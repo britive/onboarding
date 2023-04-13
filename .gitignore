@@ -499,3 +499,8 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/terraform,terragrunt,pycharm,python,macos,windows,linux,visualstudiocode,intellij
+
+
+# MANUAL ADDITIONS
+
+!google-cloud/keys/*
