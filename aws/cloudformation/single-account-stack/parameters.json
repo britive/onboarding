@@ -1,0 +1,7 @@
+{
+    "Parameters": {
+      "SamlMetadataDocumentXmlContent": "<paste xml saml metadata content obtained from admin page in the britive ui>",
+      "TenantName": "<name of your britive tenant - omit '.britive-app.com'>",
+      "DeployAwsInvalidationFeature": "yes"
+    }
+}
