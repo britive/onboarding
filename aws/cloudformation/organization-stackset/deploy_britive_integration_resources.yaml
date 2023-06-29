@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: AWS Organization Components
+        Parameters:
+          - RootOuId
+          - Region
+      - Label:
+          default: S3 Details for Template Location
+        Parameters:
+          - S3BucketName
+          - S3KeyForIamResourcesTemplate
+      - Label:
+          default: Britive Sourced Information
+        Parameters:
+          - TenantName
+          - SamlMetadataDocumentXmlComent
+          - DeployAwsInvalidationFeature
+    ParameterLabels:
+      RootOuId:
+        default: Which AWS Organization OU should this be deployed to (generally this should be the root OU)?
+      Region:
+        default: Where should the CloudFormation StackSet be deployed (only 1 region is required since all resources are global IAM resources)?
+      SamlMetadataDocumentXmlContent:
+        default: The contents of the SAML metadata document downloaded from your Britive tenant.
+      S3BucketName:
+        default: The name of the S3 bucket which holds the required CloudFormation template.
+      S3KeyForIamResourcesTemplate:
+        default: The S3 object key for the required CloudFormation template.
+      TenantName:
+        default: The name of the Britive tenant (if your tenant URL is example.britive-app.com then your tenant name is example).
+      DeployAwsInvalidationFeature:
+        default: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
+Parameters:
+  RootOuId:
+    Description: The ID of the Root OU where the StackSet will be deployed.
+    Type: String
+  Region:
+    Description: The region where the stacks will be created. All resources are IAM global resources so only one region is required.
+    Type: String
+    Default: us-east-1
+  SamlMetadataDocumentXmlContent:
+    Description: The XML content of the SAML metadata document downloaded from the Britive tenant.
+    Type: String
+  S3BucketName:
+    Description: The name of the S3 bucket that holds the britive_integration_resources.yaml CloudFormation template.
+    Type: String
+    Default: britive-global-artifacts-public
+  S3KeyForIamResourcesTemplate:
+    Description: The S3 key for britive_integration_resources.yaml object in the S3 bucket. Do not include a leading /.
+    Type: String
+    Default: britive_integration_resources.yaml
+  TenantName:
+    Description: Name of the Britive tenant. Omit ".britive-app.com".
+    Type: String
+  DeployAwsInvalidationFeature:
+    Description: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
+    Type: String
+    AllowedValues:
+      - yes
+      - no
+    Default: yes
+Resources:
+  MasterAccountStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        SamlMetadataDocumentXmlContent: !Ref SamlMetadataDocumentXmlContent
+        TenantName: !Ref TenantName
+        DeployAwsInvalidationFeature: !Ref DeployAwsInvalidationFeature
+      TemplateURL: !Sub 'https://${S3BucketName}.s3.amazonaws.com/${S3KeyForIamResourcesTemplate}'
+      TimeoutInMinutes: 20
+  StackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      CallAs: SELF
+      Capabilities:
+        - CAPABILITY_IAM
+        - CAPABILITY_NAMED_IAM
+      Description: Deploys required Britive IAM resources
+      ManagedExecution:
+        Active: true
+      OperationPreferences:
+        FailureToleranceCount: 10
+        MaxConcurrentCount: 10
+        RegionConcurrencyType: PARALLEL
+      Parameters:
+        - ParameterKey: SamlMetadataDocumentXmlContent
+          ParameterValue: !Ref SamlMetadataDocumentXmlContent
+        - ParameterKey: TenantName
+          ParameterValue: !Ref TenantName
+        - ParameterKey: DeployAwsInvalidationFeature
+          ParameterValue: !Ref DeployAwsInvalidationFeature
+      PermissionModel: SERVICE_MANAGED
+      StackInstancesGroup:
+        - DeploymentTargets:
+            OrganizationalUnitIds:
+              - !Ref RootOuId
+          Regions:
+            - !Ref Region
+      StackSetName: !Sub 'britive-resources-${AWS::StackName}-${TenantName}'
+      TemplateURL: !Sub 'https://${S3BucketName}.s3.amazonaws.com/${S3KeyForIamResourcesTemplate}'
+Outputs:
+  MasterAccountId:
+    Value: !Ref AWS::AccountId
+  IdentityProviderName:
+    Value: !Sub 'britive-${TenantName}'
+  IntegrationRoleName:
+    Value: !Sub 'britive-${TenantName}-integration-role'

@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Britive Sourced Information
+        Parameters:
+          - TenantName
+          - SamlMetadataDocumentXmlContent
+          - DeployAwsInvalidationFeature
+    ParameterLabels:
+      SamlMetadataDocumentXmlContent:
+        default: The contents of the SAML metadata document downloaded from your Britive tenant.
+      TenantName:
+        default: The name of the Britive tenant (if your tenant URL is example.britive-app.com then your tenant name is example).
+      DeployAwsInvalidationFeature:
+        default: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
+Parameters:
+  SamlMetadataDocumentXmlContent:
+    Description: The XML content of the SAML metadata document downloaded from the Britive tenant.
+    Type: String
+  TenantName:
+    Description: Name of the Britive tenant. Omit ".britive-app.com".
+    Type: String
+  DeployAwsInvalidationFeature:
+    Description: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: true
+Conditions:
+  ShouldDeployAwsInvalidationFeature: !Equals [!Ref DeployAwsInvalidationFeature, true]
+Resources:
+  BritiveSamlProvider:
+    Type: AWS::IAM::SAMLProvider
+    Properties:
+      Name: !Sub 'britive-${TenantName}'
+      SamlMetadataDocument: !Ref SamlMetadataDocumentXmlContent
+  BritiveIntegrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      Description: !Sub 'Britive Integration Role'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/IAMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess
+      MaxSessionDuration: 3600
+      RoleName: !Sub 'britive-${TenantName}-integration-role'
+  BritiveIntegrationRoleInlinePolicyForAwsInvalidation:
+    Type: AWS::IAM::Policy
+    Condition: ShouldDeployAwsInvalidationFeature
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:CreatePolicy
+              - iam:DeletePolicy
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicyVersion
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicyVersions
+            Resource: arn:aws:iam::*:policy/britive/managed/*
+      PolicyName: aws-invalidation
+      Roles:
+        - !Ref BritiveIntegrationRole
