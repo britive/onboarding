@@ -26,11 +26,11 @@ Parameters:
     Description: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
     Type: String
     AllowedValues:
-      - yes
-      - no
-    Default: no
+      - true
+      - false
+    Default: true
 Conditions:
-  ShouldDeployAwsInvalidationFeature: !Equals [!Ref DeployAwsInvalidationFeature, yes]
+  ShouldDeployAwsInvalidationFeature: !Equals [!Ref DeployAwsInvalidationFeature, true]
 Resources:
   BritiveSamlProvider:
     Type: AWS::IAM::SAMLProvider
@@ -62,7 +62,7 @@ Resources:
   BritiveIntegrationRoleInlinePolicyForAwsInvalidation:
     Type: AWS::IAM::Policy
     Condition: ShouldDeployAwsInvalidationFeature
-    Properties: 
+    Properties:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -77,5 +77,5 @@ Resources:
               - iam:ListPolicyVersions
             Resource: arn:aws:iam::*:policy/britive/managed/*
       PolicyName: aws-invalidation
-      Roles: 
+      Roles:
         - !Ref BritiveIntegrationRole
