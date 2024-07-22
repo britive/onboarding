@@ -44,7 +44,6 @@ def main():
     parser.add_argument('-a', '--applications', action='store_true', help='Process Applications')
     parser.add_argument('-i', '--idps', action='store_true', help='Process Identity providers')
     args = parser.parse_args()
-    print(f'{"Processing users" if args.users else "Will not process users"}')
     if args.users:
         process_users()
     if args.tags:
@@ -55,12 +54,13 @@ def main():
         process_idps()
 
     # Dump updates and changes to data to a json file
-    with open('./data_out.json', 'w') as f:
+    with open('./data_input.json', 'w') as f:
         json.dump(data, f)
 
 
 def process_tags():
     tags = jmespath.search("tags", data)
+    print(f'Processing {len(tags)} Tags')
     for tag in tags:
         print(f"{tag['name']}")
         tag_response = br.tags.create(name=tag['name'], description=tag['description'], idp=britive_idp)
@@ -69,6 +69,7 @@ def process_tags():
 
 def process_users():
     users = jmespath.search("users", data)
+    print(f'Processing {len(users)} users')
     for user in users:
         print(f"{user['email']}")
         user_response = br.users.create(idp=britive_idp, email=user['email'], firstName=user['firstname'],
@@ -79,6 +80,7 @@ def process_users():
 def process_applications():
     app_catalog = jmespath.search("[].{name: name, id: catalogAppId}", br.applications.catalog())
     apps = jmespath.search(expression="apps", data=data)
+    print(f'Processing {len(apps)} applications')
     for app in apps:
         catalog_id = [item['id'] for item in app_catalog if item['name'] == app['type']][0]
         app_response = br.applications.create(application_name=app['name'], catalog_id=catalog_id)
@@ -87,9 +89,11 @@ def process_applications():
 
 def process_idps():
     idps = jmespath.search(expression="idps", data=data)
+    print(f'Processing {len(idps)} identity providers')
     for idp in idps:
-        idp_id = (br.identity_providers.create(name=idp['name'], description=idp['description']))['id']
-        idp['id'] = idp_id
+        idp_response = (br.identity_providers.create(name=idp['name'], description=idp['description']))
+        idp['id'] = idp_response['id']
+        idp['ssoConfig'] = idp_response['ssoConfig']
 
 
 # Press the green button in the gutter to run the script.
