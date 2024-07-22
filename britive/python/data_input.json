@@ -1,0 +1,86 @@
+{
+  "apps": [
+    {
+      "name": "AWS",
+      "type": "AWS"
+    },
+    {
+      "name": "Kubernetes",
+      "type": "Kubernetes"
+    },
+    {
+      "name": "Britive Demo",
+      "type": "Britive"
+    },
+    {
+      "name": "GCP",
+      "type": "GCP"
+    },
+    {
+      "name": "Okta Dev",
+      "type": "Okta"
+    }
+  ],
+  "idps": [
+    {
+      "name": "Okta",
+      "type": "SAML",
+      "description": "Okta connection for SSO and SCIM"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Admins participating in the Demo. Also tenant admins",
+      "name": "User Admins"
+    },
+    {
+      "name": "Help Desk Users",
+      "description": "Users participating in the Demo"
+    },
+    {
+      "name": "Managers",
+      "description": "Approvers will approve the profiles or checkouts"
+    },
+    {
+      "name": "Environment Admins",
+      "description": "Admins managing the applications"
+    }
+  ],
+  "users": [
+    {
+      "firstname": "Adam",
+      "lastname": "Woodard",
+      "email": "adamwoodard@mailinator.com",
+      "username": "adamwoodard@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih"
+    },
+    {
+      "firstname": "Paul",
+      "lastname": "Barnett",
+      "email": "paulbarnett@mailinator.com",
+      "username": "paulbarnett@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih"
+    },
+    {
+      "firstname": "Brianna",
+      "lastname": "Russell",
+      "email": "briannarussell@mailinator.com",
+      "username": "briannarussell@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih"
+    },
+    {
+      "firstname": "Alex",
+      "lastname": "Davis",
+      "email": "alexdavis@mailinator.com",
+      "username": "alexdavis@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih"
+    },
+    {
+      "firstname": "Christine",
+      "lastname": "Nichols",
+      "email": "christinenichols@mailinator.com",
+      "username": "christinenichols@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih"
+    }
+  ]
+}
