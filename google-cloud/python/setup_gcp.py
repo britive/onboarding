@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
+import json
 from google.cloud import iam_v2
 from google.oauth2 import service_account
+import google.auth
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 
 # Run the following command to establish cli session with GCP admin account
 # gcloud auth application-default login
