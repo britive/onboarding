@@ -1,16 +1,17 @@
 {
   "apps": [
     {
+      "name": "Britive Labs",
+      "type": "Britive",
+      "id": "550j2cvf6rv5ft8nsi33"
+    },
+    {
       "name": "AWS",
       "type": "AWS"
     },
     {
       "name": "Kubernetes",
       "type": "Kubernetes"
-    },
-    {
-      "name": "Britive Demo",
-      "type": "Britive"
     },
     {
       "name": "GCP",
@@ -30,20 +31,24 @@
   ],
   "tags": [
     {
-      "description": "Admins participating in the Demo. Also tenant admins",
-      "name": "User Admins"
+      "description": "Admins participating in the user management",
+      "name": "User Admins",
+      "id": "97y2eigxcrn77ciedz4o"
     },
     {
       "name": "Help Desk Users",
-      "description": "Users participating in the Demo"
+      "description": "Users participating in the Demo",
+      "id": "nqw6nyih532tlmkvdwhm"
     },
     {
       "name": "Managers",
-      "description": "Approvers will approve the profiles or checkouts"
+      "description": "Approvers will approve the profiles or checkouts",
+      "id": "w9tvpq4a6m46csztzdvt"
     },
     {
-      "name": "Environment Admins",
-      "description": "Admins managing the applications"
+      "name": "Tenant Admins",
+      "description": "Admins managing the Britive Platform",
+      "id": "ddnl0gxpqxb2pr8tfbnk"
     }
   ],
   "users": [
