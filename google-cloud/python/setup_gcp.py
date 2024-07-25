@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from google.cloud import iam_v2
+from google.cloud import iam_admin_v1
 from google.oauth2 import service_account
 
 # Run the following command to establish cli session with GCP admin account
@@ -29,7 +29,7 @@ role_permissions = ['iam.roles.get', 'iam.roles.list', 'iam.serviceAccountKeys.c
 
 # Initialize the IAM client
 credentials = service_account.Credentials.from_service_account_file('./britive-service-account-key.json')
-client = iam_v2.IAMClient(credentials=credentials)
+client = iam_admin_v1.IAMClient(credentials=credentials)
 
 # The service account's resource name
 resource_name = f'projects/{project_id}'
@@ -45,11 +45,11 @@ service_account = client.create_service_account(
     }
 )
 # Define the custom role
-role = iam_v2.Role(
+role = iam_admin_v1.Role(
     title=role_title,
     description=role_description,
     included_permissions=role_permissions,
-    stage=iam_v2.Role.Stage.GA
+    stage=iam_admin_v1.Role.Stage.GA
 )
 
 # Create the custom role
@@ -65,7 +65,7 @@ print(f'Service account {service_account.email} created.')
 print(f'Custom role {created_role.name} created.')
 
 policy = client.get_iam_policy(request={"resource": resource_name})
-binding = iam_v2.Binding(
+binding = iam_admin_v1.Binding(
     role=role,
     members=[f'serviceAccount:{service_account.email}']
 )
