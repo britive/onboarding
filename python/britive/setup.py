@@ -8,7 +8,7 @@ try:
 except ImportError:
     import json
 import jmespath
-from colored import Fore, Back, Style
+from colored import Fore, Style
 from britive.britive import Britive
 
 '''
