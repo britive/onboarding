@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import boto3
+import argparse
 from dotenv import load_dotenv
 import os
 from colored import Fore, Style
@@ -10,13 +11,28 @@ try:
 except ImportError:
     import json
 
+# Color definitions
+caution: str = f'{Style.BOLD}{Fore.red}'
+warn: str = f'{Style.BOLD}{Fore.yellow}'
+info: str = f'{Style.BOLD}{Fore.blue}'
+green: str = f'{Style.BOLD}{Fore.green}'
+
+# Init AWS EKS client
 client = boto3.client('eks')
+
+# Pull input data
 load_dotenv()
 with open('./data_input.json', 'r') as file:
     data = json.load(file)
 
+# Init Britive client
+br = Britive(tenant=os.getenv("BRITIVE_TENANT"), token=os.getenv("BRITIVE_API_TOKEN"))
+
 
 def main():
+    parser = argparse.ArgumentParser(description='Process some command-line arguments.')
+    parser.add_argument('-b', '--britive', action='store_true', help='Process updates to Britive from the data_input file')
+
     cluster_name = ''
     idp_name = 'britive'
     issuer_url = ''
