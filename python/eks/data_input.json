@@ -1,0 +1,34 @@
+{
+  "environment_groups": [
+    {
+      "name": "US-EAST",
+      "environments": [
+        {
+          "name": "east_cluster01"
+        },
+        {
+          "name": "east_cluster02"
+        }
+      ]
+    },
+    {
+      "name": "US-WEST",
+      "environments": [
+        {
+          "name": "west_cluster-01"
+        },
+        {
+          "name": "west_cluster-02"
+        }
+      ]
+    },
+    {
+      "name": "IN",
+      "environments": [
+        {
+          "name": "IN01_cluster"
+        }
+      ]
+    }
+  ]
+}
