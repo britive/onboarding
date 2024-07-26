@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import boto3
 from dotenv import load_dotenv
 import os
@@ -20,6 +21,9 @@ def main():
     idp_name = 'britive'
     issuer_url = ''
     client_id = ''
+    cluster_dtls = client.describe_cluster(name=cluster_name)['cluster']
+    cluster_cert = cluster_dtls['certificateAuthority']['data']
+    cluster_endpoint = cluster_dtls['endpoint']
 
     response = client.associate_identity_provider_config(
         clusterName=cluster_name,
@@ -30,10 +34,7 @@ def main():
             'usernameClaim': 'sub',
             'usernamePrefix': '',
             'groupsClaim': 'groups',
-            'groupsPrefix': '',
-            'requiredClaims': {
-                '': ''
-            }
+            'groupsPrefix': ''
         },
         tags={
             'idp': 'oidc'
