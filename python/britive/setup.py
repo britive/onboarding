@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import dotenv
 from dotenv import load_dotenv
 import os
 
@@ -19,8 +20,9 @@ BRITIVE_API_TOKEN
 '''
 
 # Load data and ENVs
+data_file_input = 'britive/data_input.json'
 load_dotenv()
-with open('./data_input.json', 'r') as file:
+with open(data_file_input, 'r') as file:
     data = json.load(file)
 
 br = Britive(tenant=os.getenv("BRITIVE_TENANT"), token=os.getenv("BRITIVE_API_TOKEN"))
@@ -54,7 +56,7 @@ def main():
         process_idps()
 
     # Dump updates and changes to data to a json file
-    with open('./data_input.json', 'w') as f:
+    with open(data_file_input, 'w') as f:
         json.dump(data, f)
 
 
