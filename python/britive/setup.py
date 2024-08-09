@@ -21,6 +21,7 @@ BRITIVE_API_TOKEN
 
 # Load data and ENVs
 data_file_input = 'britive/data_input.json'
+
 load_dotenv()
 with open(data_file_input, 'r') as file:
     data = json.load(file)
