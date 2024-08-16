@@ -1,1 +1,96 @@
-{"apps": [{"name": "Britive Labs", "type": "Britive"}, {"name": "AWS", "type": "AWS"}, {"name": "Kubernetes", "type": "Kubernetes"}, {"name": "GCP", "type": "GCP"}, {"name": "Okta Dev", "type": "Okta"}], "idps": [{"name": "Okta", "type": "SAML", "description": "Okta connection for SSO and SCIM"}], "tags": [{"description": "Admins participating in the user management", "name": "User Admins", "id": "3pybkcqtoc8tkydunc3c"}, {"name": "Help Desk Users", "description": "Users participating in the Demo", "id": "a28fmzgstij6ctbforny"}, {"name": "Managers", "description": "Approvers will approve the profiles or checkouts", "id": "4u5ivblfsulfjytpyoyj"}, {"name": "Tenant Admins", "description": "Admins managing the Britive Platform", "id": "i86yzbvxs5wl672b3m07"}], "users": [{"firstname": "Adam", "lastname": "Woodard", "email": "adamwoodard@mailinator.com", "username": "adamwoodard@mailinator.com", "password": "iEKtvYx4Ri5dFih", "id": "nj0jx5nhwocjtz8259jh"}, {"firstname": "Paul", "lastname": "Barnett", "email": "paulbarnett@mailinator.com", "username": "paulbarnett@mailinator.com", "password": "iEKtvYx4Ri5dFih", "id": "gkpvyivyarau4we4lrjs"}, {"firstname": "Brianna", "lastname": "Russell", "email": "briannarussell@mailinator.com", "username": "briannarussell@mailinator.com", "password": "iEKtvYx4Ri5dFih", "id": "qm6ytchtof95ilmiipys"}, {"firstname": "Alex", "lastname": "Davis", "email": "alexdavis@mailinator.com", "username": "alexdavis@mailinator.com", "password": "iEKtvYx4Ri5dFih", "id": "4avh1ev6oi3fjhz2sgen"}, {"firstname": "Christine", "lastname": "Nichols", "email": "christinenichols@mailinator.com", "username": "christinenichols@mailinator.com", "password": "iEKtvYx4Ri5dFih", "id": "xz0tfx88qy8ov4qog58z"}]}
+{
+  "apps": [
+    {
+      "name": "Britive",
+      "description": "Britive for Britive. Short-lived Admin access",
+      "type": "Britive"
+    },
+    {
+      "name": "AWS",
+      "type": "AWS"
+    },
+    {
+      "name": "Kubernetes",
+      "type": "Kubernetes"
+    },
+    {
+      "name": "GCP",
+      "type": "GCP"
+    },
+    {
+      "name": "Okta Dev",
+      "type": "Okta"
+    }
+  ],
+  "idps": [
+    {
+      "name": "Azure SSO",
+      "type": "Azure",
+      "description": "Azure connection for SSO and SCIM"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Admins participating in the user management",
+      "name": "User Admins",
+      "id": "3pybkcqtoc8tkydunc3c"
+    },
+    {
+      "name": "Help Desk Users",
+      "description": "Users participating in the Demo",
+      "id": "a28fmzgstij6ctbforny"
+    },
+    {
+      "name": "Managers",
+      "description": "Approvers will approve the profiles or checkouts",
+      "id": "4u5ivblfsulfjytpyoyj"
+    },
+    {
+      "name": "Tenant Admins",
+      "description": "Admins managing the Britive Platform",
+      "id": "i86yzbvxs5wl672b3m07"
+    }
+  ],
+  "users": [
+    {
+      "firstname": "Adam",
+      "lastname": "Woodard",
+      "email": "adamwoodard@mailinator.com",
+      "username": "adamwoodard@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih",
+      "id": "nj0jx5nhwocjtz8259jh"
+    },
+    {
+      "firstname": "Paul",
+      "lastname": "Barnett",
+      "email": "paulbarnett@mailinator.com",
+      "username": "paulbarnett@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih",
+      "id": "gkpvyivyarau4we4lrjs"
+    },
+    {
+      "firstname": "Brianna",
+      "lastname": "Russell",
+      "email": "briannarussell@mailinator.com",
+      "username": "briannarussell@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih",
+      "id": "qm6ytchtof95ilmiipys"
+    },
+    {
+      "firstname": "Alex",
+      "lastname": "Davis",
+      "email": "alexdavis@mailinator.com",
+      "username": "alexdavis@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih",
+      "id": "4avh1ev6oi3fjhz2sgen"
+    },
+    {
+      "firstname": "Christine",
+      "lastname": "Nichols",
+      "email": "christinenichols@mailinator.com",
+      "username": "christinenichols@mailinator.com",
+      "password": "iEKtvYx4Ri5dFih",
+      "id": "xz0tfx88qy8ov4qog58z"
+    }
+  ]
+}
