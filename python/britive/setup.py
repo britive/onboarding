@@ -97,14 +97,14 @@ def process_profiles():
     apps = jmespath.search(expression="apps", data=data)
     for app in apps:
         profiles = app["profiles"]
-        print(f'{info}Processing profiles for app: {app['name']}{Style.reset}')
+        print(f'{info}Processing profiles for app: {app['name']} {Style.reset}')
         for profile in profiles:
             br.profiles.create(application_id=app['id'], name=profile['name'], status="active", expirationDuration=profile['Expiration'])
 
 
 def process_idps():
     idps = jmespath.search(expression="idps", data=data)
-    print(f'{info}Processing {len(idps)} identity providers{Style.reset}')
+    print(f'{green}Processing {len(idps)} identity providers{Style.reset}')
     for idp in idps:
         idp_response = (br.identity_providers.create(name=idp['name'], description=idp['description']))
         idp['id'] = idp_response['id']
