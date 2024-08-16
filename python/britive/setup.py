@@ -42,19 +42,22 @@ green: str = f'{Style.BOLD}{Fore.green}'
 def main():
     # The argument parser
     parser = argparse.ArgumentParser(description='Process some command-line arguments.')
+    parser.add_argument('-i', '--idps', action='store_true', help='Process Identity providers')
     parser.add_argument('-u', '--users', action='store_true', help='Process Users')
     parser.add_argument('-t', '--tags', action='store_true', help='Process Tags')
     parser.add_argument('-a', '--applications', action='store_true', help='Process Applications')
-    parser.add_argument('-i', '--idps', action='store_true', help='Process Identity providers')
+    parser.add_argument('-p', '--profiles', action='store_true', help='Process Profiles for each application')
     args = parser.parse_args()
+    if args.idps:
+        process_idps()
     if args.users:
         process_users()
     if args.tags:
         process_tags()
     if args.applications:
         process_applications()
-    if args.idps:
-        process_idps()
+    if args.profiles:
+        process_profiles()
 
     # Dump updates and changes to data to a json file
     with open(data_file_input, 'w') as f:
@@ -74,8 +77,9 @@ def process_users():
     users = jmespath.search("users", data)
     print(f'Processing {len(users)} users')
     for user in users:
-        print(f"{user['email']}")
-        user_response = br.users.create(idp=britive_idp, email=user['email'], firstName=user['firstname'],
+        print(f"{user['email']} on {user['idp']}")
+        user_idp = br.identity_providers.get_by_name(identity_provider_name=user['idp'])['id']
+        user_response = br.users.create(idp=user_idp, email=user['email'], firstName=user['firstname'],
                                         lastName=user['lastname'], username=user['username'], status='active')
         user['id'] = user_response['userId']
 
@@ -88,6 +92,15 @@ def process_applications():
         catalog_id = [item['id'] for item in app_catalog if item['name'] == app['type']][0]
         app_response = br.applications.create(application_name=app['name'], catalog_id=catalog_id)
         app['id'] = app_response['appContainerId']
+
+
+def process_profiles():
+    apps = jmespath.search(expression="apps", data=data)
+    for app in apps:
+        profiles = app["profiles"]
+        print(f'Processing profiles for app: {app['name']}')
+        for profile in profiles:
+            br.profiles.create(application_id=app['id'], name=profile['name'], status="active", expirationDuration=profile['Expiration'])
 
 
 def process_idps():
