@@ -1,1 +1,42 @@
-{"apps": [{"name": "Salesforce", "type": "SalesForce", "id": "chc3gowrrtl2lnpgmk5s"}], "idps": [{"name": "Azure", "type": "Azure", "description": "Azure connection for SSO and SCIM"}], "tags": [{"description": "Admins participating in the user management", "name": "User Admins"}, {"name": "Help Desk Users", "description": "Users participating in the Demo"}, {"name": "Managers", "description": "Approvers will approve the profiles or checkouts"}, {"name": "Tenant Admins", "description": "Admins managing the Britive Platform"}], "users": [{"firstname": "Connor", "lastname": "Frazee", "email": "cfrazee@lendingpoint.com", "username": "cfrazee@lendingpoint.com", "idp": "Azure"}]}
+{
+  "apps": [
+    {
+      "name": "Salesforce",
+      "type": "SalesForce"
+    }
+  ],
+  "idps": [
+    {
+      "name": "Azure",
+      "type": "Azure",
+      "description": "Azure connection for SSO and SCIM"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Admins participating in the user management",
+      "name": "User Admins"
+    },
+    {
+      "name": "Help Desk Users",
+      "description": "Users participating in the Demo"
+    },
+    {
+      "name": "Managers",
+      "description": "Approvers will approve the profiles or checkouts"
+    },
+    {
+      "name": "Tenant Admins",
+      "description": "Admins managing the Britive Platform"
+    }
+  ],
+  "users": [
+    {
+      "firstname": "Conor",
+      "lastname": "Coz",
+      "email": "ccoz@mailinator.com",
+      "username": "ccoz@mailinator.com",
+      "idp": "Azure"
+    }
+  ]
+}
