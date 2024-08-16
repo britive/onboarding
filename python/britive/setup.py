@@ -97,6 +97,8 @@ def process_idps():
         idp_response = (br.identity_providers.create(name=idp['name'], description=idp['description']))
         idp['id'] = idp_response['id']
         idp['ssoConfig'] = idp_response['ssoConfig']
+        if idp['type'].lower() == "azure":
+            br.identity_providers.update(identity_provider_id=idp_response['id'], sso_provider="Azure")
 
 
 # Press the green button in the gutter to run the script.
