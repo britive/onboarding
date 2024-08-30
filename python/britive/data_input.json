@@ -40,29 +40,29 @@
       ]
     },
     {
-      "name": "GCP",
-      "type": "GCP",
+      "name": "Azure",
+      "type": "Azure",
       "profiles": [
         {
-          "name": "Folder Admin",
+          "name": "Global Admin",
           "description": "",
           "Expiration": "7200000"
         },
         {
-          "name": "Project Auditor",
+          "name": "Auditor",
           "description": "",
           "Expiration": "14400000"
         }
       ]
     },
     {
-      "name": "Okta Dev",
+      "name": "Okta Sandbox",
       "type": "Okta",
       "profiles": [
         {
           "name": "Okta Super Admin",
-          "description": "",
-          "Expiration": "14400000"
+          "description": "Temporary elevation for Okta Super admin role",
+          "Expiration": "7200000"
         }
       ]
     }
@@ -71,7 +71,7 @@
     {
       "name": "Okta",
       "type": "SAML",
-      "description": "Okta connection for SSO and SCIM"
+      "description": "Okta Sandbox connection for SSO and SCIM"
     }
   ],
   "tags": [
