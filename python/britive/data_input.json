@@ -1,54 +1,95 @@
 {
   "apps": [
     {
-      "name": "Britive Labs",
+      "name": "Britive",
+      "description": "Britive for Britive. Short-lived Admin access",
       "type": "Britive",
-      "id": "550j2cvf6rv5ft8nsi33"
+      "profiles": [
+        {
+          "name": "Britive Tenant Admin",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ]
     },
     {
       "name": "AWS",
-      "type": "AWS"
+      "type": "AWS",
+      "profiles": [
+        {
+          "name": "Account Admin",
+          "description": "",
+          "Expiration": "14400000"
+        },
+        {
+          "name": "S3 Developer Full Access",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ]
     },
     {
       "name": "Kubernetes",
-      "type": "Kubernetes"
+      "type": "Kubernetes",
+      "profiles": [
+        {
+          "name": "Namespace Manager",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ]
     },
     {
-      "name": "GCP",
-      "type": "GCP"
+      "name": "Azure",
+      "type": "Azure",
+      "profiles": [
+        {
+          "name": "Global Admin",
+          "description": "",
+          "Expiration": "7200000"
+        },
+        {
+          "name": "Auditor",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ]
     },
     {
-      "name": "Okta Dev",
-      "type": "Okta"
+      "name": "Okta Sandbox",
+      "type": "Okta",
+      "profiles": [
+        {
+          "name": "Okta Super Admin",
+          "description": "Temporary elevation for Okta Super admin role",
+          "Expiration": "7200000"
+        }
+      ]
     }
   ],
   "idps": [
     {
       "name": "Okta",
       "type": "SAML",
-      "description": "Okta connection for SSO and SCIM"
+      "description": "Okta Sandbox connection for SSO and SCIM"
     }
   ],
   "tags": [
     {
       "description": "Admins participating in the user management",
-      "name": "User Admins",
-      "id": "97y2eigxcrn77ciedz4o"
+      "name": "User Admins"
     },
     {
       "name": "Help Desk Users",
-      "description": "Users participating in the Demo",
-      "id": "nqw6nyih532tlmkvdwhm"
+      "description": "Users participating in the Demo"
     },
     {
       "name": "Managers",
-      "description": "Approvers will approve the profiles or checkouts",
-      "id": "w9tvpq4a6m46csztzdvt"
+      "description": "Approvers will approve the profiles or checkouts"
     },
     {
       "name": "Tenant Admins",
-      "description": "Admins managing the Britive Platform",
-      "id": "ddnl0gxpqxb2pr8tfbnk"
+      "description": "Admins managing the Britive Platform"
     }
   ],
   "users": [
@@ -56,36 +97,41 @@
       "firstname": "Adam",
       "lastname": "Woodard",
       "email": "adamwoodard@mailinator.com",
-      "username": "adamwoodard@mailinator.com",
-      "password": "iEKtvYx4Ri5dFih"
+      "username": "adamwoodard@mailinator.com"
     },
     {
       "firstname": "Paul",
       "lastname": "Barnett",
       "email": "paulbarnett@mailinator.com",
-      "username": "paulbarnett@mailinator.com",
-      "password": "iEKtvYx4Ri5dFih"
+      "username": "paulbarnett@mailinator.com"
     },
     {
       "firstname": "Brianna",
       "lastname": "Russell",
       "email": "briannarussell@mailinator.com",
-      "username": "briannarussell@mailinator.com",
-      "password": "iEKtvYx4Ri5dFih"
+      "username": "briannarussell@mailinator.com"
     },
     {
       "firstname": "Alex",
       "lastname": "Davis",
       "email": "alexdavis@mailinator.com",
-      "username": "alexdavis@mailinator.com",
-      "password": "iEKtvYx4Ri5dFih"
+      "username": "alexdavis@mailinator.com"
     },
     {
       "firstname": "Christine",
       "lastname": "Nichols",
       "email": "christinenichols@mailinator.com",
-      "username": "christinenichols@mailinator.com",
-      "password": "iEKtvYx4Ri5dFih"
+      "username": "christinenichols@mailinator.com"
+    }
+  ],
+  "notification": [
+    {
+      "description": "Slack for approval and other Britive notices",
+      "name": "Slack_TEST",
+      "parameters": {
+        "URL": "https://britive-hq.slack.com/api/"
+      },
+      "type": "slack"
     }
   ]
 }
