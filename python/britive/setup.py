@@ -19,8 +19,10 @@ BRITIVE_API_TOKEN
 '''
 
 # Load data and ENVs
+data_file_input = 'britive/data_input.json'
+
 load_dotenv()
-with open('./data_input.json', 'r') as file:
+with open(data_file_input, 'r') as file:
     data = json.load(file)
 
 br = Britive(tenant=os.getenv("BRITIVE_TENANT"), token=os.getenv("BRITIVE_API_TOKEN"))
@@ -39,28 +41,34 @@ green: str = f'{Style.BOLD}{Fore.green}'
 def main():
     # The argument parser
     parser = argparse.ArgumentParser(description='Process some command-line arguments.')
+    parser.add_argument('-i', '--idps', action='store_true', help='Process Identity providers')
     parser.add_argument('-u', '--users', action='store_true', help='Process Users')
     parser.add_argument('-t', '--tags', action='store_true', help='Process Tags')
     parser.add_argument('-a', '--applications', action='store_true', help='Process Applications')
-    parser.add_argument('-i', '--idps', action='store_true', help='Process Identity providers')
+    parser.add_argument('-p', '--profiles', action='store_true', help='Process Profiles for each application')
+    parser.add_argument('-n', '--notification', action='store_true', help='Process Notification Medium')
     args = parser.parse_args()
+    if args.idps:
+        process_idps()
     if args.users:
         process_users()
     if args.tags:
         process_tags()
     if args.applications:
         process_applications()
-    if args.idps:
-        process_idps()
+    if args.profiles:
+        process_profiles()
+    if args.notification:
+        process_notification()
 
     # Dump updates and changes to data to a json file
-    with open('./data_input.json', 'w') as f:
+    with open(data_file_input, 'w') as f:
         json.dump(data, f)
 
 
 def process_tags():
     tags = jmespath.search("tags", data)
-    print(f'Processing {len(tags)} Tags')
+    print(f'{info}Processing {len(tags)} Tags...{Style.reset}')
     for tag in tags:
         print(f"{tag['name']}")
         tag_response = br.tags.create(name=tag['name'], description=tag['description'], idp=britive_idp)
@@ -69,10 +77,11 @@ def process_tags():
 
 def process_users():
     users = jmespath.search("users", data)
-    print(f'Processing {len(users)} users')
+    print(f'{info}Processing {len(users)} users...{Style.reset}')
     for user in users:
-        print(f"{user['email']}")
-        user_response = br.users.create(idp=britive_idp, email=user['email'], firstName=user['firstname'],
+        print(f"{user['email']} on {user['idp']}")
+        user_idp = br.identity_providers.get_by_name(identity_provider_name=user['idp'])['id']
+        user_response = br.users.create(idp=user_idp, email=user['email'], firstName=user['firstname'],
                                         lastName=user['lastname'], username=user['username'], status='active')
         user['id'] = user_response['userId']
 
@@ -80,20 +89,42 @@ def process_users():
 def process_applications():
     app_catalog = jmespath.search("[].{name: name, id: catalogAppId}", br.applications.catalog())
     apps = jmespath.search(expression="apps", data=data)
-    print(f'Processing {len(apps)} applications')
+    print(f'{info}Processing {len(apps)} applications...{Style.reset}')
     for app in apps:
         catalog_id = [item['id'] for item in app_catalog if item['name'] == app['type']][0]
         app_response = br.applications.create(application_name=app['name'], catalog_id=catalog_id)
         app['id'] = app_response['appContainerId']
 
 
+def process_profiles():
+    apps = jmespath.search(expression="apps", data=data)
+    for app in apps:
+        profiles = app["profiles"]
+        print(f'{info}Processing profiles for app: {app['name']} {Style.reset}')
+        for profile in profiles:
+            br.profiles.create(application_id=app['id'], name=profile['name'], status="active",
+                               expirationDuration=profile['Expiration'])
+
+
+def process_notification():
+    notifications = jmespath.search(expression='notification', data=data)
+    print(f'{green}Processing {len(notifications)} Notification Mediums...{Style.reset}')
+    for note in notifications:
+        print(note['name'])
+        br.notification_mediums.create(name=note['name'], description=note['description'],
+                                       notification_medium_type=note['type'],
+                                       connection_parameters=note['parameters'])
+
+
 def process_idps():
     idps = jmespath.search(expression="idps", data=data)
-    print(f'Processing {len(idps)} identity providers')
+    print(f'{green}Processing {len(idps)} identity providers...{Style.reset}')
     for idp in idps:
         idp_response = (br.identity_providers.create(name=idp['name'], description=idp['description']))
         idp['id'] = idp_response['id']
         idp['ssoConfig'] = idp_response['ssoConfig']
+        if idp['type'].lower() == "azure":
+            br.identity_providers.update(identity_provider_id=idp_response['id'], sso_provider="Azure")
 
 
 # Press the green button in the gutter to run the script.
