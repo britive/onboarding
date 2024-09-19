@@ -11,7 +11,7 @@ This Python script automates the process of registering a Britive application in
 ## Installation
 
 1. **Install Required Packages**
-
+2. 
    Install the required Azure SDK packages using pip:
 
     ```bash
