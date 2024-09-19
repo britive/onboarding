@@ -5,6 +5,7 @@ import os
 import json
 from colorama import Fore, Style
 from britive.britive import Britive
+from sympy import false
 
 
 class BritiveInt:
@@ -29,12 +30,16 @@ class BritiveInt:
         self.role_name = 'britive-integration-role'
         self.role_description = 'Role for federated access using SAML and Britive-managed support'
 
+        # Session Invalidation flag
+        self.sess = False
+
         # Initialize AWS IAM Client and Britive SDK client
         self.iam_client = boto3.client('iam')
         self.br = Britive(tenant=self.britive_tenant, token=self.britive_api_token)
 
-        # Trust policy for SAML-based role creation
-        self.trust_policy = {
+    # Trust policy for SAML-based role creation
+    def get_trust_policy(self):
+        trust_policy = {
             "Version": "2012-10-17",
             "Statement": [
                 {
@@ -53,8 +58,14 @@ class BritiveInt:
                 }
             ]
         }
-        # Inline policy for the britive idp
-        self.inline_policy = {
+        if self.sess:
+            inv_trust = ["sts:TagSession"]
+            trust_policy["Statement"][0]["Action"].append(inv_trust)
+        return json.dumps(trust_policy)
+
+    # Inline policy for the britive idp
+    def get_inline_policy(self):
+        inline_policy = {
             "Version": "2012-10-17",
             "Statement": [
                 {
@@ -75,29 +86,18 @@ class BritiveInt:
                 }
             ]
         }
-
-    def sess_inv(self):
-        # Actions for session invalidation
-        inv_trust = ["sts:TagSession"]
-        inv_actions = [
-            "iam:CreatePolicy",
-            "iam:DeletePolicy",
-            "iam:CreatePolicyVersion",
-            "iam:DeletePolicyVersion",
-            "iam:GetPolicy",
-            "iam:GetPolicyVersion",
-            "iam:ListPolicyVersions"
-        ]
-
-        # Update the trust policy to include session invalidation if not already present
-        for action in inv_trust:
-            if action not in self.trust_policy["Statement"][0]["Action"]:
-                self.trust_policy["Statement"][0]["Action"].append(action)
-
-        # Update the inline policy to include session invalidation actions if not already present
-        for action in inv_actions:
-            if action not in self.inline_policy["Statement"][0]["Action"]:
-                self.inline_policy["Statement"][0]["Action"].append(action)
+        if self.sess:
+            inv_actions = [
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicyVersions"
+            ]
+            inline_policy["Statement"][0]["Action"].append(inv_actions)
+        return json.dumps(inline_policy)
 
     def create_idp(self):
         # SAML metadata document, you can load it from a file or provide directly as a string.
@@ -116,16 +116,12 @@ class BritiveInt:
         except Exception as e:
             print(f"{self.caution}Error creating Identity Provider: {e}{Style.RESET_ALL}")
 
-    def create_role(self, sess):
-        # Inline policy for Britive-managed roles support
-        if sess:
-            self.sess_inv()
-
+    def create_role(self):
         # Create the IAM Role
         try:
             create_role_response = self.iam_client.create_role(
                 RoleName=self.role_name,
-                AssumeRolePolicyDocument=json.dumps(self.trust_policy),
+                AssumeRolePolicyDocument=json.dumps(self.get_trust_policy()),
                 Description=self.role_description,
                 MaxSessionDuration=3600  # Set max session duration to 1 hour
             )
@@ -155,7 +151,7 @@ class BritiveInt:
             self.iam_client.put_role_policy(
                 RoleName=self.role_name,
                 PolicyName='BritiveManagedRolesSupport',
-                PolicyDocument=json.dumps(self.inline_policy)
+                PolicyDocument=json.dumps(self.get_inline_policy())
             )
             print(f'{self.info}Added inline policy for Britive-managed roles support.{Style.RESET_ALL}')
         except Exception as e:
@@ -166,14 +162,17 @@ class BritiveInt:
 
 
 if __name__ == "__main__":
+    # Define arguments and usage
     parser = argparse.ArgumentParser(description='Process some command-line arguments.')
     parser.add_argument('-i', '--idp', action='store_true', help='Create Britive as an Identity Provider')
     parser.add_argument('-r', '--role', action='store_true', help='Create Britive Integration Role')
     parser.add_argument('-s', '--session', action='store_true', help='Setup for session invalidation')
     args = parser.parse_args()
+
     # Instantiate the class
     aws_int = BritiveInt()
+    aws_int.sess = args.session
     if args.idp:
         aws_int.create_idp()
     if args.role:
-        aws_int.create_role(sess=args.session)
+        aws_int.create_role()
