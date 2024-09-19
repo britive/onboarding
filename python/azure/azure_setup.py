@@ -2,17 +2,18 @@ import argparse
 import os
 
 from azure.identity import DefaultAzureCredential
+from azure.core.credentials import TokenCredential
 from azure.graphrbac import GraphRbacManagementClient
 from azure.graphrbac.models import ApplicationCreateParameters, PasswordCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
-from azure.mgmt.authorization.models import RoleDefinition, Permission, RoleAssignmentCreateParameters
-from azure.mgmt.resourcegraph.models import GraphResource
+from azure.mgmt.authorization.models import RoleDefinition, Permission
 
 
 class AzureBritiveIntegration:
     def __init__(self, subscription_id: str, tenant_id: str):
         # Initialize the credentials and required clients
         self.credential = DefaultAzureCredential()
+        assert isinstance(self.credential, TokenCredential)
         self.subscription_id = subscription_id
         self.tenant_id = tenant_id
         self.app_name = "Britive"
@@ -63,7 +64,7 @@ class AzureBritiveIntegration:
         Assigns custom role and permissions at the Tenant Root Group level.
         """
         # Step 1: Create Custom Role Definition
-        custom_role_properties = RoleDefinitionProperties(
+        custom_role_properties = RoleDefinition(
             role_name=self.role_name,
             description="Custom role for Britive integration",
             permissions=[Permission(
