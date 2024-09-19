@@ -8,7 +8,7 @@ from britive.britive import Britive
 
 
 class BritiveInt:
-    def __init__(self, sess: bool = False):
+    def __init__(self, sess: bool = False, managed: bool = False):
         # Color definitions from Colorama
         self.caution: str = f'{Style.BRIGHT}{Fore.RED}'
         self.warn: str = f'{Style.BRIGHT}{Fore.YELLOW}'
@@ -38,8 +38,9 @@ class BritiveInt:
         self.role_name = 'britive-integration-role'
         self.role_description = 'Role for federated access using SAML and Britive-managed support'
 
-        # Session Invalidation flag
+        # Session Invalidation and Britive managed policies flag
         self.sess = sess
+        self.managed = managed
 
         # Initialize AWS IAM Client and Britive SDK client
         self.iam_client = boto3.client('iam')
@@ -185,7 +186,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Instantiate the class
-    aws_int = BritiveInt(sess=args.session)
+    aws_int = BritiveInt(sess=args.session, managed=args.managed)
     if args.idp:
         aws_int.create_idp()
     if args.role:
