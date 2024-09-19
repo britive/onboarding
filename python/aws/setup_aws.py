@@ -107,6 +107,8 @@ def create_role(sess):
         ]
         # Update policy to include session invalidation
         inline_policy["Statement"][0]["Action"].extend(inv_actions)
+        inv_trust = ["sts:TagSession"]
+        trust_policy["Statement"][0]["Action"].extend(inv_trust)
 
     # Create the IAM Role
     try:
