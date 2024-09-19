@@ -22,12 +22,12 @@ This Python script integrates Britive as an identity provider (IdP) in AWS, and 
 Make sure to install the required Python packages using `pip`:
 
 ```bash
-pip install boto3 britive colorama simplejson
+pip3 install -r requirements.txt
 ```
 
 # Usage
 
-usage: script.py [-h] [-i] [-r] [-s]
+usage: setup_aws.py [-h] [-i] [-r] [-s]
 
 Process some command-line arguments.
 
