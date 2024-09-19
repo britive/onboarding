@@ -111,6 +111,7 @@ class BritiveInt:
     '''
     Create a Britive as the Identity Provider for AWS IAM Role assumprions
     '''
+
     def create_idp(self):
         # SAML metadata document, you can load it from a file or provide directly as a string.
         # Make sure it is the SAML Metadata document from your Identity Provider.
@@ -131,6 +132,7 @@ class BritiveInt:
     '''
     Create a Role that will be attached to the Britive Identity Provider
     '''
+
     def create_role(self):
         # Create the IAM Role
         try:
@@ -179,10 +181,14 @@ class BritiveInt:
 if __name__ == "__main__":
     # Define arguments and usage
     parser = argparse.ArgumentParser(description='Process some command-line arguments.')
-    parser.add_argument('-i', '--idp', action='store_true', help='Create Britive as an Identity Provider')
-    parser.add_argument('-r', '--role', action='store_true', help='Create Britive Integration Role')
-    parser.add_argument('-s', '--session', action='store_true', help='Setup for session invalidation')
-    parser.add_argument('-m', '--managed', action='store_true', help='Setup Britive managed policies')
+    parser.add_argument('-i', '--idp', action='store_true',
+                        help='Create Britive as an Identity Provider', default=True)
+    parser.add_argument('-r', '--role', action='store_true',
+                        help='Create Britive Integration Role', default=True)
+    parser.add_argument('-s', '--session', action='store_true',
+                        help='Setup for session invalidation', default=False)
+    parser.add_argument('-m', '--managed', action='store_true',
+                        help='Setup Britive managed policies', default=False)
     args = parser.parse_args()
 
     # Instantiate the class
