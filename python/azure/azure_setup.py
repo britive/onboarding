@@ -9,13 +9,18 @@ from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.authorization.models import RoleDefinition, Permission
 
 
+# Define the class
 class AzureBritiveIntegration:
     def __init__(self, subscription_id: str, tenant_id: str):
         # Initialize the credentials and required clients
         self.credential = DefaultAzureCredential()
         assert isinstance(self.credential, TokenCredential)
+
+        # Azure Tenant variables from .env file
         self.subscription_id = subscription_id
         self.tenant_id = tenant_id
+
+        # Britive components to be created in Azure
         self.app_name = "Britive"
         self.role_name = "Britive-Integration-Role"
 
@@ -36,7 +41,6 @@ class AzureBritiveIntegration:
             sign_in_audience="AzureADMyOrg",  # Single tenant
             reply_urls=["https://login.microsoftonline.com/common/oauth2/nativeclient"]
         )
-
         application = self.graph_client.applications.create(app_parameters)
 
         # Step 2: Capture the Application (Client) ID and Directory (tenant) ID
@@ -57,7 +61,7 @@ class AzureBritiveIntegration:
         print(f"Client Secret: {client_secret.secret_text}")
         print("Make sure to store this value securely.")
 
-        return app_id, tenant_id, client_secret.secret_text
+        # return app_id, tenant_id, client_secret.secret_text
 
     def assign_permissions(self):
         """
@@ -94,7 +98,7 @@ class AzureBritiveIntegration:
             }
         )
         print(f"Role '{self.role_name}' assigned to Britive application.")
-        return role_assignment
+        # return role_assignment
 
     def assign_directory_permissions(self):
         """
@@ -122,12 +126,10 @@ class AzureBritiveIntegration:
             application_object_id=application.object_id,
             required_resource_access=required_permissions
         )
-
         print(f"Permissions added to the application '{self.app_name}'.")
 
         # Grant admin consent for the application
         self.graph_client.applications.grant_admin_consent(application.object_id)
-
         print(f"Admin consent granted for the application '{self.app_name}'.")
 
 
