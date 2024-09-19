@@ -5,20 +5,28 @@ import os
 import json
 from colorama import Fore, Style
 from britive.britive import Britive
-from sympy import false
 
 
 class BritiveInt:
-    def __init__(self):
+    def __init__(self, sess: bool = False):
         # Color definitions from Colorama
-        self.caution: str = f'{Style.BOLD}{Fore.red}'
-        self.warn: str = f'{Style.BOLD}{Fore.yellow}'
-        self.info: str = f'{Style.BOLD}{Fore.blue}'
-        self.green: str = f'{Style.BOLD}{Fore.green}'
+        self.caution: str = f'{Style.BRIGHT}{Fore.RED}'
+        self.warn: str = f'{Style.BRIGHT}{Fore.YELLOW}'
+        self.info: str = f'{Style.BRIGHT}{Fore.BLUE}'
+        self.green: str = f'{Style.BRIGHT}{Fore.GREEN}'
 
+        # SAML Provider once created in AWS would have unique ARN to be stored for future use
+        # SAML metadata document would be Britive idp metadata in xml format
         self.saml_provider_arn = ''
         self.saml_metadata_document = ''
 
+        '''
+        Fetch variables from .env file. 
+        Make sure .env file locally exists with the following attributes
+        AWS_ACCOUNT : The AWS Account ID (number)
+        BRITIVE_TENANT: Britive Tenant URL. 'acme' or 'acme.britive-app.com'
+        BRITIVE_API_TOKEN: BRITIVE Service Principal Token with Tenant admin privileges
+        '''
         self.aws_account_id = os.getenv("AWS_ACCOUNT")
         self.britive_tenant = os.getenv("BRITIVE_TENANT")
         self.britive_api_token = os.getenv("BRITIVE_API_TOKEN")
@@ -31,7 +39,7 @@ class BritiveInt:
         self.role_description = 'Role for federated access using SAML and Britive-managed support'
 
         # Session Invalidation flag
-        self.sess = False
+        self.sess = sess
 
         # Initialize AWS IAM Client and Britive SDK client
         self.iam_client = boto3.client('iam')
@@ -60,7 +68,7 @@ class BritiveInt:
         }
         if self.sess:
             inv_trust = ["sts:TagSession"]
-            trust_policy["Statement"][0]["Action"].append(inv_trust)
+            trust_policy["Statement"][0]["Action"].extend(inv_trust)
         return json.dumps(trust_policy)
 
     # Inline policy for the britive idp
@@ -96,9 +104,12 @@ class BritiveInt:
                 "iam:GetPolicyVersion",
                 "iam:ListPolicyVersions"
             ]
-            inline_policy["Statement"][0]["Action"].append(inv_actions)
+            inline_policy["Statement"][0]["Action"].extend(inv_actions)
         return json.dumps(inline_policy)
 
+    '''
+    Create a Britive as the Identity Provider for AWS IAM Role assumprions
+    '''
     def create_idp(self):
         # SAML metadata document, you can load it from a file or provide directly as a string.
         # Make sure it is the SAML Metadata document from your Identity Provider.
@@ -116,6 +127,9 @@ class BritiveInt:
         except Exception as e:
             print(f"{self.caution}Error creating Identity Provider: {e}{Style.RESET_ALL}")
 
+    '''
+    Create a Role that will be attached to the Britive Identity Provider
+    '''
     def create_role(self):
         # Create the IAM Role
         try:
@@ -167,11 +181,11 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--idp', action='store_true', help='Create Britive as an Identity Provider')
     parser.add_argument('-r', '--role', action='store_true', help='Create Britive Integration Role')
     parser.add_argument('-s', '--session', action='store_true', help='Setup for session invalidation')
+    parser.add_argument('-m', '--managed', action='store_true', help='Setup Britive managed policies')
     args = parser.parse_args()
 
     # Instantiate the class
-    aws_int = BritiveInt()
-    aws_int.sess = args.session
+    aws_int = BritiveInt(sess=args.session)
     if args.idp:
         aws_int.create_idp()
     if args.role:
