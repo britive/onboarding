@@ -15,5 +15,5 @@ This Python script automates the process of registering a Britive application in
    Install the required Azure SDK packages using pip:
 
     ```bash
-    pip install azure-identity azure-graphrbac azure-mgmt-authorization
+    pip install azure-identity azure-core azure-graphrbac azure-mgmt-authorization python-dotenv
     ```
