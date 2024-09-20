@@ -3,7 +3,7 @@ import boto3
 import argparse
 from dotenv import load_dotenv
 import os
-from colored import Fore, Style
+from colorama import Fore, Style
 from britive.britive import Britive
 
 try:
@@ -12,10 +12,10 @@ except ImportError:
     import json
 
 # Color definitions
-caution: str = f'{Style.BOLD}{Fore.red}'
-warn: str = f'{Style.BOLD}{Fore.yellow}'
-info: str = f'{Style.BOLD}{Fore.blue}'
-green: str = f'{Style.BOLD}{Fore.green}'
+caution: str = f'{Style.BRIGHT}{Fore.RED}'
+warn: str = f'{Style.BRIGHT}{Fore.YELLOW}'
+info: str = f'{Style.BRIGHT}{Fore.BLUE}'
+green: str = f'{Style.BRIGHT}{Fore.GREEN}'
 
 # Init AWS EKS client
 client = boto3.client('eks')
