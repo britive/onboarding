@@ -89,7 +89,7 @@ class AzureBritiveIntegration:
 
         # Step 3: Assign the role to the Britive app
         assignments_scope = f"/subscriptions/{self.subscription_id}/providers/Microsoft.Authorization"
-        role_assignment = self.auth_client.role_assignments.create(
+        self.auth_client.role_assignments.create(
             scope=assignments_scope,
             role_assignment_name=role_definition.id,
             parameters={
@@ -98,7 +98,6 @@ class AzureBritiveIntegration:
             }
         )
         print(f"Role '{self.role_name}' assigned to Britive application.")
-        # return role_assignment
 
     def assign_directory_permissions(self):
         """
