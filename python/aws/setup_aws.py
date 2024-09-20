@@ -25,8 +25,8 @@ class BritiveInt:
         Fetch variables from .env file. 
         Make sure .env file locally exists with the following attributes
         AWS_ACCOUNT : The AWS Account ID (number)
-        BRITIVE_TENANT: Britive Tenant URL. 'acme' or 'acme.britive-app.com'
-        BRITIVE_API_TOKEN: BRITIVE Service Principal Token with Tenant admin privileges
+        BRITIVE_TENANT : Britive Tenant URL. 'acme' or 'acme.britive-app.com'
+        BRITIVE_API_TOKEN : BRITIVE Service Principal Token with Tenant admin privileges
         '''
         env_path = os.path.join('aws', '.env')
         load_dotenv(dotenv_path=env_path)
@@ -51,19 +51,55 @@ class BritiveInt:
 
     # Trust policy for SAML-based role creation
     def get_trust_policy(self):
-        with open('aws/trust_policy.json', 'r') as file:
-            trust_policy = json.load(file)
+        trust_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Federated": '"' + self.saml_provider_arn + '"'
+                    },
+                    "Action": [
+                        "sts:AssumeRoleWithSAML",
+                        "sts:SetSourceIdentity"
+                    ],
+                    "Condition": {
+                        "StringEquals": {
+                            "SAML:aud": "https://signin.aws.amazon.com/saml"
+                        }
+                    }
+                }
+            ]
+        }
         if self.sess:
             print(f'Adding invalidation')
             inv_trust = ["sts:TagSession"]
             trust_policy["Statement"][0]["Action"].extend(inv_trust)
-        print(f'Trust Policy: \n {json.dumps(trust_policy)}')
         return json.dumps(trust_policy)
 
     # Inline policy for the britive idp
     def get_inline_policy(self):
-        with open('aws/inline_policy.json', 'r') as file:
-            inline_policy = json.load(file)
+        inline_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "VisualEditor0",
+                    "Effect": "Allow",
+                    "Action": [
+                        "iam:DetachRolePolicy",
+                        "iam:UntagRole",
+                        "iam:DeleteRolePolicy",
+                        "iam:TagRole",
+                        "iam:CreateRole",
+                        "iam:DeleteRole",
+                        "iam:AttachRolePolicy",
+                        "iam:UpdateRole",
+                        "iam:PutRolePolicy"
+                    ],
+                    "Resource": "arn:aws:iam::*:policy/britive/managed/*"
+                }
+            ]
+        }
         if self.sess:
             inv_actions = [
                 "iam:CreatePolicy",
@@ -75,7 +111,6 @@ class BritiveInt:
                 "iam:ListPolicyVersions"
             ]
             inline_policy["Statement"][0]["Action"].extend(inv_actions)
-        print(f'Inline Policy : \n {json.dumps(inline_policy)}')
         return json.dumps(inline_policy)
 
     '''
