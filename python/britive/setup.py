@@ -47,6 +47,8 @@ def main():
     parser.add_argument('-a', '--applications', action='store_true', help='Process Applications')
     parser.add_argument('-p', '--profiles', action='store_true', help='Process Profiles for each application')
     parser.add_argument('-n', '--notification', action='store_true', help='Process Notification Medium')
+    parser.add_argument('-r', '--resource-types', action='store_true', help='Process creation of Resource Types')
+    parser.add_argument('-o', '--resource-profiles', action='store_true', help='Process creation of Resource Profiles')
     args = parser.parse_args()
     if args.idps:
         process_idps()
