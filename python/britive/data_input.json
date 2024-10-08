@@ -133,5 +133,67 @@
       },
       "type": "slack"
     }
+  ],
+  "resources": [
+    {
+      "name": "ActiveDirectory",
+      "profiles": [
+        {
+          "name": "Britive Tenant Admin",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ]
+    },
+    {
+      "name": "LinuxSSH",
+      "profiles": [
+        {
+          "name": "Account Admin",
+          "description": "",
+          "Expiration": "14400000"
+        },
+        {
+          "name": "S3 Developer Full Access",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ]
+    },
+    {
+      "name": "WindowsRDP",
+      "profiles": [
+        {
+          "name": "Namespace Manager",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ]
+    },
+    {
+      "name": "AuroraMySQL",
+      "profiles": [
+        {
+          "name": "Global Admin",
+          "description": "",
+          "Expiration": "7200000"
+        },
+        {
+          "name": "Auditor",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ]
+    },
+    {
+      "name": "AuroraPostgres",
+      "profiles": [
+        {
+          "name": "Okta Super Admin",
+          "description": "Temporary elevation for Okta Super admin role",
+          "Expiration": "7200000"
+        }
+      ]
+    }
   ]
 }
