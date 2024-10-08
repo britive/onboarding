@@ -42,13 +42,14 @@ def main():
     # The argument parser
     parser = argparse.ArgumentParser(description='Process some command-line arguments.')
     parser.add_argument('-i', '--idps', action='store_true', help='Process Identity providers')
-    parser.add_argument('-u', '--users', action='store_true', help='Process Users')
+    parser.add_argument('-u', '--users', action='store_true', help='Process User identities')
+    parser.add_argument('-s', '--services', action='store_true', help='Process Service identities')
     parser.add_argument('-t', '--tags', action='store_true', help='Process Tags')
     parser.add_argument('-a', '--applications', action='store_true', help='Process Applications')
     parser.add_argument('-p', '--profiles', action='store_true', help='Process Profiles for each application')
     parser.add_argument('-n', '--notification', action='store_true', help='Process Notification Medium')
-    parser.add_argument('-r', '--resource-types', action='store_true', help='Process creation of Resource Types')
-    parser.add_argument('-o', '--resource-profiles', action='store_true', help='Process creation of Resource Profiles')
+    parser.add_argument('-r', '--resourceTypes', action='store_true', help='Process creation of Resource Types')
+    parser.add_argument('-o', '--resourceProfiles', action='store_true', help='Process creation of Resource Profiles')
     args = parser.parse_args()
     if args.idps:
         process_idps()
@@ -62,6 +63,10 @@ def main():
         process_profiles()
     if args.notification:
         process_notification()
+    if args.resourceTypes:
+        process_resource_types()
+    if args.resourceProfiles:
+        process_resource_profiles()
 
     # Dump updates and changes to data to a json file
     with open(data_file_input, 'w') as f:
@@ -127,6 +132,16 @@ def process_idps():
         idp['ssoConfig'] = idp_response['ssoConfig']
         if idp['type'].lower() == "azure":
             br.identity_providers.update(identity_provider_id=idp_response['id'], sso_provider="Azure")
+
+
+def process_resource_types():
+    rt = jmespath.search(expression="resources", data=data)
+    print(rt)
+
+
+def process_resource_profiles():
+    rt = jmespath.search(expression="resources", data=data)
+    print(rt)
 
 
 # Press the green button in the gutter to run the script.
