@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-from google.cloud import iam_admin_v1
+from googleapiclient import discovery
+from google.cloud import iam_credentials_v1
+from google.cloud import iam
+from google.iam.v1 import policy_pb2 as iam_policy
 from google.oauth2 import service_account
 import argparse
 
@@ -13,78 +16,59 @@ class BritiveGCP:
         self.project_id = project_id
         self.service_account_name = service_account_name
         self.service_account_display_name = service_account_display_name
+        self.credentials = service_account.Credentials.from_service_account_file('google-cloud/service_account_creds.json')
+        self.service = discovery.build('iam', 'v1', credentials=self.credentials)
+        self.cloudresourcemanager = discovery.build('cloudresourcemanager', 'v1', credentials=self.credentials)
 
     def create_role(self):
-        role_id: str = 'BritiveIntegrationRole'
-        role_title: str = 'Britive Integration Role'
-        role_description: str = 'A custom role with admin permissions for Britive platform'
-        role_permissions = ['iam.roles.get', 'iam.roles.list', 'iam.serviceAccountKeys.create',
-                            'iam.serviceAccountKeys.delete',
-                            'iam.serviceAccountKeys.get', 'iam.serviceAccountKeys.list', 'iam.serviceAccounts.create',
-                            'iam.serviceAccounts.delete', 'iam.serviceAccounts.disable', 'iam.serviceAccounts.enable',
-                            'iam.serviceAccounts.get', 'iam.serviceAccounts.getIamPolicy', 'iam.serviceAccounts.list',
-                            'iam.serviceAccounts.setIamPolicy', 'iam.serviceAccounts.undelete',
-                            'iam.serviceAccounts.update',
-                            'orgpolicy.policy.get', 'resourcemanager.folders.get',
-                            'resourcemanager.folders.getIamPolicy',
-                            'resourcemanager.folders.list', 'resourcemanager.folders.setIamPolicy',
-                            'resourcemanager.organizations.get', 'resourcemanager.organizations.getIamPolicy',
-                            'resourcemanager.organizations.setIamPolicy', 'resourcemanager.projects.get',
-                            'resourcemanager.projects.getIamPolicy', 'resourcemanager.projects.list',
-                            'resourcemanager.projects.setIamPolicy', 'bigquery.datasets.update', 'bigquery.tables.get',
-                            'bigquery.tables.getIamPolicy', 'bigquery.tables.setIamPolicy', 'apigee.environments.get',
-                            'apigee.environments.getIamPolicy', 'apigee.environments.setIamPolicy']
-
-        print(f'Creating role with id {role_id} and description {role_description}.')
-
-        # Initialize the IAM client
-        credentials = self.service_account_name.Credentials.from_service_account_file(
-            './britive-service-account-key.json')
-        client = iam_admin_v1.IAMClient(credentials=credentials)
-
-        # The service account's resource name
-        resource_name = f'projects/{self.project_id}'
-
-        # Create the service account
-        service_account = client.create_service_account(
-            request={
-                'name': resource_name,
-                'account_id': self.service_account_name,
-                'service_account': {
-                    'display_name': self.service_account_display_name
-                }
-            }
-        )
-        # Define the custom role
-        role = iam_admin_v1.Role(
-            title=role_title,
-            description=role_description,
-            included_permissions=role_permissions,
-            stage=iam_admin_v1.Role.Stage.GA
-        )
+        # Define role details
+        role_id = 'BritiveIntegrationRole'
+        role_title = 'Britive Integration Role'
+        role_description = 'A custom role with admin permissions for Britive platform'
+        role_permissions = [
+            'iam.roles.get', 'iam.roles.list', 'iam.serviceAccountKeys.create', 'iam.serviceAccountKeys.delete',
+            'iam.serviceAccountKeys.get', 'iam.serviceAccountKeys.list', 'iam.serviceAccounts.create',
+            'iam.serviceAccounts.delete', 'iam.serviceAccounts.disable', 'iam.serviceAccounts.enable',
+            'iam.serviceAccounts.get', 'iam.serviceAccounts.getIamPolicy', 'iam.serviceAccounts.list',
+            'iam.serviceAccounts.setIamPolicy', 'iam.serviceAccounts.undelete', 'iam.serviceAccounts.update',
+            'resourcemanager.projects.get', 'resourcemanager.projects.getIamPolicy',
+            'resourcemanager.projects.setIamPolicy'
+        ]
 
         # Create the custom role
-        created_role = client.create_role(
-            request={
-                'parent': resource_name,
-                'role_id': role_id,
-                'role': role
+        custom_role_body = {
+            'roleId': role_id,
+            'role': {
+                'title': role_title,
+                'description': role_description,
+                'includedPermissions': role_permissions,
+                'stage': 'GA'
             }
-        )
+        }
 
-        print(f'Service account {service_account.email} created.')
-        print(f'Custom role {created_role.name} created.')
+        try:
+            role = self.service.projects().roles().create(parent=f'projects/{self.project_id}',
+                                                          body=custom_role_body).execute()
+            print(f"Custom role created: {role_id}")
+        except Exception as e:
+            print(f"Role creation failed: {e}")
 
-        policy = client.get_iam_policy(request={"resource": resource_name})
-        binding = iam_admin_v1.Binding(
-            role=role,
-            members=[f'serviceAccount:{service_account.email}']
-        )
-        policy.bindings.append(binding)
+        # Get the current IAM policy
+        policy = self.cloudresourcemanager.projects().getIamPolicy(resource=self.project_id, body={}).execute()
 
-        # Set the new policy
-        updated_policy = client.set_iam_policy(request={"resource": resource_name, "policy": policy})
-        print(f'Service account {service_account.email} assigned to role {role}.')
+        # Add the new binding to the policy
+        binding = {
+            'role': f'projects/{self.project_id}/roles/{role_id}',
+            'members': [f'serviceAccount:{self.service_account_name}@{self.project_id}.iam.gserviceaccount.com']
+        }
+        policy['bindings'].append(binding)
+
+        # Update the IAM policy with the new binding
+        policy_body = {'policy': policy}
+        updated_policy = self.cloudresourcemanager.projects().setIamPolicy(resource=self.project_id,
+                                                                           body=policy_body).execute()
+        print(
+            f"Role '{role_id}' assigned to service account '{self.service_account_name}@{self.project_id}.iam.gserviceaccount.com'.")
 
 
 def main():
