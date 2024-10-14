@@ -75,7 +75,7 @@ def main():
 
 def process_tags():
     tags = jmespath.search("tags", data)
-    print(f'{info}Processing {len(tags)} Tags...{Style.reset}')
+    print(f'{info}Processing {len(tags)} Tags...{Style.RESET_ALL}')
     for tag in tags:
         print(f"{tag['name']}")
         tag_response = br.tags.create(name=tag['name'], description=tag['description'], idp=britive_idp)
@@ -84,7 +84,7 @@ def process_tags():
 
 def process_users():
     users = jmespath.search("users", data)
-    print(f'{info}Processing {len(users)} users...{Style.reset}')
+    print(f'{info}Processing {len(users)} users...{Style.RESET_ALL}')
     for user in users:
         print(f"{user['email']} on {user['idp']}")
         user_idp = br.identity_providers.get_by_name(identity_provider_name=user['idp'])['id']
@@ -96,7 +96,7 @@ def process_users():
 def process_applications():
     app_catalog = jmespath.search("[].{name: name, id: catalogAppId}", br.applications.catalog())
     apps = jmespath.search(expression="apps", data=data)
-    print(f'{info}Processing {len(apps)} applications...{Style.reset}')
+    print(f'{info}Processing {len(apps)} applications...{Style.RESET_ALL}')
     for app in apps:
         catalog_id = [item['id'] for item in app_catalog if item['name'] == app['type']][0]
         app_response = br.applications.create(application_name=app['name'], catalog_id=catalog_id)
@@ -106,8 +106,14 @@ def process_applications():
 def process_profiles():
     apps = jmespath.search(expression="apps", data=data)
     for app in apps:
+        envs = app["envs"]
+        print(f'{info}Processing Environments for app: {app['name']} {Style.RESET_ALL}')
+        for env in envs:
+            br.environments.create(application_id=app['id'], name=env['name'], description=env['description'])
+
+        # Process Profiles after environments are created
         profiles = app["profiles"]
-        print(f'{info}Processing profiles for app: {app['name']} {Style.reset}')
+        print(f'{info}Processing profiles for app: {app['name']} {Style.RESET_ALL}')
         for profile in profiles:
             br.profiles.create(application_id=app['id'], name=profile['name'], status="active",
                                expirationDuration=profile['Expiration'])
@@ -115,7 +121,7 @@ def process_profiles():
 
 def process_notification():
     notifications = jmespath.search(expression='notification', data=data)
-    print(f'{green}Processing {len(notifications)} Notification Mediums...{Style.reset}')
+    print(f'{green}Processing {len(notifications)} Notification Mediums...{Style.RESET_ALL}')
     for note in notifications:
         print(note['name'])
         br.notification_mediums.create(name=note['name'], description=note['description'],
@@ -125,7 +131,7 @@ def process_notification():
 
 def process_idps():
     idps = jmespath.search(expression="idps", data=data)
-    print(f'{green}Processing {len(idps)} identity providers...{Style.reset}')
+    print(f'{green}Processing {len(idps)} identity providers...{Style.RESET_ALL}')
     for idp in idps:
         idp_response = (br.identity_providers.create(name=idp['name'], description=idp['description']))
         idp['id'] = idp_response['id']
