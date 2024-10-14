@@ -700,3 +700,4 @@ zsdoc/data
 
 # End of https://www.toptal.com/developers/gitignore/api/zsh
 
+service_account_creds.json

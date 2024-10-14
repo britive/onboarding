@@ -23,6 +23,9 @@ Make sure to install the required Python packages using `pip`:
 
 ```bash
 pip3 install -r requirements.txt
+
+# Set the right AWS Profile for boto3. 
+export AWS_PROFILE=demo
 ```
 
 # Usage
@@ -36,3 +39,4 @@ optional arguments:
   -i, --idp         Create Britive as an Identity Provider
   -r, --role        Create Britive Integration Role
   -s, --session     Setup for session invalidation
+  -m, --managed     Setup for Britive managed profiles and Access Builder
