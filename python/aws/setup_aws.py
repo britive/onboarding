@@ -195,7 +195,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--session', action='store_true',
                         help='Setup for session invalidation', default=False)
     parser.add_argument('-m', '--managed', action='store_true',
-                        help='Setup Britive managed policies', default=False)
+                        help='Setup for Britive managed profiles and Access Builder', default=False)
     args = parser.parse_args()
 
     # Instantiate the class
