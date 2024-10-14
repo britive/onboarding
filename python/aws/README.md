@@ -35,8 +35,8 @@ usage: setup_aws.py [-h] [-i] [-r] [-s]
 Process some command-line arguments.
 
 optional arguments:
-  -h, --help        Show this help message and exit.
-  -i, --idp         Create Britive as an Identity Provider
-  -r, --role        Create Britive Integration Role
-  -s, --session     Setup for session invalidation
-  -m, --managed     Setup for Britive managed profiles and Access Builder
+-  `-h`, `--help`        Show this help message and exit.
+-  `-i`, `--idp`         Create Britive as an Identity Provider
+-  `-r`, `--role`        Create Britive Integration Role
+-  `-s`, `--session`     Setup for session invalidation
+-  `-m`, `--managed`     Setup for Britive managed profiles and Access Builder
