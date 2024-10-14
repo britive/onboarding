@@ -35,10 +35,10 @@ class BritiveInt:
         self.britive_api_token = os.getenv("BRITIVE_API_TOKEN")
 
         # Define Identity Provider name to be created in AWS
-        self.identity_provider_name = "Britive"
+        self.identity_provider_name = "Britive4"
 
         # Role name and description
-        self.role_name = 'britive-integration-role'
+        self.role_name = 'britive-integration-role4'
         self.role_description = 'Role for federated access using SAML and Britive-managed support'
 
         # Session Invalidation and Britive managed policies flag
@@ -51,13 +51,14 @@ class BritiveInt:
 
     # Trust policy for SAML-based role creation
     def get_trust_policy(self):
+        print(f'saml arn: "{self.saml_provider_arn}"')
         trust_policy = {
             "Version": "2012-10-17",
             "Statement": [
                 {
                     "Effect": "Allow",
                     "Principal": {
-                        "Federated": '"' + self.saml_provider_arn + '"'
+                        "Federated": self.saml_provider_arn
                     },
                     "Action": [
                         "sts:AssumeRoleWithSAML",
@@ -75,6 +76,7 @@ class BritiveInt:
             print(f'Adding invalidation')
             inv_trust = ["sts:TagSession"]
             trust_policy["Statement"][0]["Action"].extend(inv_trust)
+        print(f'TrustPolicy: \n {json.dumps(trust_policy)}')
         return json.dumps(trust_policy)
 
     # Inline policy for the britive idp
