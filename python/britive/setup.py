@@ -141,8 +141,10 @@ def process_idps():
 
 
 def process_resource_types():
-    rt = jmespath.search(expression="resources", data=data)
-    print(rt)
+    rts = jmespath.search(expression="resources", data=data)
+    for rt in rts:
+        rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
+        rt['id'] = rt_response['resourceTypeId']
 
 
 def process_resource_profiles():

@@ -16,25 +16,8 @@
           "description": "",
           "Expiration": "7200000"
         }
-      ]
-    },
-    {
-      "name": "EKS - Cluster",
-      "description": "Britive for Britive. Short-lived Admin access",
-      "type": "Kubernetes",
-      "envs": [
-        {
-          "name": "POC Cluster",
-          "description": "Britive PoC Cluster on EKS"
-        }
       ],
-      "profiles": [
-        {
-          "name": "Cluster Admin",
-          "description": "",
-          "Expiration": "7200000"
-        }
-      ]
+      "id": "ht4n60ouwc7g5fckdgi3"
     },
     {
       "name": "AWS",
@@ -50,24 +33,26 @@
           "description": "Developer access into S3",
           "Expiration": "14400000"
         }
-      ]
+      ],
+      "id": "vk2q1zgv666oq370y9q7"
     },
     {
-      "name": "Okta Sandbox",
-      "type": "Okta",
+      "name": "Google Workspace",
+      "type": "Google Workspace",
       "envs": [
         {
           "name": "Sandbox",
-          "description": "Okta Sandbox Tenant"
+          "description": "Google Workspace"
         }
       ],
       "profiles": [
         {
-          "name": "Okta Super Admin",
-          "description": "Temporary elevation for Okta Super admin role",
+          "name": "Google Workspace Admin",
+          "description": "Temporary elevation for admin role",
           "Expiration": "7200000"
         }
-      ]
+      ],
+      "id": "id8wz3qsdyb1g0ote48l"
     }
   ],
   "idps": [
@@ -80,19 +65,23 @@
   "tags": [
     {
       "description": "Admins participating in the user management",
-      "name": "User Admins"
+      "name": "User Admins",
+      "id": "ttxmirm60fyzjvgh24m5"
     },
     {
       "name": "Help Desk Users",
-      "description": "Users participating in the Demo"
+      "description": "Users participating in the Demo",
+      "id": "86ldi6lhglzvhocrou3q"
     },
     {
       "name": "Managers",
-      "description": "Approvers will approve the profiles or checkouts"
+      "description": "Approvers will approve the profiles or checkouts",
+      "id": "76uao5bedx6asob7ye7h"
     },
     {
       "name": "Tenant Admins",
-      "description": "Admins managing the Britive Platform"
+      "description": "Admins managing the Britive Platform",
+      "id": "vlp2b2xl6y7gkx6d29au"
     }
   ],
   "users": [
@@ -145,6 +134,7 @@
   "resources": [
     {
       "name": "ActiveDirectory",
+      "description": "",
       "profiles": [
         {
           "name": "Britive Tenant Admin",
@@ -155,6 +145,7 @@
     },
     {
       "name": "LinuxSSH",
+      "description": "",
       "profiles": [
         {
           "name": "Account Admin",
@@ -170,6 +161,7 @@
     },
     {
       "name": "WindowsRDP",
+      "description": "",
       "profiles": [
         {
           "name": "Namespace Manager",
@@ -180,6 +172,7 @@
     },
     {
       "name": "AuroraMySQL",
+      "description": "",
       "profiles": [
         {
           "name": "Global Admin",
@@ -195,6 +188,7 @@
     },
     {
       "name": "AuroraPostgres",
+      "description": "",
       "profiles": [
         {
           "name": "Okta Super Admin",
