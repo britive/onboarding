@@ -1,5 +1,6 @@
 import os
 import time
+from dotenv import load_dotenv
 import britive.britive
 from britive.britive import Britive
 import logging
@@ -351,17 +352,19 @@ def configure_logging(log_file: str):
 
 
 def process():
+    load_dotenv()
+
     args = build_args()
 
     configure_logging(log_file=args.log_file)
 
-    logging.info('starting processing')
+    logging.info('Starting processing')
 
     scan_scim = ScanScim(
-        application_users_group_name='britive-users',
-        britive_group_prefix='britive-',
-        application_id='6ipnod6fyq5co63fog2w',
-        identity_provider_id='4thvwrd59luau6gc1lf7'
+        application_users_group_name=os.getenv("APP_GROUP"),
+        britive_group_prefix=os.getenv("GROUP_PREFIX"),
+        application_id=os.getenv("APP_ID"),
+        identity_provider_id=os.getenv("IDP_ID")
     )
 
     scan_scim.scan_application()
