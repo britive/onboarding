@@ -125,9 +125,7 @@
     {
       "description": "Slack for approval and other Britive notices",
       "name": "Slack_TEST",
-      "parameters": {
-        "URL": "https://britive-hq.slack.com/api/"
-      },
+      "url": "https://britive-hq.slack.com/api/",
       "type": "slack"
     }
   ],

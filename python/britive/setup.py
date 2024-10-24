@@ -125,8 +125,7 @@ def process_notification():
     for note in notifications:
         print(note['name'])
         br.notification_mediums.create(name=note['name'], description=note['description'],
-                                       notification_medium_type=note['type'],
-                                       connection_parameters=note['parameters'])
+                                       notification_medium_type=note['type'], url=note['url'])
 
 
 def process_idps():
