@@ -72,26 +72,6 @@
   ],
   "resources": [
     {
-      "name": "ActiveDirectory",
-      "description": "Active Directory Domains for permission management",
-      "permissions": [
-        {
-          "name": "AddUserToGroup",
-          "description": "Adds user to group",
-          "variables": [ "user", "group" ],
-          "checkout": "",
-          "checkin": ""
-        }
-      ],
-      "profiles": [
-        {
-          "name": "Britive Tenant Admin",
-          "description": "",
-          "Expiration": "7200000"
-        }
-      ]
-    },
-    {
       "name": "HelloWorld",
       "description": "Hellow World | Sample broker bootstrap and unit test",
       "permissions": [
@@ -107,60 +87,6 @@
         {
           "name": "Britive Tenant Admin",
           "description": "",
-          "Expiration": "7200000"
-        }
-      ]
-    },
-    {
-      "name": "LinuxSSH",
-      "description": "",
-      "profiles": [
-        {
-          "name": "Account Admin",
-          "description": "",
-          "Expiration": "14400000"
-        },
-        {
-          "name": "S3 Developer Full Access",
-          "description": "",
-          "Expiration": "14400000"
-        }
-      ]
-    },
-    {
-      "name": "WindowsRDP",
-      "description": "",
-      "profiles": [
-        {
-          "name": "Namespace Manager",
-          "description": "",
-          "Expiration": "7200000"
-        }
-      ]
-    },
-    {
-      "name": "AuroraMySQL",
-      "description": "",
-      "profiles": [
-        {
-          "name": "Global Admin",
-          "description": "",
-          "Expiration": "7200000"
-        },
-        {
-          "name": "Auditor",
-          "description": "",
-          "Expiration": "14400000"
-        }
-      ]
-    },
-    {
-      "name": "AuroraPostgres",
-      "description": "",
-      "profiles": [
-        {
-          "name": "Okta Super Admin",
-          "description": "Temporary elevation for Okta Super admin role",
           "Expiration": "7200000"
         }
       ]
