@@ -144,6 +144,7 @@ def process_resource_types():
     for rt in rts:
         rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
         rt['id'] = rt_response['resourceTypeId']
+        br.access_broker.resources.permissions.create()
 
 
 def process_resource_profiles():
