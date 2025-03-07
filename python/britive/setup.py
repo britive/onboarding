@@ -144,7 +144,13 @@ def process_resource_types():
     for rt in rts:
         rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
         rt['id'] = rt_response['resourceTypeId']
-        br.access_broker.resources.permissions.create()
+        perms = jmespath.search(expression="permissions", data=data)
+        for perm in perms:
+            perm_response = br.access_broker.resources.permissions.create(name=perm['name'],
+                                                                          description=perm['description'],
+                                                                          variables=perm["variables"],
+                                                                          checkout_file=perm["checkout"], checkin_file=perm["checkin"])
+            perm['id'] = perm_response["permissionId"]
 
 
 def process_resource_profiles():
