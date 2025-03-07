@@ -49,7 +49,7 @@ def main():
     parser.add_argument('-p', '--profiles', action='store_true', help='Process Profiles for each application')
     parser.add_argument('-n', '--notification', action='store_true', help='Process Notification Medium')
     parser.add_argument('-r', '--resourceTypes', action='store_true', help='Process creation of Resource Types')
-    parser.add_argument('-o', '--resourceProfiles', action='store_true', help='Process creation of Resource Profiles')
+
     args = parser.parse_args()
     if args.idps:
         process_idps()
@@ -65,8 +65,6 @@ def main():
         process_notification()
     if args.resourceTypes:
         process_resource_types()
-    if args.resourceProfiles:
-        process_resource_profiles()
 
     # Dump updates and changes to data to a json file
     with open(data_file_input, 'w') as f:
@@ -144,6 +142,7 @@ def process_resource_types():
     for rt in rts:
         rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
         rt['id'] = rt_response['resourceTypeId']
+        # Process Permissions - create permissions listed
         perms = jmespath.search(expression="permissions", data=rt)
         print(f'Creating Permissions {len(perms)} : {perms}')
         for perm in perms:
@@ -151,12 +150,13 @@ def process_resource_types():
                                                                           description=perm['description'],
                                                                           variables=perm["variables"],
                                                                           checkout_file=perm["checkout"], checkin_file=perm["checkin"])
-            # perm['id'] = perm_response["permissionId"]
-
-
-def process_resource_profiles():
-    rt = jmespath.search(expression="resources", data=data)
-    print(rt)
+            perm['id'] = perm_response["permissionId"]
+        # Process profiles - create profiles for the resource type
+        profiles = jmespath.search(expression="profiles", data=rt)
+        for profile in profiles:
+            profile_response = br.access_broker.profiles.create(name=profile[''], description=profile[''],
+                                                                expiration_duration=profile[''])
+            profile['id'] = profile_response['profileId']
 
 
 # Press the green button in the gutter to run the script.
