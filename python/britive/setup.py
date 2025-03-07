@@ -151,7 +151,6 @@ def process_resource_types():
                                                                           description=perm['description'],
                                                                           variables=perm["variables"],
                                                                           checkout_file=perm["checkout"], checkin_file=perm["checkin"])
-            print(f'Permission output: {perm_response}')
             # perm['id'] = perm_response["permissionId"]
 
 
