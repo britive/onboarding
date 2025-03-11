@@ -8,9 +8,11 @@ This script automates various tasks using the Britive API, such as processing id
 ## Prerequisites
 
 ### 1. Python Version
+
 Ensure that you have Python 3.x installed on your machine.
 
 ### 2. Required Libraries
+
 Install the following Python packages before running the script:
 
 ```bash
@@ -18,6 +20,7 @@ pip install britive simplejson colorama jmespath python-dotenv
 ```
 
 ### 3. Environment Configuration
+
 Create a `.env` file in the root directory with the following environment variables:
 
 ```
@@ -28,6 +31,7 @@ BRITIVE_API_TOKEN=<Your Britive API Token>
 This information is required for the script to connect to the Britive API.
 
 ### 4. Input Data
+
 The script reads from a JSON file located at `britive/data_input.json`, which contains the necessary information to create users, applications, tags, and more. Ensure that this file is properly formatted.
 
 Example structure of `data_input.json`:
@@ -61,7 +65,8 @@ You can run the script with specific options based on the task you want to perfo
 python script.py [options]
 ```
 
-### Available Options:
+### Available Options
+
 - `-i`, `--idps`: Process Identity Providers
 - `-u`, `--users`: Process User Identities
 - `-s`, `--services`: Process Service Identities
@@ -70,9 +75,11 @@ python script.py [options]
 - `-p`, `--profiles`: Process Profiles for each application
 - `-n`, `--notification`: Process Notification Mediums
 - `-r`, `--resourceTypes`: Process creation of Resource Types
+- `-b`, `--brokerPool`: Process broker pool. Creates one primary broker pool
 - `-o`, `--resourceProfiles`: Process creation of Resource Profiles
 
-### Example:
+### Example
+
 To process users and tags, run:
 
 ```bash
@@ -80,6 +87,7 @@ python script.py --users --tags
 ```
 
 ### Output
+
 The script outputs logs to the console, showing the progress for each resource being processed (e.g., users, applications, tags).
 
 ## Script Flow
@@ -91,7 +99,9 @@ The script outputs logs to the console, showing the progress for each resource b
 5. **Data Persistence**: Updates made to users, tags, or applications are written back to `data_input.json`.
 
 ## Error Handling
+
 If there is an issue with the Britive API or the input data, the script will print warning or error messages using the `colorama` library, providing visual cues with different colors (red for errors, yellow for warnings, blue for info, green for success).
 
 ## License
+
 This project is licensed under the MIT License.
