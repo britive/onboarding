@@ -66,7 +66,7 @@ def main():
         process_notification()
     if args.resourceTypes:
         process_resource_types()
-    if args.resourceTypes:
+    if args.brokerPool:
         process_broker_pool()
 
     # Dump updates and changes to data to a json file
@@ -139,9 +139,11 @@ def process_idps():
         if idp['type'].lower() == "azure":
             br.identity_providers.update(identity_provider_id=idp_response['id'], sso_provider="Azure")
 
+
 def process_broker_pool():
-    broker_pool = br.br.broker_pools.create(name='Primary Pool', description='Broker Pool for Britive Broker')
+    broker_pool = br.broker_pools.create(name='Primary Pool', description='Broker Pool for Britive Broker')
     print(f'Create Broker Pool id: {broker_pool['poolId']}')
+
 
 def process_resource_types():
     rts = jmespath.search(expression="resources", data=data)
