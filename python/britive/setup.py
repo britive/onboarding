@@ -157,6 +157,7 @@ def process_resource_types():
             profile_response = br.access_broker.profiles.create(name=profile[''], description=profile[''],
                                                                 expiration_duration=profile[''])
             profile['id'] = profile_response['profileId']
+        br.access_broker.pools.create(name='', description='')
 
 
 # Press the green button in the gutter to run the script.
