@@ -73,7 +73,7 @@
   "resources": [
     {
       "name": "HelloWorld",
-      "description": "Hellow World | Sample broker bootstrap and unit test",
+      "description": "Hello World | Sample broker bootstrap and unit test",
       "permissions": [
         {
           "name": "ConfirmUser",
