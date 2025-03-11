@@ -51,8 +51,7 @@
           "description": "Temporary elevation for admin role",
           "Expiration": "7200000"
         }
-      ],
-      "id": "id8wz3qsdyb1g0ote48l"
+      ]
     }
   ],
   "idps": [
@@ -91,30 +90,25 @@
           "description": "",
           "Expiration": "7200000"
         }
-      ],
-      "id": "finu649p7xybo5omho18"
+      ]
     }
   ],
   "tags": [
     {
       "description": "Admins participating in the user management",
-      "name": "User Admins",
-      "id": "ttxmirm60fyzjvgh24m5"
+      "name": "User Admins"
     },
     {
       "name": "Help Desk Users",
-      "description": "Users participating in the Demo",
-      "id": "86ldi6lhglzvhocrou3q"
+      "description": "Users participating in the Demo"
     },
     {
       "name": "Managers",
-      "description": "Approvers will approve the profiles or checkouts",
-      "id": "76uao5bedx6asob7ye7h"
+      "description": "Approvers will approve the profiles or checkouts"
     },
     {
       "name": "Tenant Admins",
-      "description": "Admins managing the Britive Platform",
-      "id": "vlp2b2xl6y7gkx6d29au"
+      "description": "Admins managing the Britive Platform"
     }
   ],
   "users": [
