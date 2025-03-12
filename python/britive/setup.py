@@ -142,7 +142,7 @@ def process_idps():
 
 def process_broker_pool():
     broker_pool = br.access_broker.pools.create(name='Primary Pool', description='Broker Pool for Britive Broker')
-    print(f'Create Broker Pool id: {broker_pool['poolId']}')
+    print(f'Create Broker Pool id: {broker_pool['pool-id']}')
 
 
 def process_resource_types():
