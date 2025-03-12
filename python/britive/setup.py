@@ -163,10 +163,9 @@ def process_resource_types():
         # Process profiles - create profiles for the resource type
         profiles = jmespath.search(expression="profiles", data=rt)
         for profile in profiles:
-            profile_response = br.access_broker.profiles.create(name=profile[''], description=profile[''],
-                                                                expiration_duration=profile[''])
+            profile_response = br.access_broker.profiles.create(name=profile['name'], description=profile['description'],
+                                                                expiration_duration=profile['Expiration'])
             profile['id'] = profile_response['profileId']
-        br.access_broker.pools.create(name='', description='')
 
 
 # Press the green button in the gutter to run the script.
