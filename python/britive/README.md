@@ -76,7 +76,6 @@ python script.py [options]
 - `-n`, `--notification`: Process Notification Mediums
 - `-r`, `--resourceTypes`: Process creation of Resource Types
 - `-b`, `--brokerPool`: Process broker pool. Creates one primary broker pool
-- `-o`, `--resourceProfiles`: Process creation of Resource Profiles
 
 ### Example
 
