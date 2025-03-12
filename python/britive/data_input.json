@@ -1,14 +1,15 @@
 {
   "apps": [
     {
+      "name": "Britive",
       "description": "Britive for Britive. Short-lived Admin access",
+      "type": "Britive",
       "envs": [
         {
           "name": "POC Tenant",
           "description": "Britive PoC Tenant"
         }
       ],
-      "name": "Britive",
       "profiles": [
         {
           "name": "Britive Tenant Admin",
@@ -16,7 +17,7 @@
           "Expiration": "7200000"
         }
       ],
-      "type": "Britive"
+      "id": "ht4n60ouwc7g5fckdgi3"
     },
     {
       "name": "AWS",
@@ -32,7 +33,8 @@
           "description": "Developer access into S3",
           "Expiration": "14400000"
         }
-      ]
+      ],
+      "id": "vk2q1zgv666oq370y9q7"
     },
     {
       "name": "Google Workspace",
@@ -49,7 +51,8 @@
           "description": "Temporary elevation for admin role",
           "Expiration": "7200000"
         }
-      ]
+      ],
+      "id": "id8wz3qsdyb1g0ote48l"
     }
   ],
   "idps": [
@@ -69,15 +72,33 @@
   ],
   "resources": [
     {
+      "name": "ActiveDirectory",
+      "description": "Active Directory Domains for permission management",
+      "permissions": [
+        {
+          "name": "AddUserToGroup",
+          "description": "Adds user to group",
+          "variables": [ "user", "group" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
+      "profiles": [
+        {
+          "name": "Britive Tenant Admin",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ]
+    },
+    {
       "name": "HelloWorld",
-      "description": "Hello World | Sample broker bootstrap and unit test",
+      "description": "Hellow World | Sample broker bootstrap and unit test",
       "permissions": [
         {
           "name": "ConfirmUser",
           "description": "Returns Username upon checkout",
-          "variables": [
-            "username"
-          ],
+          "variables": [ "username" ],
           "checkout": "echo $username",
           "checkin": "echo 'checked-in'"
         }
@@ -89,24 +110,82 @@
           "Expiration": "7200000"
         }
       ]
+    },
+    {
+      "name": "LinuxSSH",
+      "description": "",
+      "profiles": [
+        {
+          "name": "Account Admin",
+          "description": "",
+          "Expiration": "14400000"
+        },
+        {
+          "name": "S3 Developer Full Access",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ]
+    },
+    {
+      "name": "WindowsRDP",
+      "description": "",
+      "profiles": [
+        {
+          "name": "Namespace Manager",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ]
+    },
+    {
+      "name": "AuroraMySQL",
+      "description": "",
+      "profiles": [
+        {
+          "name": "Global Admin",
+          "description": "",
+          "Expiration": "7200000"
+        },
+        {
+          "name": "Auditor",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ]
+    },
+    {
+      "name": "AuroraPostgres",
+      "description": "",
+      "profiles": [
+        {
+          "name": "Okta Super Admin",
+          "description": "Temporary elevation for Okta Super admin role",
+          "Expiration": "7200000"
+        }
+      ]
     }
   ],
   "tags": [
     {
       "description": "Admins participating in the user management",
-      "name": "User Admins"
+      "name": "User Admins",
+      "id": "ttxmirm60fyzjvgh24m5"
     },
     {
       "name": "Help Desk Users",
-      "description": "Users participating in the Demo"
+      "description": "Users participating in the Demo",
+      "id": "86ldi6lhglzvhocrou3q"
     },
     {
       "name": "Managers",
-      "description": "Approvers will approve the profiles or checkouts"
+      "description": "Approvers will approve the profiles or checkouts",
+      "id": "76uao5bedx6asob7ye7h"
     },
     {
       "name": "Tenant Admins",
-      "description": "Admins managing the Britive Platform"
+      "description": "Admins managing the Britive Platform",
+      "id": "vlp2b2xl6y7gkx6d29au"
     }
   ],
   "users": [
