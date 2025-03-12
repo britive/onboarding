@@ -3,6 +3,8 @@ import argparse
 from dotenv import load_dotenv
 import os
 
+from eks.setup_eks import caution
+
 try:
     import simplejson as json
 except ImportError:
@@ -18,24 +20,52 @@ BRITIVE_TENANT
 BRITIVE_API_TOKEN
 '''
 
-# Load data and ENVs
-data_file_input = 'britive/data_input.json'
 
+# Load Environment Variables
 load_dotenv()
-with open(data_file_input, 'r') as file:
-    data = json.load(file)
 
-br = Britive(tenant=os.getenv("BRITIVE_TENANT"), token=os.getenv("BRITIVE_API_TOKEN"))
+# Validate required environment variables
+BRITIVE_TENANT = os.getenv("BRITIVE_TENANT")
+BRITIVE_API_TOKEN = os.getenv("BRITIVE_API_TOKEN")
 
-# Get the id for the local (Britive) Identity provider. This is needed to create Users and Tags local to Britive.
-idp_list = br.identity_management.identity_providers.list()
-britive_idp = [item['id'] for item in idp_list if item['name'] == 'Britive'][0]
+if not BRITIVE_TENANT or not BRITIVE_API_TOKEN:
+    print(f"{caution}Missing BRITIVE_TENANT or BRITIVE_API_TOKEN in environment variables.{Style.RESET_ALL}")
+    exit(1)
+
+# Load JSON data file
+DATA_FILE_INPUT = "britive/data_input.json"
+
+try:
+    with open(DATA_FILE_INPUT, "r") as file:
+        data = json.load(file)
+except FileNotFoundError:
+    print(f"{caution}Data file '{DATA_FILE_INPUT}' not found. Ensure it exists.{Style.RESET_ALL}")
+    exit(1)
+except json.JSONDecodeError:
+    print(f"{caution}Error decoding JSON in file '{DATA_FILE_INPUT}'. Check for syntax errors.{Style.RESET_ALL}")
+    exit(1)
+
+try:
+    br = Britive(tenant=BRITIVE_TENANT, token=BRITIVE_API_TOKEN)
+except Exception as e:
+    print(f"{caution}Failed to initialize Britive API: {e}{Style.RESET_ALL}")
+    exit(1)
+
+# Get the id for the local (Britive) Identity Provider
+try:
+    idp_list = br.identity_management.identity_providers.list()
+    britive_idp = next((item["id"] for item in idp_list if item["name"] == "Britive"), None)
+    if not britive_idp:
+        raise ValueError(f"Britive Identity Provider ID not found.")
+except Exception as e:
+    print(f"{caution}Error retrieving Britive IDP: {e}{Style.RESET_ALL}")
+    exit(1)
 
 # Color definitions
-caution: str = f'{Style.BRIGHT}{Fore.RED}'
-warn: str = f'{Style.BRIGHT}{Fore.YELLOW}'
-info: str = f'{Style.BRIGHT}{Fore.BLUE}'
-green: str = f'{Style.BRIGHT}{Fore.GREEN}'
+caution = f"{Style.BRIGHT}{Fore.RED}"
+warn = f"{Style.BRIGHT}{Fore.YELLOW}"
+info = f"{Style.BRIGHT}{Fore.BLUE}"
+green = f"{Style.BRIGHT}{Fore.GREEN}"
 
 
 def main():
@@ -52,26 +82,34 @@ def main():
     parser.add_argument('-b', '--brokerPool', action='store_true', help='Process creation of a single broker pool')
 
     args = parser.parse_args()
-    if args.idps:
-        process_idps()
-    if args.users:
-        process_users()
-    if args.tags:
-        process_tags()
-    if args.applications:
-        process_applications()
-    if args.profiles:
-        process_profiles()
-    if args.notification:
-        process_notification()
-    if args.brokerPool:
-        process_broker_pool()
-    if args.resourceTypes:
-        process_resource_types()
 
-    # Dump updates and changes to data to a json file
-    with open(data_file_input, 'w') as f:
-        json.dump(data, f)
+    try:
+        if args.idps:
+            process_idps()
+        if args.users:
+            process_users()
+        if args.tags:
+            process_tags()
+        if args.applications:
+            process_applications()
+        if args.profiles:
+            process_profiles()
+        if args.notification:
+            process_notification()
+        if args.brokerPool:
+            process_broker_pool()
+        if args.resourceTypes:
+            process_resource_types()
+    except Exception as e:
+        print(f"{caution}An error occurred while processing: {e}{Style.RESET_ALL}")
+        exit(1)
+
+    # Save updated data back to JSON
+    try:
+        with open(DATA_FILE_INPUT, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"{caution}Failed to save updates to '{DATA_FILE_INPUT}': {e}{Style.RESET_ALL}")
 
 
 def process_tags():
@@ -147,39 +185,80 @@ def process_broker_pool():
 
 
 def process_resource_types():
-    rts = jmespath.search(expression="resourcesTypes", data=data)
-    for rt in rts:
-        rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
-        rt['id'] = rt_response['resourceTypeId']
-        print(f'{green}Created Resource-Type: {rt['name']} with id:{rt['id']} {Style.RESET_ALL}')
-        # Process Permissions - create permissions listed
-        perms = jmespath.search(expression="permissions", data=rt)
-        print(f'{info}Creating Permissions {len(perms)} : {perms}{Style.RESET_ALL}')
-        for perm in perms:
-            perm_response = br.access_broker.resources.permissions.create(name=perm['name'], resource_type_id=rt['id'],
-                                                                          description=perm['description'],
-                                                                          variables=perm["variables"],
-                                                                          checkout_file=perm["checkout"], checkin_file=perm["checkin"])
-            perm['id'] = perm_response["permissionId"]
+    try:
+        rts = jmespath.search(expression="resourcesTypes", data=data)
+        if not rts:
+            print(f'{warn}No Resource Types found in the data.{Style.RESET_ALL}')
+            return
 
-        # Process Resource - create profiles for the resource type
-        resources = jmespath.search(expression="resources", data=rt)
-        for resource in resources:
-            resource_response = br.access_broker.resources.create(name=resource['name'], description=resource['description'],
-                                                                  resource_type_id=rt['id'])
-            resource['id'] = resource_response['resourceId']
-            print(f'{green}Created Resource: {resource['name']} with id: {resource['id']}{Style.RESET_ALL}')
+        for rt in rts:
+            try:
+                rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
+                rt['id'] = rt_response['resourceTypeId']
+                print(f'{green}Created Resource-Type: {rt["name"]} with id:{rt["id"]} {Style.RESET_ALL}')
+            except Exception as e:
+                print(f'{caution}Error creating Resource-Type {rt["name"]}: {e}{Style.RESET_ALL}')
+                exit(1)  # Skip to the next resource type
 
-        # Process profiles - create profiles for the resource type
-        profiles = jmespath.search(expression="profiles", data=rt)
-        for profile in profiles:
-            profile_response = br.access_broker.profiles.create(name=profile['name'], description=profile['description'],
-                                                                expiration_duration=profile['Expiration'])
-            profile['id'] = profile_response['profileId']
-            print(f'{green}Created Profile: {profile['name']} with id: {profile['id']}{Style.RESET_ALL}')
-            assoc = {"Resource-Type": rt['name']}
-            br.access_broker.profiles.add_association(profile_id=profile['id'],
-                                                      associations=assoc)
+            # Process Permissions
+            try:
+                perms = jmespath.search(expression="permissions", data=rt) or []
+                print(f'{info}Creating Permissions {len(perms)} : {perms}{Style.RESET_ALL}')
+                for perm in perms:
+                    try:
+                        perm_response = br.access_broker.resources.permissions.create(
+                            name=perm['name'],
+                            resource_type_id=rt['id'],
+                            description=perm['description'],
+                            variables=perm["variables"],
+                            checkout_file=perm["checkout"],
+                            checkin_file=perm["checkin"]
+                        )
+                        perm['id'] = perm_response["permissionId"]
+                    except Exception as e:
+                        print(f'{caution}Error creating Permission {perm["name"]}: {e}{Style.RESET_ALL}')
+            except Exception as e:
+                print(f'{caution}Error processing permissions for {rt["name"]}: {e}{Style.RESET_ALL}')
+
+            # Process Resources
+            try:
+                resources = jmespath.search(expression="resources", data=rt) or []
+                for resource in resources:
+                    try:
+                        resource_response = br.access_broker.resources.create(
+                            name=resource['name'],
+                            description=resource['description'],
+                            resource_type_id=rt['id']
+                        )
+                        resource['id'] = resource_response['resourceId']
+                        print(f'{green}Created Resource: {resource["name"]} with id: {resource["id"]}{Style.RESET_ALL}')
+                    except Exception as e:
+                        print(f'{caution}Error creating Resource {resource["name"]}: {e}{Style.RESET_ALL}')
+            except Exception as e:
+                print(f'{caution}Error processing resources for {rt["name"]}: {e}{Style.RESET_ALL}')
+
+            # Process Profiles
+            try:
+                profiles = jmespath.search(expression="profiles", data=rt) or []
+                for profile in profiles:
+                    try:
+                        profile_response = br.access_broker.profiles.create(
+                            name=profile['name'],
+                            description=profile['description'],
+                            expiration_duration=profile['Expiration']
+                        )
+                        profile['id'] = profile_response['profileId']
+                        print(f'{green}Created Profile: {profile["name"]} with id: {profile["id"]}{Style.RESET_ALL}')
+
+                        assoc = {"Resource-Type": rt['name']}
+                        br.access_broker.profiles.add_association(profile_id=profile['id'], associations=assoc)
+                    except Exception as e:
+                        print(f'{caution}Error creating Profile {profile["name"]}: {e}{Style.RESET_ALL}')
+            except Exception as e:
+                print(f'{caution}Error processing profiles for {rt["name"]}: {e}{Style.RESET_ALL}')
+
+    except Exception as e:
+        print(f'{caution}Unexpected error in process_resource_types: {e}{Style.RESET_ALL}')
 
 
 # Press the green button in the gutter to run the script.
