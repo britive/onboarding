@@ -70,7 +70,7 @@
       "type": "slack"
     }
   ],
-  "resources-types": [
+  "resourcesTypes": [
     {
       "name": "ActiveDirectory",
       "description": "Active Directory Domains for permission management",
@@ -85,7 +85,7 @@
       ],
       "profiles": [
         {
-          "name": "Britive Tenant Admin",
+          "name": "Domain Admin Group",
           "description": "",
           "Expiration": "7200000"
         }
@@ -111,9 +111,9 @@
       ],
       "profiles": [
         {
-          "name": "Britive Tenant Admin",
+          "name": "Hellow World",
           "description": "",
-          "Expiration": "7200000"
+          "Expiration": "1200000"
         }
       ],
       "resources": [
@@ -126,6 +126,15 @@
     {
       "name": "LinuxSSH",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "SSH Sudo",
@@ -148,6 +157,15 @@
     {
       "name": "WindowsRDP",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "Local Admin",
@@ -165,6 +183,15 @@
     {
       "name": "AuroraMySQL",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "DB Admin",
@@ -182,6 +209,15 @@
     {
       "name": "AuroraPostgres",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "DB Admin",
