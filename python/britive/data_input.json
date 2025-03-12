@@ -113,7 +113,7 @@
         {
           "name": "Hellow World",
           "description": "",
-          "Expiration": "720000"
+          "Expiration": "1200000"
         }
       ],
       "resources": [
