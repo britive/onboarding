@@ -3,8 +3,6 @@ import argparse
 from dotenv import load_dotenv
 import os
 
-from eks.setup_eks import caution
-
 try:
     import simplejson as json
 except ImportError:
@@ -20,6 +18,12 @@ BRITIVE_TENANT
 BRITIVE_API_TOKEN
 '''
 
+
+# Color definitions
+caution = f"{Style.BRIGHT}{Fore.RED}"
+warn = f"{Style.BRIGHT}{Fore.YELLOW}"
+info = f"{Style.BRIGHT}{Fore.BLUE}"
+green = f"{Style.BRIGHT}{Fore.GREEN}"
 
 # Load Environment Variables
 load_dotenv()
@@ -60,12 +64,6 @@ try:
 except Exception as e:
     print(f"{caution}Error retrieving Britive IDP: {e}{Style.RESET_ALL}")
     exit(1)
-
-# Color definitions
-caution = f"{Style.BRIGHT}{Fore.RED}"
-warn = f"{Style.BRIGHT}{Fore.YELLOW}"
-info = f"{Style.BRIGHT}{Fore.BLUE}"
-green = f"{Style.BRIGHT}{Fore.GREEN}"
 
 
 def main():
