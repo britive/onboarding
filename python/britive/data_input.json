@@ -126,6 +126,15 @@
     {
       "name": "LinuxSSH",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "SSH Sudo",
@@ -148,6 +157,15 @@
     {
       "name": "WindowsRDP",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "Local Admin",
@@ -165,6 +183,15 @@
     {
       "name": "AuroraMySQL",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "DB Admin",
@@ -182,6 +209,15 @@
     {
       "name": "AuroraPostgres",
       "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
       "profiles": [
         {
           "name": "DB Admin",
