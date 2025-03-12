@@ -64,10 +64,10 @@ def main():
         process_profiles()
     if args.notification:
         process_notification()
-    if args.resourceTypes:
-        process_resource_types()
     if args.brokerPool:
         process_broker_pool()
+    if args.resourceTypes:
+        process_resource_types()
 
     # Dump updates and changes to data to a json file
     with open(data_file_input, 'w') as f:
@@ -147,7 +147,7 @@ def process_broker_pool():
 
 
 def process_resource_types():
-    rts = jmespath.search(expression="resources-types", data=data)
+    rts = jmespath.search(expression="resourcesTypes", data=data)
     for rt in rts:
         rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
         rt['id'] = rt_response['resourceTypeId']
