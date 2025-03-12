@@ -79,7 +79,8 @@ def process_tags():
     print(f'{info}Processing {len(tags)} Tags...{Style.RESET_ALL}')
     for tag in tags:
         print(f"{tag['name']}")
-        tag_response = br.identity_management.tags.create(name=tag['name'], description=tag['description'], idp=britive_idp)
+        tag_response = br.identity_management.tags.create(name=tag['name'], description=tag['description'],
+                                                          idp=britive_idp)
         tag['id'] = tag_response['userTagId']
 
 
@@ -142,7 +143,7 @@ def process_idps():
 
 def process_broker_pool():
     broker_pool = br.access_broker.pools.create(name='Primary Pool', description='Broker Pool for Britive Broker')
-    print(f'Create Broker Pool id: {broker_pool['pool-id']}')
+    print(f'{green}Create Broker Pool id: {broker_pool['pool-id']}{Style.RESET_ALL}')
 
 
 def process_resource_types():
