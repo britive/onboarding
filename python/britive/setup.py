@@ -147,7 +147,7 @@ def process_broker_pool():
 
 
 def process_resource_types():
-    rts = jmespath.search(expression="resources", data=data)
+    rts = jmespath.search(expression="resources-types", data=data)
     for rt in rts:
         rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
         rt['id'] = rt_response['resourceTypeId']
@@ -160,12 +160,23 @@ def process_resource_types():
                                                                           variables=perm["variables"],
                                                                           checkout_file=perm["checkout"], checkin_file=perm["checkin"])
             perm['id'] = perm_response["permissionId"]
+
+        # Process Resource - create profiles for the resource type
+        resources = jmespath.search(expression="resources", data=rt)
+        for resource in resources:
+            resource_response = br.access_broker.resources.create(name=resource['name'], description=resource['description'],
+                                                                  resource_type_id=rt['id'])
+            resource['id'] = resource_response['resourceId']
+
         # Process profiles - create profiles for the resource type
         profiles = jmespath.search(expression="profiles", data=rt)
         for profile in profiles:
             profile_response = br.access_broker.profiles.create(name=profile['name'], description=profile['description'],
                                                                 expiration_duration=profile['Expiration'])
             profile['id'] = profile_response['profileId']
+            assoc = {"Resource-Type": rt['name']}
+            br.access_broker.profiles.add_association(profile_id=profile['id'],
+                                                      associations=assoc)
 
 
 # Press the green button in the gutter to run the script.
