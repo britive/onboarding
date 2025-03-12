@@ -70,7 +70,7 @@
       "type": "slack"
     }
   ],
-  "resources-types": [
+  "resourcesTypes": [
     {
       "name": "ActiveDirectory",
       "description": "Active Directory Domains for permission management",
@@ -85,7 +85,7 @@
       ],
       "profiles": [
         {
-          "name": "Britive Tenant Admin",
+          "name": "Domain Admin Group",
           "description": "",
           "Expiration": "7200000"
         }
@@ -111,9 +111,9 @@
       ],
       "profiles": [
         {
-          "name": "Britive Tenant Admin",
+          "name": "Hellow World",
           "description": "",
-          "Expiration": "7200000"
+          "Expiration": "720000"
         }
       ],
       "resources": [
