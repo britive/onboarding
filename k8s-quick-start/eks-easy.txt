@@ -1,0 +1,37 @@
+# required tools - pybritive (pip3 install pybritive), aws cli, jq, kubectl
+
+# export some environment variables
+export AWS_DEFAULT_REGION=us-west-2
+export BRITIVE_TENANT=k8s.dev2.aws
+export KUBECONFIG=~/.kube/config:~/.britive/kube/config
+
+# set some variables
+clustername=britive-test
+appid=lc1f7cvhurz8ep0feefc
+
+# login to britive
+pybritive login
+
+# get the eks cluster configuration and extract some required elements - inject aws credentials via whatever mechanism makes the most sense
+clusterinfo=$(aws eks describe-cluster --name "$clustername")
+endpoint=$(echo "$clusterinfo" | jq -r '.cluster.endpoint')
+certificatedata=$(echo "$clusterinfo" | jq -r '.cluster.certificateAuthority.data')
+
+# create the cluster as an environment in the britive tenant
+createdenv=$(pybritive api environments.create --application-id "$appid" --name "$clustername")
+envid=$(echo "$createdenv" | jq -r '.id')
+env=$(pybritive api environments.get --application-id "$appid" --environment-id "$envid")
+issuer=$(echo "$env" | jq -r '.catalogApplication.propertyTypes | .[] | select(.name == "oidcIssuerUrl") | .value')
+clientid=$(echo "$env" | jq -r '.catalogApplication.propertyTypes | .[] | select(.name == "clientId") | .value')
+pybritive api environments.update --application-id "$appid" --environment-id "$envid" --certificateAuthorityData "$certificatedata" --apiServerUrl "$endpoint"
+
+
+# set the oidc identity provider configuration on the eks cluster
+aws eks associate-identity-provider-config --cluster-name "$clustername" --oidc identityProviderConfigName=britive,issuerUrl="$issuer",clientId="$clientid",usernameClaim=sub,groupsClaim=groups
+
+# create a profile as needed
+
+# use kubectl to connect
+pybritive cache kubeconfig
+kubectl config get-contexts
+kubectl get namespaces --context "...profile..."
