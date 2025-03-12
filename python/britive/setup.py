@@ -151,9 +151,10 @@ def process_resource_types():
     for rt in rts:
         rt_response = br.access_broker.resources.types.create(name=rt['name'], description=rt.get('description', ''))
         rt['id'] = rt_response['resourceTypeId']
+        print(f'{green}Created Resource-Type: {rt['name']} with id:{rt['id']} {Style.RESET_ALL}')
         # Process Permissions - create permissions listed
         perms = jmespath.search(expression="permissions", data=rt)
-        print(f'Creating Permissions {len(perms)} : {perms}')
+        print(f'{info}Creating Permissions {len(perms)} : {perms}{Style.RESET_ALL}')
         for perm in perms:
             perm_response = br.access_broker.resources.permissions.create(name=perm['name'], resource_type_id=rt['id'],
                                                                           description=perm['description'],
@@ -167,6 +168,7 @@ def process_resource_types():
             resource_response = br.access_broker.resources.create(name=resource['name'], description=resource['description'],
                                                                   resource_type_id=rt['id'])
             resource['id'] = resource_response['resourceId']
+            print(f'{green}Created Resource: {resource['name']} with id: {resource['id']}{Style.RESET_ALL}')
 
         # Process profiles - create profiles for the resource type
         profiles = jmespath.search(expression="profiles", data=rt)
@@ -174,6 +176,7 @@ def process_resource_types():
             profile_response = br.access_broker.profiles.create(name=profile['name'], description=profile['description'],
                                                                 expiration_duration=profile['Expiration'])
             profile['id'] = profile_response['profileId']
+            print(f'{green}Created Profile: {profile['name']} with id: {profile['id']}{Style.RESET_ALL}')
             assoc = {"Resource-Type": rt['name']}
             br.access_broker.profiles.add_association(profile_id=profile['id'],
                                                       associations=assoc)
