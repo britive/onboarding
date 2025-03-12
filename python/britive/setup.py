@@ -28,7 +28,7 @@ with open(data_file_input, 'r') as file:
 br = Britive(tenant=os.getenv("BRITIVE_TENANT"), token=os.getenv("BRITIVE_API_TOKEN"))
 
 # Get the id for the local (Britive) Identity provider. This is needed to create Users and Tags local to Britive.
-idp_list = br.identity_providers.list()
+idp_list = br.identity_management.identity_providers.list()
 britive_idp = [item['id'] for item in idp_list if item['name'] == 'Britive'][0]
 
 # Color definitions
@@ -79,7 +79,7 @@ def process_tags():
     print(f'{info}Processing {len(tags)} Tags...{Style.RESET_ALL}')
     for tag in tags:
         print(f"{tag['name']}")
-        tag_response = br.tags.create(name=tag['name'], description=tag['description'], idp=britive_idp)
+        tag_response = br.identity_management.tags.create(name=tag['name'], description=tag['description'], idp=britive_idp)
         tag['id'] = tag_response['userTagId']
 
 
@@ -88,19 +88,19 @@ def process_users():
     print(f'{info}Processing {len(users)} users...{Style.RESET_ALL}')
     for user in users:
         print(f"{user['email']} on {user['idp']}")
-        user_idp = br.identity_providers.get_by_name(identity_provider_name=user['idp'])['id']
-        user_response = br.users.create(idp=user_idp, email=user['email'], firstName=user['firstname'],
-                                        lastName=user['lastname'], username=user['username'], status='active')
+        user_idp = br.identity_management.identity_providers.get_by_name(identity_provider_name=user['idp'])['id']
+        user_response = br.identity_management.users.create(idp=user_idp, email=user['email'], firstName=user['firstname'],
+                                                            lastName=user['lastname'], username=user['username'], status='active')
         user['id'] = user_response['userId']
 
 
 def process_applications():
-    app_catalog = jmespath.search("[].{name: name, id: catalogAppId}", br.applications.catalog())
+    app_catalog = jmespath.search("[].{name: name, id: catalogAppId}", br.application_management.applications.catalog())
     apps = jmespath.search(expression="apps", data=data)
     print(f'{info}Processing {len(apps)} applications...{Style.RESET_ALL}')
     for app in apps:
         catalog_id = [item['id'] for item in app_catalog if item['name'] == app['type']][0]
-        app_response = br.applications.create(application_name=app['name'], catalog_id=catalog_id)
+        app_response = br.application_management.applications.create(application_name=app['name'], catalog_id=catalog_id)
         app['id'] = app_response['appContainerId']
 
 
@@ -110,14 +110,14 @@ def process_profiles():
         envs = app["envs"]
         print(f'{info}Processing Environments for app: {app['name']} {Style.RESET_ALL}')
         for env in envs:
-            br.environments.create(application_id=app['id'], name=env['name'], description=env['description'])
+            br.application_management.environments.create(application_id=app['id'], name=env['name'], description=env['description'])
 
         # Process Profiles after environments are created
         profiles = app["profiles"]
         print(f'{info}Processing profiles for app: {app['name']} {Style.RESET_ALL}')
         for profile in profiles:
-            br.profiles.create(application_id=app['id'], name=profile['name'], status="active",
-                               expirationDuration=profile['Expiration'])
+            br.application_management.profiles.create(application_id=app['id'], name=profile['name'], status="active",
+                                                      expirationDuration=profile['Expiration'])
 
 
 def process_notification():
@@ -125,19 +125,19 @@ def process_notification():
     print(f'{green}Processing {len(notifications)} Notification Mediums...{Style.RESET_ALL}')
     for note in notifications:
         print(note['name'])
-        br.notification_mediums.create(name=note['name'], description=note['description'],
-                                       notification_medium_type=note['type'], url=note['url'])
+        br.global_settings.notification_mediums.create(name=note['name'], description=note['description'],
+                                                       notification_medium_type=note['type'], url=note['url'])
 
 
 def process_idps():
     idps = jmespath.search(expression="idps", data=data)
     print(f'{green}Processing {len(idps)} identity providers...{Style.RESET_ALL}')
     for idp in idps:
-        idp_response = (br.identity_providers.create(name=idp['name'], description=idp['description']))
+        idp_response = (br.identity_management.identity_providers.create(name=idp['name'], description=idp['description']))
         idp['id'] = idp_response['id']
         idp['ssoConfig'] = idp_response['ssoConfig']
         if idp['type'].lower() == "azure":
-            br.identity_providers.update(identity_provider_id=idp_response['id'], sso_provider="Azure")
+            br.identity_management.identity_providers.update(identity_provider_id=idp_response['id'], sso_provider="Azure")
 
 
 def process_broker_pool():
