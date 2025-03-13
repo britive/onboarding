@@ -83,26 +83,22 @@
             "group"
           ],
           "checkout": "",
-          "checkin": "",
-          "id": "8imaywzuegthxxsbdnvd"
+          "checkin": ""
         }
       ],
       "profiles": [
         {
           "name": "Domain Admin Group",
           "description": "",
-          "Expiration": "7200000",
-          "id": "xl2rpf5evq01cec7tib9"
+          "Expiration": "7200000"
         }
       ],
       "resources": [
         {
           "name": "Domain01",
-          "description": "",
-          "id": "gtxx2oynxysr4v7fd3oc"
+          "description": ""
         }
-      ],
-      "id": "xk474g1kswrgjf72w5sb"
+      ]
     },
     {
       "name": "HelloWorld",
@@ -115,26 +111,22 @@
             "username"
           ],
           "checkout": "echo $username",
-          "checkin": "echo 'checked-in'",
-          "id": "2f4n1ehhj2zoaqd9yv50"
+          "checkin": "echo 'checked-in'"
         }
       ],
       "profiles": [
         {
           "name": "Hellow World",
           "description": "",
-          "Expiration": "1200000",
-          "id": "t67xzko5r9zhkftj5rn7"
+          "Expiration": "1200000"
         }
       ],
       "resources": [
         {
           "name": "Server1",
-          "description": "",
-          "id": "lqrqd2zdhrs8q3pu9qgu"
+          "description": ""
         }
-      ],
-      "id": "395e4g2jzejie2up1d89"
+      ]
     }
   ],
   "tags": [
