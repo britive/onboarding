@@ -51,6 +51,7 @@ except json.JSONDecodeError:
 
 try:
     br = Britive(tenant=BRITIVE_TENANT, token=BRITIVE_API_TOKEN)
+    print(f"{info}Connection to: {BRITIVE_TENANT}{Style.RESET_ALL}")
 except Exception as e:
     print(f"{caution}Failed to initialize Britive API: {e}{Style.RESET_ALL}")
     exit(1)
@@ -247,7 +248,6 @@ def process_resource_types():
                         )
                         profile['id'] = profile_response['profileId']
                         print(f'{green}Created Profile: {profile["name"]} with id: {profile["id"]}{Style.RESET_ALL}')
-
                         assoc = {"Resource-Type": rt['name']}
                         br.access_broker.profiles.add_association(profile_id=profile['id'], associations=assoc)
                     except Exception as e:
