@@ -1,44 +1,24 @@
-import os
-import time
-from dotenv import load_dotenv
-import britive.britive
-from britive.britive import Britive
-import logging
 import argparse
 import json
+import logging
+import os
+import time
 
-
-def monkey_patch_users_list(self, filter_expression: str = None, include_tags: bool = False) -> list:
-    """
-    Provide an optionally filtered list of all users.
-
-    :param filter_expression: filter list of users based on name, status, or role. The supported operators
-         are 'eq' and 'co'. Example: 'name co "Smith"'
-    :param include_tags: Optional parameter that indicates the response should include all the tags associated
-        with the user.
-    :return: List of user records
-    """
-
-    params = {
-        'type': 'User',
-        'page': 0,
-        'size': 100
-    }
-    if filter_expression:
-        params['filter'] = filter_expression
-    if include_tags:
-        params['includeTags'] = True
-
-    return self.britive.get(self.base_url, params)
-
-
-britive.britive.Users.list = monkey_patch_users_list
+from britive.britive import Britive
+from dotenv import load_dotenv
 
 
 class ScanScim:
-    def __init__(self, application_users_group_name: str, britive_group_prefix: str,
-                 application_id: str, identity_provider_id: str, britive_tenant: str = None, britive_token: str = None,
-                 token_federation_provider: str = None):
+    def __init__(
+        self,
+        application_users_group_name: str,
+        britive_group_prefix: str,
+        application_id: str,
+        identity_provider_id: str,
+        britive_tenant: str = None,
+        britive_token: str = None,
+        token_federation_provider: str = None,
+    ):
         self.application_users_group_name = application_users_group_name
         self.britive_group_prefix = britive_group_prefix
         self.application_id = application_id
@@ -47,7 +27,7 @@ class ScanScim:
         self.b = Britive(
             tenant=britive_tenant,
             token=britive_token,
-            token_federation_provider=token_federation_provider
+            token_federation_provider=token_federation_provider,
         )
         self.scan_users = {}
         self.scan_groups = {}
@@ -62,12 +42,15 @@ class ScanScim:
         self.local_users = []
 
     def _group_matches(self, name: str):
-        return name.lower().startswith(self.britive_group_prefix.lower()) or \
-            name.lower() == self.application_users_group_name.lower()
+        return (
+            name.lower().startswith(self.britive_group_prefix.lower())
+            or name.lower() == self.application_users_group_name.lower()
+        )
 
     def collect_local_users(self):
-        self.local_users = [u['username'] for u in self.b.users.list()
-                            if u['identityProvider']['name'] == self.britive_idp_name]
+        self.local_users = [
+            u['username'] for u in self.b.users.list() if u['identityProvider']['name'] == self.britive_idp_name
+        ]
 
     def _get_users_for_group(self, group_id: int) -> list:
         return [u['accountName'] for u in self.b.groups.accounts(group_id=group_id, application_id=self.application_id)]
@@ -117,8 +100,11 @@ class ScanScim:
 
         self.collect_local_users()
 
-        groups = [g for g in self.b.groups.list(application_id=self.application_id, include_associations=False)
-                  if g['type'] == 'group' and self._group_matches(name=g['name'])]
+        groups = [
+            g
+            for g in self.b.groups.list(application_id=self.application_id, include_associations=False)
+            if g['type'] == 'group' and self._group_matches(name=g['name'])
+        ]
 
         app_group = None
         for group in groups:
@@ -127,8 +113,9 @@ class ScanScim:
                 break
         if not app_group:
             raise Exception('application users group not found')
-        app_group_users = [u for u in self._get_users_for_group(group_id=app_group['appPermissionId'])
-                           if u not in self.local_users]
+        app_group_users = [
+            u for u in self._get_users_for_group(group_id=app_group['appPermissionId']) if u not in self.local_users
+        ]
 
         for group in groups:
             name = group['name']
@@ -136,13 +123,10 @@ class ScanScim:
             users = [u for u in self._get_users_for_group(group_id=group['appPermissionId']) if u in app_group_users]
             self.scan_groups[name] = {
                 'description': group['description'],
-                'users': users
+                'users': users,
             }
 
-        for account in self.b.accounts.list(
-                application_id=self.application_id,
-                include_associations=False
-        ):
+        for account in self.b.accounts.list(application_id=self.application_id, include_associations=False):
             if account['type'] != 'user':
                 continue
             username = account['nativeName']
@@ -153,7 +137,7 @@ class ScanScim:
                 'username': username,
                 'email': username,
                 'firstName': account['firstName'],
-                'lastName': account['lastName']
+                'lastName': account['lastName'],
             }
 
     def collect_tenant_data(self):
@@ -162,12 +146,9 @@ class ScanScim:
             name = tag['name']
             if not name.startswith(self.britive_group_prefix):
                 continue
-            if not tag['userTagIdentityProviders'][0]['identityProvider']['name'] == self.britive_idp_name:
+            if tag['userTagIdentityProviders'][0]['identityProvider']['name'] != self.britive_idp_name:
                 continue
-            self.tenant_groups[name] = {
-                'id': tag['userTagId'],
-                'users': []
-            }
+            self.tenant_groups[name] = {'id': tag['userTagId'], 'users': []}
 
         for user in self.b.users.list(include_tags=True):
             if user['identityProvider']['id'] != self.identity_provider_id:
@@ -179,7 +160,7 @@ class ScanScim:
                 'firstName': user['firstName'],
                 'lastName': user['lastName'],
                 'userId': user['userId'],
-                'status': user['status']
+                'status': user['status'],
             }
 
             user_tags = []
@@ -239,13 +220,10 @@ class ScanScim:
                     logging.info(f'user {username} already exists and was inactive - made active')
                     continue
 
-            response = self.b.users.create(
-                idp=self.identity_provider_id,
-                **details
-            )
+            response = self.b.users.create(idp=self.identity_provider_id, **details)
             new_fields = {
                 'userId': response['userId'],
-                'status': response['status']
+                'status': response['status'],
             }
             self.tenant_users[username] = {**details, **new_fields}
             logging.info(f'created user {username} with user id {response["userId"]}')
@@ -258,7 +236,7 @@ class ScanScim:
             response = self.b.tags.create(name=name)
             self.tenant_groups[name] = {
                 'id': response['userTagId'],
-                'users': []
+                'users': [],
             }
             logging.info(f'created tag {name} with tag id {response["userTagId"]}')
 
@@ -307,29 +285,24 @@ def confirm():
     message = 'Proceed? (only "yes" is accepted) '
     while True:
         user_input = input(message).strip().lower()
-        if user_input == 'yes':
-            return True
-        else:
-            return False
+        return user_input == 'yes'
 
 
 def build_args():
     parser = argparse.ArgumentParser(description='Python script to simulate SCIM actions based on Britive scan data.')
     parser.add_argument(
-        '-n', '--num-allowable-users-to-disable-before-error',
+        '-n',
+        '--num-allowable-users-to-disable-before-error',
         default=10,
         type=int,
-        help='Threshold on number of allowable Britive tenant users to disable before the script stop execution.'
+        help='Threshold on number of allowable Britive tenant users to disable before the script stop execution.',
     )
 
-    parser.add_argument(
-        '--confirm',
-        action=argparse.BooleanOptionalAction,
-        default=True
-    )
+    parser.add_argument('--confirm', action=argparse.BooleanOptionalAction, default=True)
 
     parser.add_argument(
-        '-f', '--log-file',
+        '-f',
+        '--log-file',
         help='Absolute path for where to emit log entries to file. Omitting means nothing will log to a file.',
     )
 
@@ -361,10 +334,10 @@ def process():
     logging.info('Starting processing')
 
     scan_scim = ScanScim(
-        application_users_group_name=os.getenv("APP_GROUP"),
-        britive_group_prefix=os.getenv("GROUP_PREFIX"),
-        application_id=os.getenv("APP_ID"),
-        identity_provider_id=os.getenv("IDP_ID")
+        application_users_group_name=os.getenv('APP_GROUP'),
+        britive_group_prefix=os.getenv('GROUP_PREFIX'),
+        application_id=os.getenv('APP_ID'),
+        identity_provider_id=os.getenv('IDP_ID'),
     )
 
     scan_scim.scan_application()
@@ -380,9 +353,11 @@ def process():
     logging.info(f'entitlements to remove: {json.dumps(scan_scim.entitlements_to_remove, default=str)}')
 
     if len(scan_scim.users_to_disable) > args.num_allowable_users_to_disable_before_error:
-        raise Exception(f'performing actions would result in more than '
-                        f'{args.num_allowable_users_to_disable_before_error} to be disabled so not '
-                        f'performing any actions')
+        raise Exception(
+            'performing actions would result in more than '
+            f'{args.num_allowable_users_to_disable_before_error} to be disabled so not '
+            'performing any actions'
+        )
 
     if args.confirm and not confirm():
         return
