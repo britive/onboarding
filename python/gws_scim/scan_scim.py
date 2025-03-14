@@ -1,38 +1,11 @@
 import os
 import time
 from dotenv import load_dotenv
-import britive.britive
 from britive.britive import Britive
 import logging
 import argparse
 import json
 
-
-def monkey_patch_users_list(self, filter_expression: str = None, include_tags: bool = False) -> list:
-    """
-    Provide an optionally filtered list of all users.
-
-    :param filter_expression: filter list of users based on name, status, or role. The supported operators
-         are 'eq' and 'co'. Example: 'name co "Smith"'
-    :param include_tags: Optional parameter that indicates the response should include all the tags associated
-        with the user.
-    :return: List of user records
-    """
-
-    params = {
-        'type': 'User',
-        'page': 0,
-        'size': 100
-    }
-    if filter_expression:
-        params['filter'] = filter_expression
-    if include_tags:
-        params['includeTags'] = True
-
-    return self.britive.get(self.base_url, params)
-
-
-britive.britive.Users.list = monkey_patch_users_list
 
 
 class ScanScim:
