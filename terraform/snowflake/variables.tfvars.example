@@ -1,0 +1,11 @@
+snowflake_account       = "your_snowflake_account"
+snowflake_user          = "your_snowflake_user"
+snowflake_password      = "your_snowflake_password"
+snowflake_admin_role    = "ACCOUNTADMIN"
+
+britive_role_name       = "BRITIVEROLE"
+britive_role_privileges = ["MANAGE GRANTS"]
+orgadmin_role           = "ORGADMIN"
+
+britive_user_name       = "BRITIVEUSER"
+britive_public_key_path = "./britive_public_key.pem"
