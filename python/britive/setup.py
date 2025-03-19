@@ -2,7 +2,8 @@
 import argparse
 from dotenv import load_dotenv
 import os
-
+import secrets
+import string
 try:
     import simplejson as json
 except ImportError:
@@ -127,8 +128,12 @@ def process_users():
     for user in users:
         print(f"{user['email']} on {user['idp']}")
         user_idp = br.identity_management.identity_providers.get_by_name(identity_provider_name=user['idp'])['id']
-        user_response = br.identity_management.users.create(idp=user_idp, email=user['email'], firstName=user['firstname'],
-                                                            lastName=user['lastname'], username=user['username'], status='active')
+        print(f'{info}User IdP {user['idp']} : {user_idp}{Style.RESET_ALL}')
+        random_string = ''.join((secrets.choice(string.ascii_letters + string.digits + string.punctuation) for i in range(12)))
+        print(f'{warn}{random_string}{Style.RESET_ALL}')
+        user_response = (br.identity_management.users.create(identityProvider=user_idp, email=user['email'],
+                                                             firstName=user['firstname'], lastName=user['lastname'],
+                                                             username=user['username'], status='active', password=random_string))
         user['id'] = user_response['userId']
 
 
