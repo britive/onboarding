@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "snowflake" {
-    organization_name = var.snowflake_organization # required if not using profile. Can also be set via SNOWFLAKE_ORGANIZATION_NAME env var
+    organization_name = var.snowflake_organization  # required if not using profile. Can also be set via SNOWFLAKE_ORGANIZATION_NAME env var
     account_name = var.snowflake_account
     user     = var.snowflake_user
     password = var.snowflake_password
