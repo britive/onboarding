@@ -16,8 +16,7 @@
           "description": "",
           "Expiration": "7200000"
         }
-      ],
-      "id": "ht4n60ouwc7g5fckdgi3"
+      ]
     },
     {
       "name": "AWS",
@@ -33,8 +32,7 @@
           "description": "Developer access into S3",
           "Expiration": "14400000"
         }
-      ],
-      "id": "vk2q1zgv666oq370y9q7"
+      ]
     },
     {
       "name": "Google Workspace",
@@ -51,8 +49,7 @@
           "description": "Temporary elevation for admin role",
           "Expiration": "7200000"
         }
-      ],
-      "id": "id8wz3qsdyb1g0ote48l"
+      ]
     }
   ],
   "idps": [
@@ -78,10 +75,7 @@
         {
           "name": "AddUserToGroup",
           "description": "Adds user to group",
-          "variables": [
-            "user",
-            "group"
-          ],
+          "variables": [ "user", "group" ],
           "checkout": "",
           "checkin": ""
         }
@@ -107,9 +101,7 @@
         {
           "name": "ConfirmUser",
           "description": "Returns Username upon checkout",
-          "variables": [
-            "username"
-          ],
+          "variables": [ "username" ],
           "checkout": "echo $username",
           "checkin": "echo 'checked-in'"
         }
@@ -124,6 +116,115 @@
       "resources": [
         {
           "name": "Server1",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "LinuxSSH",
+      "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
+      "profiles": [
+        {
+          "name": "SSH Sudo",
+          "description": "",
+          "Expiration": "14400000"
+        },
+        {
+          "name": "SSH NoSudo",
+          "description": "",
+          "Expiration": "14400000"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Server01",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "WindowsRDP",
+      "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
+      "profiles": [
+        {
+          "name": "Local Admin",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Server01",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "AuroraMySQL",
+      "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
+      "profiles": [
+        {
+          "name": "DB Admin",
+          "description": "",
+          "Expiration": "7200000"
+        }
+      ],
+      "resources": [
+        {
+          "name": "DB01",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "AuroraPostgres",
+      "description": "",
+      "permissions": [
+        {
+          "name": "",
+          "description": "",
+          "variables": [ "", "" ],
+          "checkout": "",
+          "checkin": ""
+        }
+      ],
+      "profiles": [
+        {
+          "name": "DB Admin",
+          "description": "Temporary elevation for Database Admin",
+          "Expiration": "7200000"
+        }
+      ],
+      "resources": [
+        {
+          "name": "DB01",
           "description": ""
         }
       ]
