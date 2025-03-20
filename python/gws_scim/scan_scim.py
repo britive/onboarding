@@ -49,16 +49,21 @@ class ScanScim:
 
     def collect_local_users(self):
         self.local_users = [
-            u['username'] for u in self.b.users.list() if u['identityProvider']['name'] == self.britive_idp_name
+            u['username']
+            for u in self.b.identity_management.users.list()
+            if u['identityProvider']['name'] == self.britive_idp_name
         ]
 
     def _get_users_for_group(self, group_id: int) -> list:
-        return [u['accountName'] for u in self.b.groups.accounts(group_id=group_id, application_id=self.application_id)]
+        return [
+            u['accountName']
+            for u in self.b.identity_management.groups.accounts(group_id=group_id, application_id=self.application_id)
+        ]
 
     def _wait_for_task_to_complete(self, task_id: str, scan_type: str) -> None:
         logging.info(f'waiting for {scan_type} scan to complete')
         while True:
-            response = self.b.scans.status(task_id=task_id)
+            response = self.b.application_management.scans.status(task_id=task_id)
             status = response['status'].lower()
             if status == 'success':
                 logging.debug(f'{scan_type} scan complete')
@@ -72,7 +77,7 @@ class ScanScim:
 
     def _get_env_task_id_given_org_task_id(self, task_id: str) -> str:
         env_scan_task_id = None
-        for scan in self.b.scans.history(application_id=self.application_id):
+        for scan in self.b.application_management.scans.history(application_id=self.application_id):
             if scan['orgTaskId'] == task_id:
                 env_scan_task_id = scan['taskId']
                 break
@@ -82,7 +87,7 @@ class ScanScim:
 
     def scan_application(self):
         logging.info('scanning application')
-        response = self.b.applications.scan(application_id=self.application_id)
+        response = self.b.application_management.applications.scan(application_id=self.application_id)
         task_id = response['taskId']
 
         # this just waits for the org scan to complete
@@ -102,7 +107,9 @@ class ScanScim:
 
         groups = [
             g
-            for g in self.b.groups.list(application_id=self.application_id, include_associations=False)
+            for g in self.b.identity_management.groups.list(
+                application_id=self.application_id, include_associations=False
+            )
             if g['type'] == 'group' and self._group_matches(name=g['name'])
         ]
 
@@ -126,7 +133,9 @@ class ScanScim:
                 'users': users,
             }
 
-        for account in self.b.accounts.list(application_id=self.application_id, include_associations=False):
+        for account in self.b.application_management.accounts.list(
+            application_id=self.application_id, include_associations=False
+        ):
             if account['type'] != 'user':
                 continue
             username = account['nativeName']
@@ -142,7 +151,7 @@ class ScanScim:
 
     def collect_tenant_data(self):
         logging.debug('collecting tenant data')
-        for tag in self.b.tags.list():
+        for tag in self.b.identity_management.tags.list():
             name = tag['name']
             if not name.startswith(self.britive_group_prefix):
                 continue
@@ -150,7 +159,7 @@ class ScanScim:
                 continue
             self.tenant_groups[name] = {'id': tag['userTagId'], 'users': []}
 
-        for user in self.b.users.list(include_tags=True):
+        for user in self.b.identity_management.users.list(include_tags=True):
             if user['identityProvider']['id'] != self.identity_provider_id:
                 continue
             username = user['username']
@@ -216,11 +225,11 @@ class ScanScim:
                 if tenant_user['status'] == 'active':
                     logging.info(f'user {username} already exists and is active - skipping')
                 if tenant_user['status'] == 'inactive':
-                    self.b.users.enable(user_id=tenant_user['userId'])
+                    self.b.identity_management.users.enable(user_id=tenant_user['userId'])
                     logging.info(f'user {username} already exists and was inactive - made active')
                     continue
 
-            response = self.b.users.create(idp=self.identity_provider_id, **details)
+            response = self.b.identity_management.users.create(idp=self.identity_provider_id, **details)
             new_fields = {
                 'userId': response['userId'],
                 'status': response['status'],
@@ -233,7 +242,7 @@ class ScanScim:
         if len(self.tags_to_create) == 0:
             logging.info('no tags to create')
         for name in self.tags_to_create:
-            response = self.b.tags.create(name=name)
+            response = self.b.identity_management.tags.create(name=name)
             self.tenant_groups[name] = {
                 'id': response['userTagId'],
                 'users': [],
@@ -248,7 +257,7 @@ class ScanScim:
             tag_id = self.tenant_groups[tag_name]['id']
             for username in usernames:
                 user_id = self.tenant_users[username]['userId']
-                self.b.tags.add_user(tag_id=tag_id, user_id=user_id)
+                self.b.identity_management.tags.add_user(tag_id=tag_id, user_id=user_id)
                 logging.info(f'added {username} to {tag_name}')
 
     def remove_entitlements(self):
@@ -259,7 +268,7 @@ class ScanScim:
             tag_id = self.tenant_groups[tag_name]['id']
             for username in usernames:
                 user_id = self.tenant_users[username]['userId']
-                self.b.tags.remove_user(tag_id=tag_id, user_id=user_id)
+                self.b.identity_management.tags.remove_user(tag_id=tag_id, user_id=user_id)
                 logging.info(f'removed {username} to {tag_name}')
 
     def disable_users(self):
@@ -268,7 +277,7 @@ class ScanScim:
             logging.info('no users to disable')
         for username in self.users_to_disable:
             user_id = self.tenant_users[username]['userId']
-            self.b.users.disable(user_id=user_id)
+            self.b.identity_management.users.disable(user_id=user_id)
             logging.info(f'disabled user {username}')
 
     def enable_users(self):
@@ -277,7 +286,7 @@ class ScanScim:
             logging.info('no users to enable')
         for username in self.users_to_enable:
             user_id = self.tenant_users[username]['userId']
-            self.b.users.enable(user_id=user_id)
+            self.b.identity_management.users.enable(user_id=user_id)
             logging.info(f'enabled user {username}')
 
 
@@ -331,13 +340,13 @@ def process():
 
     configure_logging(log_file=args.log_file)
 
-    logging.info('Starting processing')
+    logging.info('starting processing')
 
     scan_scim = ScanScim(
-        application_users_group_name=os.getenv('APP_GROUP'),
-        britive_group_prefix=os.getenv('GROUP_PREFIX'),
-        application_id=os.getenv('APP_ID'),
-        identity_provider_id=os.getenv('IDP_ID'),
+        application_users_group_name='SSO-Britive',
+        britive_group_prefix='britive-',
+        application_id='6ipnod6fyq5co63fog2w',
+        identity_provider_id='4thvwrd59luau6gc1lf7',
     )
 
     scan_scim.scan_application()
