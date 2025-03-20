@@ -122,7 +122,7 @@ class BritiveInt:
     def create_idp(self):
         # SAML metadata document, you can load it from a file or provide directly as a string.
         # Make sure it is the SAML Metadata document from your Identity Provider.
-        self.saml_metadata_document = self.br.saml.metadata()
+        self.saml_metadata_document = self.br.security.saml.metadata()
 
         try:
             # Create the SAML Identity Provider

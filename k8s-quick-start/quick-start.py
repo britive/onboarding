@@ -1,6 +1,7 @@
 import os
 import time
 from britive.britive import Britive
+from britive.helpers.utils import source_federation_token
 import json
 import argparse
 
@@ -18,7 +19,7 @@ def build_britive_client():
     if github_action_env:
         now = int(time.time())
         if now - github_token_start_time > (4*60):  # if token is 4+ minutes old change it
-            oidc_token = Britive.source_federation_token_from(provider='github-britive', tenant=tenant)
+            oidc_token = source_federation_token(provider='github-britive', tenant=tenant)
             b = Britive(tenant=tenant, token=oidc_token, query_features=False)
             if github_token_start_time > 0:
                 print('refreshed oidc token')
@@ -41,7 +42,7 @@ tag_helpdesk = 'Help Desk'
 def create_application(application_name):
     flush_print('creating aws application')
     # get the catalog of applications we can create
-    apps = b.applications.catalog()
+    apps = b.application_management.applications.catalog()
     catalog = {}
     for app in apps:
         catalog[app['key']] = app
@@ -50,13 +51,13 @@ def create_application(application_name):
     catalog_id = catalog['AWS-2.0']['catalogAppId']
 
     # create the application
-    app_id = b.applications.create(
+    app_id = b.application_management.applications.create(
         catalog_id=catalog_id,
         application_name=application_name
     )['appContainerId']
 
     # update the application with the required details
-    b.applications.update(
+    b.application_management.applications.update(
         application_id=app_id,
         showAwsAccountNumber=True,
         identityProvider=idp_name,
