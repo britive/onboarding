@@ -57,7 +57,9 @@ class ScanScim:
     def _get_users_for_group(self, group_id: int) -> list:
         return [
             u['accountName']
-            for u in self.b.identity_management.groups.accounts(group_id=group_id, application_id=self.application_id)
+            for u in self.b.application_management.groups.accounts(
+                group_id=group_id, application_id=self.application_id
+            )
         ]
 
     def _wait_for_task_to_complete(self, task_id: str, scan_type: str) -> None:
@@ -107,7 +109,7 @@ class ScanScim:
 
         groups = [
             g
-            for g in self.b.identity_management.groups.list(
+            for g in self.b.application_management.groups.list(
                 application_id=self.application_id, include_associations=False
             )
             if g['type'] == 'group' and self._group_matches(name=g['name'])
