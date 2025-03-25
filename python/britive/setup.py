@@ -171,7 +171,6 @@ def process_notification():
         br.global_settings.notification_mediums.create(name=note['name'], description=note['description'],
                                                        notification_medium_type=note['type'], url=note['url'])
 
-
 def process_idps():
     idps = jmespath.search(expression="idps", data=data)
     print(f'{green}Processing {len(idps)} identity providers...{Style.RESET_ALL}')
