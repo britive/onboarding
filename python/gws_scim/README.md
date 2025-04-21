@@ -24,17 +24,32 @@ This script is designed to simulate SCIM (System for Cross-domain Identity Manag
 
 1. Install the required packages:
    ```bash
+   # create a virtual environment
+   python -m venv .venv
+   source .venv/bin/activate
+
+   # install the packages
    pip install britive python-dotenv
    ```
 
 2. Set up your environment variables in a `.env` file:
 
    ```
+   BRITIVE_TENANT=<Britive Tenant name>
+   BRITIVE_API_TOKEN=<Britive API token>
    APP_GROUP=<Your Application Group Name>
    GROUP_PREFIX=<Prefix for Britive Group>
    APP_ID=<Application ID>
    IDP_ID=<Identity Provider ID>
    ```
+
+- `BRITIVE_TENANT`: In order to obtain the tenant name, reference the Britive URL used to login to the UI. If the URL is `https://example.britive-app.com` then the tenant name will be `example`.
+- `BRITIVE_API_TOKEN`: Authentication is handled solely via API tokens. As of v2.5.0 a `Bearer` token can be provided as well. A `Bearer` token is generated as part of an interactive login process and is temporary in nature. An API token can be generated at `https://{{tenant}}.britive-app.com/admin/security/api-tokens`. See the **Security** [**Creating API token**](https://docs.britive.com/v1/docs/introduction-security#creating-api-token) documentation for more details.
+- `APP_GROUP`: The name of at least one Google Workspace group that should be included in the scan for users.
+- `GROUP_PREFIX`: The standard group name prefix of Google Workspace Groups to match. If the group names are `Britive - Team 1` and `Britive - Team 2` then the prefix will be `Britive -`.
+   > **NOTE:** Both `APP_GROUP` and `GROUP_PREFIX` must be supplied even if `APP_GROUP` starts with the prefix defined in `GROUP_PREFIX`.
+- `APP_ID`: In order to obtain the application ID, reference the Britive URL used to access the Google Workspace app in the UI. If the URL is `https://example.britive-app.com/admin/applications/6ipnod6fyq5co63fog2w/overview` then the app ID will be `6ipnod6fyq5co63fog2w`.
+- `IDP_ID`: In order to obtain the IDP ID, reference the Britive URL used to access the Google Workspace Identity Provider in the UI. If the URL is `https://example.britive-app.com/admin/identity-management/identity-providers/4thvwrd59luau6gc1lf7` then the app ID will be `4thvwrd59luau6gc1lf7`.
 
 3. Optionally set `LOG_LEVEL` in your environment to control logging verbosity (`INFO` by default).
 
@@ -43,13 +58,13 @@ This script is designed to simulate SCIM (System for Cross-domain Identity Manag
 Run the script via the command line:
 
 ```bash
-python script.py
+python scan_scim.py
 ```
 
 ### Command Line Arguments
 
 - `-n` or `--num-allowable-users-to-disable-before-error`: The threshold for the number of users that can be disabled before the script halts (default is 10).
-  
+
 - `--confirm/--no-confirm`: Toggles whether to require user confirmation before performing any actions.
 
 - `-f` or `--log-file`: Specifies the path to a log file to record log entries. If omitted, logging is only to the console.
@@ -61,7 +76,7 @@ This script includes an optional `handler` function to run it in an AWS Lambda e
 ### Example Command
 
 ```bash
-python script.py --num-allowable-users-to-disable-before-error 5 --no-confirm
+python scan_scim.py --num-allowable-users-to-disable-before-error 5 --no-confirm
 ```
 
 ## Logging

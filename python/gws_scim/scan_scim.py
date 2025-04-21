@@ -345,10 +345,10 @@ def process():
     logging.info('starting processing')
 
     scan_scim = ScanScim(
-        application_users_group_name='SSO-Britive',
-        britive_group_prefix='britive-',
-        application_id='6ipnod6fyq5co63fog2w',
-        identity_provider_id='4thvwrd59luau6gc1lf7',
+        application_users_group_name=os.environ['APP_GROUP'],
+        britive_group_prefix=os.environ['GROUP_PREFIX'],
+        application_id=os.environ['APP_ID'],
+        identity_provider_id=os.environ['IDP_ID'],
     )
 
     scan_scim.scan_application()
