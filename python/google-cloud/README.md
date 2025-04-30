@@ -1,151 +1,86 @@
+# Britive GCP Setup Script
 
----
+This script automates the creation of a custom IAM role and a service account, and assigns the role to the service account in a specified GCP project.
+It is designed for integrating the Britive platform with GCP.
 
-# 🔐 Britive GCP & Google Workspace Role Setup
 
-This repository includes automation scripts to configure the required roles and permissions for integrating **Britive** with:
+## 🔧 Requirements
 
-1. **Google Cloud Platform (GCP)** – `setup_gcp.py`
-2. **Google Workspace / GCDS** – `setup_gcds.py`
+- Python 3.10+
+- Required packages:
+  - `google-api-python-client`
+  - `google-auth`
+  - `google-cloud-iam`
+  - `time`
+  - `argparse`
 
----
-
-## 📄 Scripts Overview
-
-### `setup_gcp.py`
-
-Creates a **custom IAM role** in a GCP project and binds it to a specified **service account**. This role provides the necessary permissions for Britive to manage service accounts and IAM policies.
-
-### `setup_gcds.py`
-
-Creates a **custom Google Workspace Admin SDK role** with specific directory-level privileges required for Britive integration with **Google Cloud Directory Sync (GCDS)**.
-
----
-
-## ⚙️ Prerequisites
-
-- Python 3.9+
-- Google Cloud Project with APIs enabled:
-  - IAM API
-  - Cloud Resource Manager API
-  - Admin SDK API (for Workspace)
-
-### 📦 Install Dependencies
+Install dependencies:
 
 ```bash
-pip install google-api-python-client google-cloud-iam google-cloud-iam-credentials google-auth google-auth-oauthlib
+pip install -r requirements.txt
 ```
 
----
+## 🔐 Authentication
 
-## 🔐 Authentication Setup
+You must authenticate using a GCP service account key with sufficient permissions to:
 
-### 🔸 For `setup_gcp.py`
+- Create service accounts
+- Create custom roles
+- Assign IAM policies
 
-1. Authenticate using Google CLI:
+Authenticate via:
 
 ```bash
 gcloud auth application-default login
 ```
 
-2. Download a **service account key** with the following roles:
-   - `IAM Security Admin`
-   - `Project IAM Admin`
+Create a service account key (if you haven't already):
 
-3. Save the key as:
+```bash
+gcloud iam service-accounts keys create service_account_creds.json \
+  --iam-account your-sa@your-project.iam.gserviceaccount.com
+```
+
+Save the key at:
 
 ```
 google-cloud/service_account_creds.json
 ```
 
----
-
-### 🔹 For `setup_gcds.py`
-
-1. In your [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth 2.0 Client ID** (Desktop app).
-
-2. Download the OAuth credentials JSON file and update:
-
-```python
-CREDENTIALS_FILE = 'path/to/credentials.json'
-```
-
----
-
 ## 🚀 Usage
 
-### 🔸 Run GCP Role Setup
-
-```bash
-python setup_gcp.py
-```
-
-Optional args:
+Run the script:
 
 ```bash
 python setup_gcp.py \
-  --project_id=my-gcp-project \
-  --service_account_name=britive-sa \
-  --service_account_display_name="Britive Service Account"
+  --project_id your-project-id \
+  --role_id BritiveIntegrationRole \
+  --service_account_name sa-britive-service \
+  --service_account_display_name "Britive Service Account"
 ```
 
-✅ Creates a custom IAM role and assigns it to the specified service account.
 
----
+## 📋 What It Does
 
-### 🔹 Run GCDS Role Setup
+1. **Checks if the service account exists.** Creates it if it doesn't.
+2. **Creates a custom role** named `BritiveIntegrationRole` with GCP IAM permissions required for Britive integration.
+3. **Assigns the role** to the service account at the project level.
 
-```bash
-python setup_gcds.py
-```
-
-> Replace the `customer_id` in the script with either:
-> - `'my_customer'` (default for primary domain)
-> - or your actual Workspace customer ID.
-
-✅ Creates a custom Admin SDK role with:
-- `ORG_UNITS_READ`
-- `USER_READ`
-- `GROUP_READ`
-- `GROUP_UPDATE`
-
----
-
-## ✅ Output Examples
-
-### GCP Script
+## 🗂 Directory Structure
 
 ```
-Custom role created: BritiveIntegrationRole
-Role 'BritiveIntegrationRole' assigned to service account 'britive-service@your-project.iam.gserviceaccount.com'.
+.
+├── setup_gcp.py
+├── google-cloud/
+│   └── service_account_creds.json
+└── README.md
 ```
 
-### GCDS Script
+## 🛡️ Notes
 
-```json
-Custom role created: {
-  "roleId": "...",
-  "roleName": "BritiveDirectoryRole",
-  ...
-}
-```
-
----
-
-## 🛡️ Permissions Summary
-
-### GCP Role Permissions
-
-| Permission | Description |
-|------------|-------------|
-| `iam.*`    | Manage service accounts & keys |
-| `resourcemanager.*` | Manage project IAM policies |
-
-### GCDS Role Privileges
-
-| Privilege | Scope |
-|-----------|-------|
-| `ORG_UNITS_READ` | Read organizational units |
-| `USER_READ` | View user directory |
-| `GROUP_READ` | View groups |
-| `GROUP_UPDATE` | Modify groups |
+- The script is **idempotent** — it will skip creation steps for existing resources.
+- Custom role propagation may take a few seconds; the script includes a short delay before policy binding.
+- Ensure your service account key has permissions like:
+  - `iam.roles.create`
+  - `iam.serviceAccounts.*`
+  - `resourcemanager.projects.setIamPolicy`
