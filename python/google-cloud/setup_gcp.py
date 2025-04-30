@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import time
 from googleapiclient import discovery
 from google.cloud import iam_credentials_v1
 from google.cloud import iam
 from google.iam.v1 import policy_pb2 as iam_policy
 from google.oauth2 import service_account
 import argparse
+from googleapiclient.errors import HttpError
 
 
 # Run the following command to establish cli session with GCP admin account
@@ -12,8 +14,9 @@ import argparse
 
 class BritiveGCP:
     def __init__(self, project_id='britive', service_account_name='britive-service',
-                 service_account_display_name='Britive Service'):
+                 service_account_display_name='Britive Service', role_id='BritiveIntegrationRole'):
         self.project_id = project_id
+        self.role_id = role_id
         self.service_account_name = service_account_name
         self.service_account_display_name = service_account_display_name
         self.credentials = service_account.Credentials.from_service_account_file('google-cloud/service_account_creds.json')
@@ -21,8 +24,34 @@ class BritiveGCP:
         self.cloudresourcemanager = discovery.build('cloudresourcemanager', 'v1', credentials=self.credentials)
 
     def create_role(self):
-        # Define role details
-        role_id = 'BritiveIntegrationRole'
+        service_account_email = f'{self.service_account_name}@{self.project_id}.iam.gserviceaccount.com'
+
+        # Step 1: Check if the service account exists
+        try:
+            self.service.projects().serviceAccounts().get(
+                name=f'projects/{self.project_id}/serviceAccounts/{service_account_email}'
+            ).execute()
+            print(f"Service account '{service_account_email}' already exists.")
+        except HttpError as e:
+            if e.resp.status == 404:
+                # Step 2: Create the service account if it does not exist
+                print(f"Creating service account '{service_account_email}'...")
+                service_account_body = {
+                    'accountId': self.service_account_name,
+                    'serviceAccount': {
+                        'displayName': self.service_account_display_name
+                    }
+                }
+                self.service.projects().serviceAccounts().create(
+                    name=f'projects/{self.project_id}',
+                    body=service_account_body
+                ).execute()
+                print(f"Service account '{service_account_email}' created.")
+            else:
+                raise
+
+        # Step 3: Define role details
+        role_id = self.role_id
         role_title = 'Britive Integration Role'
         role_description = 'A custom role with admin permissions for Britive platform'
         role_permissions = [
@@ -35,7 +64,7 @@ class BritiveGCP:
             'resourcemanager.projects.setIamPolicy'
         ]
 
-        # Create the custom role
+        # Step 4: Create the custom role
         custom_role_body = {
             'roleId': role_id,
             'role': {
@@ -47,28 +76,43 @@ class BritiveGCP:
         }
 
         try:
-            role = self.service.projects().roles().create(parent=f'projects/{self.project_id}',
-                                                          body=custom_role_body).execute()
+            role = self.service.projects().roles().create(
+                parent=f'projects/{self.project_id}',
+                body=custom_role_body
+            ).execute()
             print(f"Custom role created: {role_id}")
-        except Exception as e:
-            print(f"Role creation failed: {e}")
+        except HttpError as e:
+            if e.resp.status == 409:
+                print(f"Custom role '{role_id}' already exists.")
+            else:
+                raise
 
-        # Get the current IAM policy
+        # Optional delay to ensure the role is propagated before assignment
+        time.sleep(5)
+
+        # Step 5: Get current IAM policy
         policy = self.cloudresourcemanager.projects().getIamPolicy(resource=self.project_id, body={}).execute()
 
-        # Add the new binding to the policy
-        binding = {
+        # Step 6: Add new binding if not already present
+        new_binding = {
             'role': f'projects/{self.project_id}/roles/{role_id}',
-            'members': [f'serviceAccount:{self.service_account_name}@{self.project_id}.iam.gserviceaccount.com']
+            'members': [f'serviceAccount:{service_account_email}']
         }
-        policy['bindings'].append(binding)
 
-        # Update the IAM policy with the new binding
-        policy_body = {'policy': policy}
-        updated_policy = self.cloudresourcemanager.projects().setIamPolicy(resource=self.project_id,
-                                                                           body=policy_body).execute()
-        print(
-            f"Role '{role_id}' assigned to service account '{self.service_account_name}@{self.project_id}.iam.gserviceaccount.com'.")
+        if not any(
+                b['role'] == new_binding['role'] and f'serviceAccount:{service_account_email}' in b.get('members', [])
+                for b in policy.get('bindings', [])
+        ):
+            policy.setdefault('bindings', []).append(new_binding)
+            policy_body = {'policy': policy}
+
+            updated_policy = self.cloudresourcemanager.projects().setIamPolicy(
+                resource=self.project_id,
+                body=policy_body
+            ).execute()
+            print(f"Role '{role_id}' assigned to service account '{service_account_email}'.")
+        else:
+            print(f"Service account '{service_account_email}' already has role '{role_id}'.")
 
 
 def main():
@@ -80,7 +124,8 @@ def main():
                         default='britive-service', help="The name for the service account.")
     parser.add_argument('-d', '--service_account_display_name', type=str,
                         default='Britive Service', help="The display name for the service account.")
-
+    parser.add_argument('-r', '--role_id', type=str,
+                        default='BritiveIntegrationRole', help="Name oft he role to be created for Britive integration.")
     # Parse arguments
     args = parser.parse_args()
 
@@ -88,7 +133,8 @@ def main():
     service_account_role = BritiveGCP(
         project_id=args.project_id,
         service_account_name=args.service_account_name,
-        service_account_display_name=args.service_account_display_name
+        service_account_display_name=args.service_account_display_name,
+        role_id=args.role_id
     )
 
     # Call create_role method
@@ -97,5 +143,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
