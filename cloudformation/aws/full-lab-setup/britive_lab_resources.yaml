@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Complete Britive Integration Infrastructure Stack
+
+Parameters:
+  TenantName:
+    Description: Name of the Britive tenant. Omit ".britive-app.com".
+    Type: String
+  SamlMetadataDocumentXmlContent:
+    Description: The XML content of the SAML metadata document downloaded from the Britive tenant.
+    Type: String
+  DeployAwsInvalidationFeature:
+    Description: Enable AWS Invalidation feature permissions.
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+
+Conditions:
+  ShouldDeployAwsInvalidationFeature:
+    !Equals [!Ref DeployAwsInvalidationFeature, "true"]
+
+Resources:
+  BritiveKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting RDS password secret
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  RdsPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: BritiveRdsAdminSecret
+      Description: RDS admin password secret
+      KmsKeyId: !Ref BritiveKmsKey
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "britive"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  BritiveEC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: britive-keypair
+      KeyType: rsa
+      Tags:
+        - Key: Name
+          Value: britive-keypair
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: britive-vpc
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: britive-subnet-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: britive-subnet-2
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Britive Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  MySQLRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: britive-mysql
+      Engine: mysql
+      MasterUsername:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref RdsPasswordSecret,
+            ":SecretString:username}}",
+          ],
+        ]
+      MasterUserPassword:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref RdsPasswordSecret,
+            ":SecretString:password}}",
+          ],
+        ]
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      PubliclyAccessible: true
+      BackupRetentionPeriod: 7
+      VPCSecurityGroups:
+        - !Ref SecurityGroup
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+
+  LinuxEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0c02fb55956c7d316
+      KeyName: !Ref BritiveEC2KeyPair
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      Tags:
+        - Key: Name
+          Value: Britive-Linux
+
+  WindowsEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.small
+      ImageId: ami-0b69ea66ff7391e80
+      KeyName: !Ref BritiveEC2KeyPair
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      Tags:
+        - Key: Name
+          Value: Britive-Windows
