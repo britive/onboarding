@@ -1,0 +1,17 @@
+log_level = "INFO"
+
+[britive]
+app_id = "..."
+# OPTIONAL
+# federation_provider = "..."
+# idp_id = "..."
+# tenant = "..."
+# token = "..."
+
+[group-one]
+# OPTIONAL
+# prefixes = ["groupone-"]
+
+[group-two]
+# OPTIONAL
+# prefixes = ["grouptwo-"]
