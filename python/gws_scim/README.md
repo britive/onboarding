@@ -16,9 +16,9 @@ This script is designed to simulate SCIM (System for Cross-domain Identity Manag
 
 ## Requirements
 
-- Python 3.x
-- `britive` Python SDK
-- `python-dotenv` to load environment variables
+- Python 3.9+
+- [`britive`](https://pypi.org/project/britive/)
+- [`tomli`](https://pypi.org/project/tomli/)
 
 ## Installation
 
