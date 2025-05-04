@@ -1,0 +1,15 @@
+[britive]
+idp_name = "Britive"        # REQUIRED - idp name
+tenant = "..."              # OPTIONAL - tenant name
+token = "..."               # OPTIONAL - api token
+federation_provider = "..." # OPTIONAL - federation provider
+
+[scim_groups.application_group_name_one]
+app_id = "..."       # REQUIRED - application id
+group_prefix = "..." # REQUIRED - prefix for britive group
+idp_id = "..."       # OPTIONAL - identity provider id
+
+[scim_groups.application_group_name_two]
+app_id = "..."       # REQUIRED - application id
+group_prefix = "..." # REQUIRED - prefix for britive group
+idp_id = "..."       # OPTIONAL - identity provider id
