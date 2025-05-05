@@ -1,6 +1,12 @@
 # Session recording
 
-This examples cover session recording features for SSH and rDP sessions curated by Britive access broker.
+These examples cover session recording features for SSH and rDP sessions curated by Britive access broker.
+
+## Background
+
+This example uses Britive access broker and Apache Guacamole to achieve proxied user session into servers and allows for video recording of the user session. The sessions curated by Britive are short-lived and does nto require user to install any special tools or copying credentials. The credential rotation is compeltely handled by Britive access broker.
+
+Apache Guacamole’s proxy service, called guacd, is the core backend component responsible for brokering remote desktop sessions between users and target systems. Unlike traditional remote access tools that run directly in a client application, Guacamole uses guacd to handle protocols like RDP, VNC, and SSH, and then streams the session over the web using HTML5. This proxy receives connection requests from the Guacamole web frontend and manages the actual protocol communication, abstracting it into a format that browsers can render. By separating the frontend (web application) from the backend (guacd), Guacamole enables secure, clientless remote access through a browser without plugins.
 
 ## [example_user.json](user.json)
 
