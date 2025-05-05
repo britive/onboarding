@@ -1,0 +1,619 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "VPC Configuration"
+        Parameters:
+          - VpcId
+          - VpcSecurityGroupId
+          - FirstSubnetId
+          - SecondSubnetId
+          - AllowEcsCidr
+          - CreateVpcEndpoints
+          - RouteTableId
+      - Label:
+          default: "ALB Configuration"
+        Parameters:
+          - LoadBalancerArn
+          - ListenerPort
+          - SslPolicy
+          - CertificateArn
+          - AllowedGuacamoleCidr
+          - GuacamoleUri
+      - Label:
+          default: "Image Locations"
+        Parameters:
+          - ImageLocationGuacd
+          - ImageLocationGuacamole
+          - ImageLocationGuacEnc
+      - Label:
+          default: "Sync recordings to S3"
+        Parameters:
+          - ImageLocationGuacSync
+          - S3BucketArnGuacSync
+      - Label:
+          default: "Auth Configuration"
+        Parameters:
+          - JsonSecretKey
+Parameters:
+  JsonSecretKey:
+    NoEcho: True
+    Type: String
+    MinLength: 32
+    MaxLength: 32
+    AllowedPattern: "^[0-9a-f]{32}$"
+    ConstraintDescription: "Must be a 32-character hexadecimal string (0-9, a-f)."
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Specify the ID of the VPC to use.
+  VpcSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Specify the ID of the VPC Security Group to use for NFS access to EFS.
+  FirstSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Specify the ID of the first VPC Subnet to use.
+  SecondSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Specify the ID of the second VPC Subnet to use.
+  AllowEcsCidr:
+    Type: String
+    Default: "172.31.0.0/16"
+    Description: Specify the CIDR that will be allowed to access the exposed ports from the ECS tasks.
+  CreateVpcEndpoints:
+    Type: String
+    Default: "false"
+    Description: Specify whether the required VPC endpoints should be created - [true|false].
+  RouteTableId:
+    Type: String
+    Description: If creating VPC endpoints, specify the route table ID for the S3 gateway endpoint.
+    AllowedPattern: "^rtb-[a-z0-9]+$"
+  LoadBalancerArn:
+    Type: String
+    Description: Specify the ARN of the ALB to add the HTTPS listener to.
+  ListenerPort:
+    Type: Number
+    Default: 8443
+    Description: Specify the port number for the HTTPS listener.
+  SslPolicy:
+    Type: String
+    Description: Specify the SSL Policy of the HTTPS listener.
+  CertificateArn:
+    Type: String
+    Description: Specify the Certificate ARN for the HTTPS listener.
+  AllowedGuacamoleCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: Specify the CIDR for allowed ingress traffic on the new listener port.
+  GuacamoleUri:
+    Type: String
+    Default: guacamole
+    Description: Specify the URI path for guacamole, "guacamole" is default, use "ROOT" to have no URI path.
+  ImageLocationGuacd:
+    Type: String
+    Default: "<account-id>.dkr.ecr.<region>.amazonaws.com/<repository>:guacd"
+    Description: ECR image URI, or docker hub image (e.g. guacamole/guacd) if comfortable pulling from there, but that will require a NAT gateway.
+  ImageLocationGuacamole:
+    Type: String
+    Default: "<account-id>.dkr.ecr.<region>.amazonaws.com/<repository>:guacamole"
+    Description: ECR image URI, or docker hub image (e.g. guacamole/guacamole) if comfortable pulling from there, but that will require a NAT gateway.
+  ImageLocationGuacSync:
+    Type: String
+    Description: OPTIONAL - ECR image URI for the image used to convert and sync recordings to S3.
+  S3BucketArnGuacSync:
+    Type: String
+    AllowedPattern: "^arn:aws:s3:::[a-z0-9.-]{1,255}$"
+    Description: OPTIONAL - S3 bucket ARN where converted recordings will be placed.
+Conditions:
+  CreateSyncService: !Not
+    - !Or
+      - !Equals
+        - !Ref ImageLocationGuacSync
+        - ""
+      - !Equals
+        - !Ref S3BucketArnGuacSync
+        - ""
+  CreateEndpoints: !Equals
+    - !Ref CreateVpcEndpoints
+    - "true"
+Resources:
+  JsonSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AWS::StackName}-json-secret-key"
+      Description: "Secret Key for JSON auth"
+      SecretString: !Sub |
+        {
+          "key": "${JsonSecretKey}"
+        }
+  GuacSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow inbound traffic on ports 8080/4822 for ECS services"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowEcsCidr
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: !Ref AllowEcsCidr
+        - IpProtocol: tcp
+          FromPort: 4822
+          ToPort: 4822
+          CidrIp: !Ref AllowEcsCidr
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref AllowEcsCidr
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref VpcSecurityGroupId
+  AllowInternalNFS:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref GuacSecurityGroup
+      GroupId: !Ref VpcSecurityGroupId
+  AllowInternalSSH:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: !Ref GuacSecurityGroup
+      GroupId: !Ref VpcSecurityGroupId
+  AllowExternalGuacamole:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VpcSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref ListenerPort
+      ToPort: !Ref ListenerPort
+      CidrIp: !Ref AllowedGuacamoleCidr
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref RouteTableId
+  EcrVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref VpcSecurityGroupId
+        - !Ref GuacSecurityGroup
+      SubnetIds: 
+        - !Ref FirstSubnetId
+        - !Ref SecondSubnetId
+  EcrDockerVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref VpcSecurityGroupId
+        - !Ref GuacSecurityGroup
+      SubnetIds:
+        - !Ref FirstSubnetId
+        - !Ref SecondSubnetId
+  CloudWatchLogsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref VpcSecurityGroupId
+        - !Ref GuacSecurityGroup
+      SubnetIds:
+        - !Ref FirstSubnetId
+        - !Ref SecondSubnetId
+  EfsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.elasticfilesystem"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref VpcSecurityGroupId
+        - !Ref GuacSecurityGroup
+      SubnetIds:
+        - !Ref FirstSubnetId
+        - !Ref SecondSubnetId
+  SecretsManagerVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref VpcSecurityGroupId
+        - !Ref GuacSecurityGroup
+      SubnetIds:
+        - !Ref FirstSubnetId
+        - !Ref SecondSubnetId
+  GuacamoleTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: 8080
+      HealthCheckPath: "/guacamole/"
+      Matcher:
+        HttpCode: "200,302"
+  GuacamoleAlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref GuacamoleTargetGroup
+                Weight: 1
+      LoadBalancerArn: !Ref LoadBalancerArn
+      Port: !Ref ListenerPort
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      SslPolicy: !Ref SslPolicy
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:*"
+              StringEquals:
+                "aws:SourceAccount": !Ref "AWS::AccountId"
+      Policies:
+        - PolicyName: EFS
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                Resource: !GetAtt RecordingsFileSystem.Arn
+                Condition:
+                  StringEquals:
+                    elasticfilesystem:AccessPointArn: !GetAtt RecordingsAccessPoint.Arn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+  S3SyncPolicy:
+    Type: AWS::IAM::RolePolicy
+    Condition: CreateSyncService
+    Properties:
+      PolicyName: s3sync
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:DeleteObject
+              - s3:GetBucketLocation
+              - s3:GetObject
+              - s3:PutObject
+            Resource:
+              - !Ref S3BucketArnGuacSync
+              - !Sub "${S3BucketArnGuacSync}/*"
+      RoleName: !Ref TaskRole
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:*"
+              StringEquals:
+                "aws:SourceAccount": !Ref "AWS::AccountId"
+      Policies:
+        - PolicyName: secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref JsonSecret
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  Namespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !Sub "${AWS::StackName}-guac.local"
+      Vpc: !Ref VpcId
+      Properties:
+        DnsProperties:
+          SOA:
+            TTL: 60
+  GuacdServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: guacd
+      NamespaceId: !Ref Namespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+  GuacamoleServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: guacamole
+      NamespaceId: !Ref Namespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-GuacCluster"
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+  RecordingsFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value: Recordings
+      Encrypted: true
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+        - TransitionToPrimaryStorageClass: AFTER_1_ACCESS
+  RecordingsMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref RecordingsFileSystem
+      SubnetId: !Ref FirstSubnetId
+      SecurityGroups:
+        - !Ref GuacSecurityGroup
+  RecordingsMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref RecordingsFileSystem
+      SubnetId: !Ref SecondSubnetId
+      SecurityGroups:
+        - !Ref GuacSecurityGroup
+  RecordingsAccessPoint:
+      Type: AWS::EFS::AccessPoint
+      Properties:
+        FileSystemId: !Ref RecordingsFileSystem
+        PosixUser:
+          Uid: "1001"
+          Gid: "1001"
+          SecondaryGids:
+            - "1000"
+        RootDirectory:
+          CreationInfo:
+            OwnerUid: "1001"
+            OwnerGid: "1001"
+            Permissions: "0755"
+          Path: "/recordings"
+  GuacdTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AWS::StackName}-guacd-task"
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: guacd
+          Image: !Ref ImageLocationGuacd
+          Essential: true
+          PortMappings:
+            - ContainerPort: 4822
+          MountPoints:
+            - SourceVolume: efs-volume
+              ContainerPath: "/home/guacd/recordings"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              mode: non-blocking
+              max-buffer-size: 25m
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: guacd-task
+      Volumes:
+        - Name: efs-volume
+          EFSVolumeConfiguration:
+            AuthorizationConfig:
+              AccessPointId: !Ref RecordingsAccessPoint
+              IAM: ENABLED
+            FilesystemId: !Ref RecordingsFileSystem
+            TransitEncryption: ENABLED
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      Cpu: 256
+      Memory: 512
+  GuacamoleTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AWS::StackName}-guacamole-task"
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: guacamole
+          Image: !Ref ImageLocationGuacamole
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              mode: non-blocking
+              max-buffer-size: 25m
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: guacamole-task
+          Environment:
+            - Name: GUACD_HOSTNAME
+              Value: !Sub "${GuacdServiceDiscoveryService.Name}.${AWS::StackName}-guac.local"
+            - Name: GUACD_PORT
+              Value: "4822"
+            - Name: EXTENSION_PRIORITY
+              Value: "json, *"
+            - Name: WEBAPP_CONTEXT
+              Value: !Ref GuacamoleUri
+          Secrets:
+            - Name: JSON_SECRET_KEY
+              ValueFrom: !Sub "${JsonSecret}:key::"
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      Cpu: 256
+      Memory: 512
+  GuacSyncTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Condition: CreateSyncService
+    Properties:
+      Family: !Sub "${AWS::StackName}-guacsync-task"
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: guacsync
+          Image: !Ref ImageLocationGuacSync
+          Essential: true
+          MountPoints:
+            - SourceVolume: efs-volume
+              ContainerPath: "/home/guacamole/recordings"
+          Environment:
+            - Name: BUCKET
+              Value: !Select [5, !Split [":", !Ref S3BucketArnGuacSync]]
+            - Name: PARALLEL
+              Value: "true"
+            - Name: AUTOCONVERT
+              Value: "true"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              mode: non-blocking
+              max-buffer-size: 25m
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: guacsync-task
+      Volumes:
+        - Name: efs-volume
+          EFSVolumeConfiguration:
+            AuthorizationConfig:
+              AccessPointId: !Ref RecordingsAccessPoint
+              IAM: ENABLED
+            FilesystemId: !Ref RecordingsFileSystem
+            TransitEncryption: ENABLED
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      Cpu: 1024
+      Memory: 4096
+  GuacdService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref GuacdTaskDefinition
+      EnableExecuteCommand: true
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref FirstSubnetId
+            - !Ref SecondSubnetId
+          SecurityGroups:
+            - !Ref GuacSecurityGroup
+          AssignPublicIp: DISABLED
+      ServiceRegistries:
+        - RegistryArn: !GetAtt GuacdServiceDiscoveryService.Arn
+  GuacamoleService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - GuacdService
+      - GuacamoleAlbListener
+    Properties:
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref GuacamoleTaskDefinition
+      EnableExecuteCommand: true
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref FirstSubnetId
+            - !Ref SecondSubnetId
+          SecurityGroups:
+            - !Ref GuacSecurityGroup
+          AssignPublicIp: DISABLED
+      LoadBalancers:
+        - ContainerName: guacamole
+          ContainerPort: 8080
+          TargetGroupArn: !Ref GuacamoleTargetGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt GuacamoleServiceDiscoveryService.Arn
+  GuacSyncService:
+    Type: AWS::ECS::Service
+    Condition: CreateSyncService
+    DependsOn:
+      - GuacdService
+    Properties:
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref GuacSyncTaskDefinition
+      EnableExecuteCommand: true
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref FirstSubnetId
+            - !Ref SecondSubnetId
+          SecurityGroups:
+            - !Ref GuacSecurityGroup
+          AssignPublicIp: DISABLED
