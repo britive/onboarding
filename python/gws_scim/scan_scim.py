@@ -4,39 +4,30 @@ import json
 import logging
 import os
 import time
-from collections import defaultdict
-from contextlib import suppress
 from dataclasses import dataclass, field
 
-import tomllib
+try:
+    import tomllib as toml
+except ModuleNotFoundError:
+    import toml
 from britive.britive import Britive
-from dotenv import load_dotenv
 
-load_dotenv()
-local_config = {}
-with suppress(FileNotFoundError), open('scan_config.toml', 'rb') as config_file:
-    local_config = tomllib.load(config_file)
-britive_config = local_config.get('britive', {})
-scim_groups = local_config.get(
-    'scim_groups',
-    {
-        os.getenv('APP_GROUP'): {
-            'group_prefix': os.getenv('GROUP_PREFIX'),
-            'app_id': os.getenv('APP_ID'),
-            'idp_id': os.getenv('IDP_ID'),
-        }
-    },
-)
 log_formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
-root_logger = logging.getLogger()
-root_logger.setLevel(os.getenv('LOG_LEVEL', 'INFO'))
+
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(log_formatter)
+
+root_logger = logging.getLogger()
 root_logger.addHandler(console_handler)
+root_logger.setLevel(os.getenv('LOG_LEVEL', 'INFO'))
+
+with open('scan_config.toml') as config_file:
+    scim_groups = toml.loads(config_file.read())
+britive = scim_groups.pop('britive', {})
 b = Britive(
-    tenant=britive_config.get('tenant', os.getenv('BRITIVE_TENANT')),
-    token=britive_config.get('token', os.getenv('BRITIVE_API_TOKEN')),
-    token_federation_provider=britive_config.get('federation_provider'),
+    tenant=britive.get('tenant', os.getenv('BRITIVE_TENANT')),
+    token=britive.get('token', os.getenv('BRITIVE_API_TOKEN')),
+    token_federation_provider=britive.get('federation_provider'),
 )
 
 
@@ -44,7 +35,11 @@ class ExceedsUserDisablementCount(Exception):
     pass
 
 
-class MissingApplicationGroup(Exception):
+class MissingApplicationGroups(Exception):
+    pass
+
+
+class MissingApplicationId(Exception):
     pass
 
 
@@ -58,39 +53,44 @@ class ScanError(Exception):
 
 @dataclass
 class TenantData:
-    groups: dict = field(init=False, default_factory=lambda: defaultdict(lambda: {'users': []}))
+    groups: dict = field(init=False, default_factory=dict)
     users: dict = field(init=False, default_factory=dict)
 
     def __post_init__(self):
         logging.debug('collecting tenant data')
-        self._users = b.identity_management.users.list(include_tags=True)
         self._tags = b.identity_management.tags.list()
-        self.britive_idp_name = britive_config.get('idp_name', os.getenv('BRITIVE_IDP_NAME', 'Britive'))
-        self.britive_idp_id = b.identity_management.identity_providers.get_by_name(
-            identity_provider_name=self.britive_idp_name
-        )['id']
-        self.local_users = [
-            u['username'] for u in self._users if u['identityProvider']['name'] == self.britive_idp_name
-        ]
+        self._users = b.identity_management.users.list(include_tags=True)
+        self.app_id = britive.get('app_id')
+        self.app_groups = {
+            a['name']: {'desc': a['description'], 'id': a['appPermissionId']}
+            for a in b.application_management.groups.list(
+                application_id=self.app_id, include_associations=False, filter_expression='type eq group'
+            )
+        }
+        self.britive_idp = b.identity_management.identity_providers.get_by_name('Britive')['id']
+        self.idp_id = britive.get('idp_id', self.britive_idp)
+        self.local_users = [u['username'] for u in self._users if u['identityProvider']['id'] == self.britive_idp]
         self._collect_tenant_data()
 
     def _collect_tenant_data(self):
-        group_prefixes = tuple(v['group_prefix'] for k, v in scim_groups.items())
-        identity_provider_ids = {v.get('idp_id', self.britive_idp_id) for k, v in scim_groups.items()}
+        group_prefixes = tuple(p for k, v in scim_groups.items() for p in v.get('prefixes', []))
         for tag in self._tags:
             name = tag['name']
-            if (not name.startswith(group_prefixes)) or name in scim_groups:
+            if (not name.startswith(group_prefixes)) and name not in scim_groups:
                 continue
-            if tag['userTagIdentityProviders'][0]['identityProvider']['name'] != self.britive_idp_name:
+            if tag['userTagIdentityProviders'][0]['identityProvider']['id'] != self.idp_id:
                 continue
             self.groups[name] = {'id': tag['userTagId'], 'users': []}
-
         for user in self._users:
-            if user['identityProvider']['id'] not in identity_provider_ids:
+            if user['identityProvider']['id'] != self.idp_id:
                 continue
 
             username = user['username'].lower()
-            user_tags = [tag['name'] for tag in user.get('userTags', []) if tag['name'].startswith(group_prefixes)]
+            user_tags = [
+                tag['name']
+                for tag in user.get('userTags', [])
+                if tag['name'].startswith(group_prefixes) or tag['name'] in scim_groups
+            ]
 
             for tag_name in user_tags:
                 self.groups[tag_name]['users'].append(username)
@@ -108,12 +108,9 @@ class TenantData:
 
 @dataclass
 class ScanScim:
-    app_id: str
-    group_name: str
-    group_prefix: str
+    name: str
+    prefixes: tuple
     tenant: TenantData
-    idp_id: str = None
-
     users: dict = field(default_factory=dict)
     groups: dict = field(default_factory=dict)
 
@@ -128,48 +125,24 @@ class ScanScim:
     def _get_users_for_group(self, group_id: int) -> list:
         return [
             u['accountName']
-            for u in b.application_management.groups.accounts(group_id=group_id, application_id=self.app_id)
+            for u in b.application_management.groups.accounts(group_id=group_id, application_id=self.tenant.app_id)
         ]
 
     def collect_scan_data(self) -> None:
-        logging.info('collecting scan data')
-        if not (
-            app_group := next(
-                iter(
-                    b.application_management.groups.list(
-                        application_id=self.app_id,
-                        include_associations=False,
-                        filter_expression=f'name eq {self.group_name}',
-                    )
-                ),
-                None,
-            )
-        ):
-            raise MissingApplicationGroup('application users group not found')
+        if not (app_group := self.tenant.app_groups.get(self.name)):
+            raise MissingApplicationGroups('application user group(s) not found')
 
-        groups = b.application_management.groups.list(
-            application_id=self.app_id,
-            include_associations=False,
-            filter_expression=f'type eq group and name sw {self.group_prefix}',
-        )
-
+        groups = {k: v for k, v in self.tenant.app_groups.items() if k == self.name or k.startswith(self.prefixes)}
         app_group_users = [
-            u
-            for u in self._get_users_for_group(group_id=app_group['appPermissionId'])
-            if u not in self.tenant.local_users
+            u for u in self._get_users_for_group(group_id=app_group['id']) if u not in self.tenant.local_users
         ]
-
-        for group in groups:
-            name = group['name']
+        for name, details in groups.items():
             self.groups[name] = {
-                'description': group['description'],
-                'users': [
-                    u for u in self._get_users_for_group(group_id=group['appPermissionId']) if u in app_group_users
-                ],
+                'description': details['desc'],
+                'users': [u for u in self._get_users_for_group(group_id=details['id']) if u in app_group_users],
             }
-
         for account in b.application_management.accounts.list(
-            application_id=self.app_id, include_associations=False, filter_expression='type eq user'
+            application_id=self.tenant.app_id, include_associations=False, filter_expression='type eq user'
         ):
             if (username := account['nativeName'].lower()) not in app_group_users:
                 continue
@@ -185,7 +158,8 @@ class ScanScim:
         diff_output = {
             'users': {
                 'create': [
-                    (u, self.users[u], self.idp_id) for u in self._diff(source=self.users, compare=self.tenant.users)
+                    (u, self.users[u], self.tenant.idp_id)
+                    for u in self._diff(source=self.users, compare=self.tenant.users)
                 ],
                 'disable': self._diff(
                     source=[u for u, v in self.tenant.users.items() if v['status'] == 'active'], compare=self.users
@@ -198,7 +172,6 @@ class ScanScim:
                 'remove': {},
             },
         }
-
         for group, details in self.groups.items():
             if entitlements_to_create := self._diff(
                 source=details['users'], compare=self.tenant.groups.get(group, {}).get('users', [])
@@ -211,6 +184,7 @@ class ScanScim:
             ):
                 diff_output['entitlements']['remove'][tag] = entitlements_to_remove
 
+        logging.debug(json.dumps(diff_output, indent=2, default=str))
         return diff_output
 
 
@@ -313,16 +287,17 @@ def process(
     logging.info('starting processing')
     tenant = TenantData()
     action_items = []
+    if not (app_id := britive.get('app_id')):
+        raise MissingApplicationId('must supply an application ID')
 
     if not skip_scan:
-        scan_applications(app_ids={v['app_id'] for k, v in scim_groups.items()})
+        scan_application(app_id=app_id)
 
+    logging.info('collecting scan data')
     for name, details in scim_groups.items():
         scan_scim = ScanScim(
-            app_id=details.get('app_id'),
-            idp_id=details.get('idp_id'),
-            group_name=name,
-            group_prefix=details.get('group_prefix'),
+            name=name,
+            prefixes=tuple(p for p in details.get('prefixes', [])),
             tenant=tenant,
         )
         action_items.append(scan_scim.diff())
@@ -343,7 +318,7 @@ def process(
     entitlements_to_remove = [e for a in action_items for e in a['entitlements']['remove']]
     logging.info(f'entitlements to remove: {json.dumps(entitlements_to_remove, default=str)}')
     users_to_disable = set.intersection(*(set(a['users']['disable']) for a in action_items))
-    logging.info(f'users to disable: {json.dumps(list(users_to_disable), default=list, indent=2)}')
+    logging.info(f'users to disable: {json.dumps(list(users_to_disable), default=str)}')
 
     if len(users_to_disable) > user_cap:
         raise ExceedsUserDisablementCount(
@@ -361,7 +336,7 @@ def process(
     disable_users(users_to_disable, tenant)
 
 
-def scan_applications(app_ids: set) -> None:
+def scan_application(app_id: str) -> None:
     def _get_env_task_id_given_org_task_id(app_id: str, task_id: str) -> str:
         for scan in b.application_management.scans.history(
             application_id=app_id, filter_expression='scanType eq Environment'
@@ -386,24 +361,23 @@ def scan_applications(app_ids: set) -> None:
             time.sleep(10)
 
     logging.info('scanning applications')
-    for app_id in app_ids:
-        response = b.application_management.applications.scan(application_id=app_id)
-        task_id = response['taskId']
+    response = b.application_management.applications.scan(application_id=app_id)
+    task_id = response['taskId']
 
-        # this just waits for the org scan to complete
-        _wait_for_task_to_complete(task_id=task_id, scan_type='org')
+    # this just waits for the org scan to complete
+    _wait_for_task_to_complete(task_id=task_id, scan_type='org')
 
-        # now we need to wait for env scan task to be created
-        time.sleep(10)
-        env_scan_task_id = _get_env_task_id_given_org_task_id(app_id=app_id, task_id=task_id)
+    # now we need to wait for env scan task to be created
+    time.sleep(10)
+    env_scan_task_id = _get_env_task_id_given_org_task_id(app_id=app_id, task_id=task_id)
 
-        # and finally wait for the task to complete
-        _wait_for_task_to_complete(task_id=env_scan_task_id, scan_type='env')
+    # and finally wait for the task to complete
+    _wait_for_task_to_complete(task_id=env_scan_task_id, scan_type='env')
 
 
 # UNCOMMENT THE FOLLOWING TO RUN INSIDE AN AWS LAMBDA FUNCTION
 
-# def handler(**kwargs):
+# def handler(event, context):
 #     process()
 
 # EVERYTHING BELOW HERE CAN BE REMOVED FOR LAMBDA USAGE
@@ -412,27 +386,26 @@ def scan_applications(app_ids: set) -> None:
 def main():
     parser = argparse.ArgumentParser(description='Python script to simulate SCIM actions based on Britive scan data.')
     parser.add_argument(
-        '-n',
-        '--num-allowable-users-to-disable-before-error',
+        '-u',
+        '--user-cap',
         default=10,
         type=int,
-        dest='user_cap',
-        help='Threshold on number of allowable Britive tenant users to disable before the script stop execution.',
+        help='Threshold number of Britive users to allow automated disablement',
     )
 
-    parser.add_argument('--confirm', action='store_true')
+    parser.add_argument('-c', '--confirm', action='store_true')
 
     parser.add_argument(
-        '--no-refresh-idp',
+        '-s',
+        '--skip-scan',
         action='store_true',
-        dest='skip_scan',
-        help='Useful during debugging to skip repeatedly reloading IdP data',
+        help='Useful during debugging to skip repeatedly scanning the organization and environment(s)',
     )
 
     parser.add_argument(
         '-f',
         '--log-file',
-        help='Absolute path for where to emit log entries to file. Omitting means nothing will log to a file.',
+        help='Absolute path for where to emit log entries to file - in addition to console logging.',
     )
     args = parser.parse_args()
 
