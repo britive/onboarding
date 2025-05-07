@@ -27,7 +27,6 @@ It compares application data with Britive tenant data and takes appropriate acti
 
 - Python 3.9+
 - [`britive`](https://pypi.org/project/britive/)
-- [`python-dotenv`](https://pypi.org/project/python-dotenv/)
 - [`tomli`](https://pypi.org/project/tomli/)
 
 ## Installation
