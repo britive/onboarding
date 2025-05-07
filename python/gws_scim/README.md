@@ -1,18 +1,27 @@
-
-# README for Britive SCIM Simulation Script
+# Britive SCIM Sync Script
 
 ## Overview
 
-This script is designed to simulate SCIM (System for Cross-domain Identity Management) actions using data from Britive scans. It compares local application data with the Britive tenant data to synchronize users, groups (tags), and their entitlements. It can create, enable, disable users, and assign or remove entitlements based on the differences detected between these datasets.
+This script syncs users, groups (tags), and entitlements between a Britive application and the Britive tenant, using SCIM-like behavior.
 
-## Features
+It can be run from the command line or as an AWS Lambda.
 
-- **Scan Application Data**: Gathers user and group data from a specified application.
-- **Collect Tenant Data**: Retrieves user and group data from the Britive tenant.
-- **Diff Calculation**: Compares local application users and groups with tenant data to identify discrepancies.
-- **Automate Changes**: Automatically creates users, groups (tags), and assigns/removes entitlements.
-- **Error Handling**: Prevents action if the number of users to disable exceeds a defined threshold.
-- **Interactive Confirmation**: Optionally prompts for confirmation before proceeding with changes.
+It compares application data with Britive tenant data and takes appropriate action to:
+
+- Create or enable users
+- Disable users (with safeguards)
+- Create missing groups (tags)
+- Add/remove entitlements to/from users
+
+## Key Features
+
+- **Application Scan**: Extracts user and group data from your Britive application (e.g. Google Workspace).
+- **Tenant Sync**: Collects current user/tag/entitlement data from Britive.
+- **Smart Diffing**: Identifies changes needed for alignment.
+- **Automated Actions**: OPTIONALLY applies changes (user lifecycle, group creation, entitlement mapping).
+- **Safeguards**: Prevents excessive user disablement with a configurable threshold.
+- **Detailed Logging**: Console and optional file logging for audit trails.
+- **CLI + AWS Lambda Support**: Use as a local script or deploy in serverless environments.
 
 ## Requirements
 
@@ -22,82 +31,109 @@ This script is designed to simulate SCIM (System for Cross-domain Identity Manag
 
 ## Installation
 
-1. Install the required packages:
-   ```bash
-   # create a virtual environment
-   python -m venv .venv
-   source .venv/bin/activate
+```bash
+# Set up virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate
 
-   # install the packages
-   pip install britive python-dotenv
-   ```
+# Install dependencies
+pip install -r requirements.txt
+```
 
-2. Set up your environment variables in a `.env` file:
+## Configuration
 
-   ```
-   BRITIVE_TENANT=<Britive Tenant name>
-   BRITIVE_API_TOKEN=<Britive API token>
-   APP_GROUP=<Your Application Group Name>
-   GROUP_PREFIX=<Prefix for Britive Group>
-   APP_ID=<Application ID>
-   IDP_ID=<Identity Provider ID>
-   ```
+Configuration is managed through the `scan_config.toml` file.
 
-- `BRITIVE_TENANT`: In order to obtain the tenant name, reference the Britive URL used to login to the UI. If the URL is `https://example.britive-app.com` then the tenant name will be `example`.
-- `BRITIVE_API_TOKEN`: Authentication is handled solely via API tokens. As of v2.5.0 a `Bearer` token can be provided as well. A `Bearer` token is generated as part of an interactive login process and is temporary in nature. An API token can be generated at `https://{{tenant}}.britive-app.com/admin/security/api-tokens`. See the **Security** [**Creating API token**](https://docs.britive.com/v1/docs/introduction-security#creating-api-token) documentation for more details.
-- `APP_GROUP`: The name of at least one Google Workspace group that should be included in the scan for users.
-- `GROUP_PREFIX`: The standard group name prefix of Google Workspace Groups to match. If the group names are `Britive - Team 1` and `Britive - Team 2` then the prefix will be `Britive -`.
-   > **NOTE:** Both `APP_GROUP` and `GROUP_PREFIX` must be supplied even if `APP_GROUP` starts with the prefix defined in `GROUP_PREFIX`.
-- `APP_ID`: In order to obtain the application ID, reference the Britive URL used to access the Google Workspace app in the UI. If the URL is `https://example.britive-app.com/admin/applications/6ipnod6fyq5co63fog2w/overview` then the app ID will be `6ipnod6fyq5co63fog2w`.
-- `IDP_ID`: In order to obtain the IDP ID, reference the Britive URL used to access the Google Workspace Identity Provider in the UI. If the URL is `https://example.britive-app.com/admin/identity-management/identity-providers/4thvwrd59luau6gc1lf7` then the app ID will be `4thvwrd59luau6gc1lf7`.
+### Configuration Reference
 
-3. Optionally set `LOG_LEVEL` in your environment to control logging verbosity (`INFO` by default).
+| Required | Section | Name | Value | Description |
+| -------- | ------- | ---- | ----- | ----------- |
+| N | base | `log_level` | `"INFO"` | Logging level, e.g. `INFO`, `DEBUG`, etc. |
+| Y | `[britive]` | `app_id` | `"..."` | Britive Application ID to scan |
+| N | `[britive]` | `federation_provider` | `"..."` | Federation Provider, if being used |
+| N | `[britive]` | `idp_id` | `"..."` | Identity Provider ID if not using the default `Britive` IdP |
+| N | `[britive]` | `tenant` | `"..."` | Britive Tenant to perform actions against |
+| N | `[britive]` | `token` | `"..."` | Britive API Token for authentication |
+| Y | `[group_name]` | n/a | n/a | Name of an application group to scan and include |
+| N | `[group_name]` | `prefixes` | `["prefix-one-", "prefix-two"]` | Names of application group prefixes to include in scan |
+
+> There can be as many `[group_name]` sections as desired, each will be included in scan and subsequent actions.
+
+### Optional Environment Variables
+
+```sh
+BRITIVE_TENANT="{tenant-name}"
+BRITIVE_API_TOKEN="{api-token}"
+LOG_LEVEL="{log-level}"
+```
+
+#### Environment Variable Reference
+
+| Variable | Description |
+| -------- | ----------- |
+| `BRITIVE_TENANT` | Subdomain of your Britive URL (e.g. `example` from `example.britive-app.com`) |
+| `BRITIVE_API_TOKEN` | API token for authentication |
+| `LOG_LEVEL` | Set to `DEBUG`, `INFO`, etc. (default: `INFO`) |
 
 ## Usage
-
-Run the script via the command line:
 
 ```bash
 python scan_scim.py
 ```
 
-### Command Line Arguments
+### Optional Arguments
 
-- `-n` or `--num-allowable-users-to-disable-before-error`: The threshold for the number of users that can be disabled before the script halts (default is 10).
+| Flag | Description |
+|------|-------------|
+| `--user-cap`, `-u` | Threshold number of Britive users to allow automated disablement. (default: 10) |
+| `--confirm`, `-c` | Require confirmation before making changes |
+| `--log-file`, `-f` | Absolute path for where to emit log entries to file - in addition to console logging. |
+| `--skip-scan`, `-s` | Useful during debugging to skip repeatedly scanning the organization and environment(s) |
 
-- `--confirm/--no-confirm`: Toggles whether to require user confirmation before performing any actions.
-
-- `-f` or `--log-file`: Specifies the path to a log file to record log entries. If omitted, logging is only to the console.
-
-### AWS Lambda
-
-This script includes an optional `handler` function to run it in an AWS Lambda environment. The `process()` function is wrapped in the `handler` for compatibility with Lambda triggers.
-
-### Example Command
+#### Example
 
 ```bash
-python scan_scim.py --num-allowable-users-to-disable-before-error 5 --no-confirm
+python scan_scim.py -u 5 --confirm -f scan_scim.log
 ```
+
+## AWS Lambda Support
+
+The script includes a `handler(event, context)` function to enable AWS Lambda deployment.
+
+AWS EventBridge can be used to initiate sync runs on a schedule, or triggered via API Gateway.
 
 ## Logging
 
-Logging is configured to print messages both to the console and (if specified) to a file. It logs important events, such as the number of users to create, disable, and enable, as well as any entitlements and tags to modify.
+Logs key metrics and changes to:
 
-## Functions
+- Console - always.
+- File - if `--log-file` is specified
 
-- **`ScanScim` Class**:
-  - **`scan_application()`**: Initiates a scan for the application.
-  - **`collect_scan_data()`**: Gathers user and group data from the application.
-  - **`collect_tenant_data()`**: Gathers user and group data from the Britive tenant.
-  - **`diff()`**: Calculates differences between local application data and tenant data.
-  - **`create_users()`, `enable_users()`, `disable_users()`**: Handles user lifecycle management.
-  - **`create_tags()`, `create_entitlements()`, `remove_entitlements()`**: Manages group (tag) creation and user assignment.
+Includes counts of users to be created, enabled, disabled, and changes to entitlements(tags).
 
-## Error Handling
+## Function Overview
 
-- The script will stop execution if the number of users to be disabled exceeds the defined threshold.
-- It raises exceptions for missing application users, unexpected errors during scans, and other potential failures.
+| Class/Function | Description |
+|----------------|-------------|
+| `TenantData` | Retrieves current users, tags, and entitlements from Britive |
+| `scan_application()` | Scans source application for users and groups |
+| `ScanScim` | Collects scan data for each application group |
+| `ScanScim.diff()` | Computes diffs between app and tenant |
+| `create_users()` | Creates newly discovered users |
+| `enable_users()` | Enables existing disabled users if granted entitlement(s) in scanned groups |
+| `disable_users()` | Disables existing users if removed from all scanned groups |
+| `create_tags()` | Creates missing Britive tags |
+| `create_entitlements()` | Creates scanned entitlements for users |
+| `remove_entitlements()` | Removes dropped entitlements for users |
+| `process` | Orchestrates full sync cycle |
+| `handler` | AWS Lambda entry point |
+
+## Error Handling & Safeguards
+
+- Exits with error if number of users to disable exceeds defined threshold.
+- Provides detailed exceptions for scan failures or invalid configurations.
+- Confirms actions to be taken - if `--confirm` is explicitly provided.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+MIT License – See [LICENSE](../../LICENSE)
