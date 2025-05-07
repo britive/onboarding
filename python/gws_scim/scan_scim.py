@@ -19,11 +19,13 @@ console_handler.setFormatter(log_formatter)
 
 root_logger = logging.getLogger()
 root_logger.addHandler(console_handler)
-root_logger.setLevel(os.getenv('LOG_LEVEL', 'INFO'))
 
 with open('scan_config.toml') as config_file:
     scim_groups = toml.loads(config_file.read())
+
+root_logger.setLevel(scim_groups.pop('log_level', os.getenv('LOG_LEVEL', 'INFO')))
 britive = scim_groups.pop('britive', {})
+
 b = Britive(
     tenant=britive.get('tenant', os.getenv('BRITIVE_TENANT')),
     token=britive.get('token', os.getenv('BRITIVE_API_TOKEN')),
