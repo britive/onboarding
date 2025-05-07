@@ -49,14 +49,16 @@ Configuration is managed through the `scan_config.toml` file.
 
 | Required | Section | Name | Value | Description |
 | -------- | ------- | ---- | ----- | ----------- |
-| N | `` | `log_level` | `"INFO"` | Logging level, e.g. `INFO`, `DEBUG`, etc. |
+| N | base | `log_level` | `"INFO"` | Logging level, e.g. `INFO`, `DEBUG`, etc. |
 | Y | `[britive]` | `app_id` | `"..."` | Britive Application ID to scan |
 | N | `[britive]` | `federation_provider` | `"..."` | Federation Provider, if being used |
 | N | `[britive]` | `idp_id` | `"..."` | Identity Provider ID if not using the default `Britive` IdP |
 | N | `[britive]` | `tenant` | `"..."` | Britive Tenant to perform actions against |
 | N | `[britive]` | `token` | `"..."` | Britive API Token for authentication |
-| Y | `[group_name]` | `` | `` | Name of an application group to scan and include |
+| Y | `[group_name]` | n/a | n/a | Name of an application group to scan and include |
 | N | `[group_name]` | `prefixes` | `["prefix-one-", "prefix-two"]` | Names of application group prefixes to include in scan |
+
+> There can be as many `[group_name]` sections as desired, each will be included in scan and subsequent actions.
 
 ### Optional Environment Variables
 
