@@ -1,15 +1,17 @@
+log_level = "INFO"
+
 [britive]
-idp_name = "Britive"        # REQUIRED - idp name
-tenant = "..."              # OPTIONAL - tenant name
-token = "..."               # OPTIONAL - api token
-federation_provider = "..." # OPTIONAL - federation provider
+app_id = "..."
+# OPTIONAL
+# federation_provider = "..."
+# idp_id = "..."
+# tenant = "..."
+# token = "..."
 
-[scim_groups.application_group_name_one]
-app_id = "..."       # REQUIRED - application id
-group_prefix = "..." # REQUIRED - prefix for britive group
-idp_id = "..."       # OPTIONAL - identity provider id
+[group-one]
+# OPTIONAL
+# prefixes = ["groupone-"]
 
-[scim_groups.application_group_name_two]
-app_id = "..."       # REQUIRED - application id
-group_prefix = "..." # REQUIRED - prefix for britive group
-idp_id = "..."       # OPTIONAL - identity provider id
+[group-two]
+# OPTIONAL
+# prefixes = ["grouptwo-"]
