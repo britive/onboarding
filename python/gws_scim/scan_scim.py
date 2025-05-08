@@ -302,10 +302,18 @@ def process(
     logging.info(f'users to enable: {json.dumps(users_to_enable, default=list)}')
     tags_to_create = [t for a in action_items for t in a['tags']]
     logging.info(f'tags to create: {json.dumps(tags_to_create, default=str)}')
-    entitlements_to_create = [e for a in action_items for e in a['entitlements']['create']]
-    logging.info(f'entitlements to create: {json.dumps(entitlements_to_create, default=str)}')
-    entitlements_to_remove = [e for a in action_items for e in a['entitlements']['remove']]
-    logging.info(f'entitlements to remove: {json.dumps(entitlements_to_remove, default=str)}')
+    entitlements_to_create = {}
+    for create_ents in [a['entitlements']['create'] for a in action_items]:
+        for group, users in create_ents.items():
+            entitlements_to_create.setdefault(group, set())
+            entitlements_to_create[group] |= set(users)
+    logging.info(f'entitlements to create: {json.dumps(entitlements_to_create, default=list)}')
+    entitlements_to_remove = {}
+    for remove_ents in [a['entitlements']['remove'] for a in action_items]:
+        for group, users in remove_ents.items():
+            entitlements_to_remove.setdefault(group, set())
+            entitlements_to_remove[group] |= set(users)
+    logging.info(f'entitlements to remove: {json.dumps(entitlements_to_remove, default=list)}')
     users_to_disable = set.intersection(*(set(a['users']['disable']) for a in action_items))
     logging.info(f'users to disable: {json.dumps(users_to_disable, default=list)}')
 
