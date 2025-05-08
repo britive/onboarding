@@ -190,6 +190,33 @@ class ScanScim:
         return diff_output
 
 
+def create_entitlements(entitlements: dict, tenant: TenantData) -> None:
+    if not entitlements:
+        logging.info('no entitlements to create')
+        return
+    logging.info('creating entitlements')
+    for tag_name, usernames in entitlements.items():
+        tag_id = tenant.groups[tag_name]['id']
+        for username in usernames:
+            user_id = tenant.users[username]['userId']
+            b.identity_management.tags.add_user(tag_id=tag_id, user_id=user_id)
+            logging.info(f'added {username} to {tag_name}')
+
+
+def create_tags(tags: list, tenant: TenantData) -> None:
+    if not tags:
+        logging.info('no tags to create')
+        return
+    logging.info('creating tags')
+    for name in tags:
+        response = b.identity_management.tags.create(name=name)
+        tenant.groups[name] = {
+            'id': response['userTagId'],
+            'users': [],
+        }
+        logging.info(f'created tag {name} with tag id {response["userTagId"]}')
+
+
 def create_users(users: list, tenant: TenantData) -> None:
     if not users:
         logging.info('no users to create')
@@ -211,46 +238,6 @@ def create_users(users: list, tenant: TenantData) -> None:
         }
         tenant.users[username] = {**details, **new_fields}
         logging.info(f'created user {username} with user id {response["userId"]}')
-
-
-def create_tags(tags: list, tenant: TenantData) -> None:
-    if not tags:
-        logging.info('no tags to create')
-        return
-    logging.info('creating tags')
-    for name in tags:
-        response = b.identity_management.tags.create(name=name)
-        tenant.groups[name] = {
-            'id': response['userTagId'],
-            'users': [],
-        }
-        logging.info(f'created tag {name} with tag id {response["userTagId"]}')
-
-
-def create_entitlements(entitlements: dict, tenant: TenantData) -> None:
-    if not entitlements:
-        logging.info('no entitlements to create')
-        return
-    logging.info('creating entitlements')
-    for tag_name, usernames in entitlements.items():
-        tag_id = tenant.groups[tag_name]['id']
-        for username in usernames:
-            user_id = tenant.users[username]['userId']
-            b.identity_management.tags.add_user(tag_id=tag_id, user_id=user_id)
-            logging.info(f'added {username} to {tag_name}')
-
-
-def remove_entitlements(entitlements: dict, tenant: TenantData) -> None:
-    if not entitlements:
-        logging.info('no entitlements to remove')
-        return
-    logging.info('removing entitlements')
-    for tag_name, usernames in entitlements.items():
-        tag_id = tenant.groups[tag_name]['id']
-        for username in usernames:
-            user_id = tenant.users[username]['userId']
-            b.identity_management.tags.remove_user(tag_id=tag_id, user_id=user_id)
-            logging.info(f'removed {username} to {tag_name}')
 
 
 def enable_users(users: set, tenant: TenantData) -> None:
@@ -310,9 +297,9 @@ def process(
         if user[0] not in usernames_to_create:
             usernames_to_create.add(user[0])
             users_to_create.append(user)
-    logging.info(f'users to create: {json.dumps(list(usernames_to_create), default=str)}')
+    logging.info(f'users to create: {json.dumps(usernames_to_create, default=list)}')
     users_to_enable = {u for a in action_items for u in a['users']['enable']}
-    logging.info(f'users to enable: {json.dumps(list(users_to_enable), default=str)}')
+    logging.info(f'users to enable: {json.dumps(users_to_enable, default=list)}')
     tags_to_create = [t for a in action_items for t in a['tags']]
     logging.info(f'tags to create: {json.dumps(tags_to_create, default=str)}')
     entitlements_to_create = [e for a in action_items for e in a['entitlements']['create']]
@@ -320,7 +307,7 @@ def process(
     entitlements_to_remove = [e for a in action_items for e in a['entitlements']['remove']]
     logging.info(f'entitlements to remove: {json.dumps(entitlements_to_remove, default=str)}')
     users_to_disable = set.intersection(*(set(a['users']['disable']) for a in action_items))
-    logging.info(f'users to disable: {json.dumps(list(users_to_disable), default=str)}')
+    logging.info(f'users to disable: {json.dumps(users_to_disable, default=list)}')
 
     if len(users_to_disable) > user_cap:
         raise ExceedsUserDisablementCount(
@@ -336,6 +323,19 @@ def process(
     create_entitlements(entitlements_to_create, tenant)
     remove_entitlements(entitlements_to_remove, tenant)
     disable_users(users_to_disable, tenant)
+
+
+def remove_entitlements(entitlements: dict, tenant: TenantData) -> None:
+    if not entitlements:
+        logging.info('no entitlements to remove')
+        return
+    logging.info('removing entitlements')
+    for tag_name, usernames in entitlements.items():
+        tag_id = tenant.groups[tag_name]['id']
+        for username in usernames:
+            user_id = tenant.users[username]['userId']
+            b.identity_management.tags.remove_user(tag_id=tag_id, user_id=user_id)
+            logging.info(f'removed {username} to {tag_name}')
 
 
 def scan_application(app_id: str) -> None:
