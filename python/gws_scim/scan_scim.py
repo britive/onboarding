@@ -80,7 +80,7 @@ class TenantData:
             name = tag['name']
             if (not name.startswith(group_prefixes)) and name not in scim_groups:
                 continue
-            if tag['userTagIdentityProviders'][0]['identityProvider']['id'] != self.idp_id:
+            if tag['userTagIdentityProviders'][0]['identityProvider']['id'] != self.britive_idp:
                 continue
             self.groups[name] = {'id': tag['userTagId'], 'users': []}
         for user in self._users:
