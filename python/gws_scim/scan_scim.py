@@ -174,17 +174,13 @@ class ScanScim:
                 'remove': {},
             },
         }
-        for group, details in self.groups.items():
-            if entitlements_to_create := self._diff(
-                source=details['users'], compare=self.tenant.groups.get(group, {}).get('users', [])
-            ):
-                diff_output['entitlements']['create'][group] = entitlements_to_create
 
-        for tag, details in self.tenant.groups.items():
-            if entitlements_to_remove := self._diff(
-                source=details['users'], compare=self.groups.get(tag, {}).get('users', [])
-            ):
-                diff_output['entitlements']['remove'][tag] = entitlements_to_remove
+        for group, details in self.groups.items():
+            tenant_group_users = self.tenant.groups.get(group, {}).get('users', [])
+            if entitlements_to_create := self._diff(source=details['users'], compare=tenant_group_users):
+                diff_output['entitlements']['create'][group] = entitlements_to_create
+            if entitlements_to_remove := self._diff(source=tenant_group_users, compare=details['users']):
+                diff_output['entitlements']['remove'][group] = entitlements_to_remove
 
         logging.debug(json.dumps(diff_output, indent=2, default=str))
         return diff_output
