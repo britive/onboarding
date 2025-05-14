@@ -163,33 +163,68 @@ def process_tags():
 
 
 def process_users():
-    users = jmespath.search("users", data)
-    print(f"{info}Processing {len(users)} users...{Style.RESET_ALL}")
+    try:
+        users = jmespath.search("users", data)
+        if not users:
+            print(f"{caution}No users found in the input data.{Style.RESET_ALL}")
+            return
+        print(f"{info}Processing {len(users)} users...{Style.RESET_ALL}")
+    except Exception as e:
+        print(f"{caution}Failed to extract users from data: {e}{Style.RESET_ALL}")
+        return
+
     for user in users:
-        print(f"{user['email']} on {user['idp']}")
-        user_idp = br.identity_management.identity_providers.get_by_name(
-            identity_provider_name=user["idp"]
-        )["id"]
-        print(f"{info}User IdP {user['idp']} : {user_idp}{Style.RESET_ALL}")
-        random_string = "".join(
-            (
-                secrets.choice(
-                    string.ascii_letters + string.digits + string.punctuation
+        try:
+            print(f"{user['email']} on {user['idp']}")
+            try:
+                idp_response = br.identity_management.identity_providers.get_by_name(
+                    identity_provider_name=user["idp"]
                 )
-                for i in range(12)
+                user_idp = idp_response["id"]
+                print(f"{info}User IdP {user['idp']} : {user_idp}{Style.RESET_ALL}")
+            except Exception as e:
+                print(
+                    f"{caution}Error fetching IdP for {user['email']}: {e}{Style.RESET_ALL}"
+                )
+                continue
+
+            try:
+                random_string = "".join(
+                    secrets.choice(
+                        string.ascii_letters + string.digits + string.punctuation
+                    )
+                    for _ in range(12)
+                )
+                print(f"{warn}{random_string}{Style.RESET_ALL}")
+            except Exception as e:
+                print(
+                    f"{caution}Failed to generate password for {user['email']}: {e}{Style.RESET_ALL}"
+                )
+                continue
+
+            try:
+                user_response = br.identity_management.users.create(
+                    idp=user_idp,
+                    email=user["email"],
+                    firstName=user["firstname"],
+                    lastName=user["lastname"],
+                    username=user["username"],
+                    status="active",
+                    password=random_string,
+                )
+                user["id"] = user_response["userId"]
+            except Exception as e:
+                print(
+                    f"{caution}Failed to create user {user['email']}: {e}{Style.RESET_ALL}"
+                )
+                continue
+
+        except KeyError as e:
+            print(f"{caution}Missing required user field: {e}{Style.RESET_ALL}")
+        except Exception as e:
+            print(
+                f"{caution}Unexpected error processing user {user.get('email', 'unknown')}: {e}{Style.RESET_ALL}"
             )
-        )
-        print(f"{warn}{random_string}{Style.RESET_ALL}")
-        user_response = br.identity_management.users.create(
-            identityProvider=user_idp,
-            email=user["email"],
-            firstName=user["firstname"],
-            lastName=user["lastname"],
-            username=user["username"],
-            status="active",
-            password=random_string,
-        )
-        user["id"] = user_response["userId"]
 
 
 def process_applications():
