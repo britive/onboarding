@@ -33,6 +33,21 @@
           "Expiration": "14400000"
         }
       ]
+    },{
+      "name": "AWS Account",
+      "type": "AWS Standalone",
+      "profiles": [
+        {
+          "name": "Account Admin",
+          "description": "Administrative privileges on AWS Account",
+          "Expiration": "14400000"
+        },
+        {
+          "name": "S3 Developer Full Access",
+          "description": "Developer access into S3",
+          "Expiration": "14400000"
+        }
+      ]
     },
     {
       "name": "Google Workspace",
