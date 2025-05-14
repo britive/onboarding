@@ -1,8 +1,9 @@
 import os
 
+from colorama import Fore, Style
+
 import oci
 from britive.britive import Britive
-from colorama import Fore, Style
 
 # Color definitions from Colorama
 caution: str = f"{Style.BRIGHT}{Fore.RED}"
