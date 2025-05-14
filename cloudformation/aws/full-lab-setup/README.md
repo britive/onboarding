@@ -12,7 +12,7 @@ This CloudFormation template sets up a complete AWS environment integrated with 
 ### Prepare Parameters
 
 1. Tenant name is the prefix part of your tenant URL.
-2. AWS Invalidation fucntion is optional but recommended for all AWS Integrations
+2. AWS Invalidation function is optional but recommended for all AWS Integrations
 3. SamlMetadata for your Tenant is available under System Admin > Security > SAML Configurations.
    Download the metadata xml file and transform it as follows for processing with cloudformation.
    ```bash
