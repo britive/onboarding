@@ -74,22 +74,30 @@ class ScanScim:
                 error = response["error"]
                 logging.debug(f"{scan_type} scan error: {error}")
                 raise Exception(error)
-            logging.debug(f"sleeping 10 seconds while waiting for {scan_type} scan to complete")
+            logging.debug(
+                f"sleeping 10 seconds while waiting for {scan_type} scan to complete"
+            )
             time.sleep(10)
 
     def _get_env_task_id_given_org_task_id(self, task_id: str) -> str:
         env_scan_task_id = None
-        for scan in self.b.application_management.scans.history(application_id=self.application_id):
+        for scan in self.b.application_management.scans.history(
+            application_id=self.application_id
+        ):
             if scan["orgTaskId"] == task_id:
                 env_scan_task_id = scan["taskId"]
                 break
         if not env_scan_task_id:
-            raise Exception("unable to find environment scan task given org scan task id")
+            raise Exception(
+                "unable to find environment scan task given org scan task id"
+            )
         return env_scan_task_id
 
     def scan_application(self):
         logging.info("scanning application")
-        response = self.b.application_management.applications.scan(application_id=self.application_id)
+        response = self.b.application_management.applications.scan(
+            application_id=self.application_id
+        )
         task_id = response["taskId"]
 
         # this just waits for the org scan to complete
@@ -123,13 +131,19 @@ class ScanScim:
         if not app_group:
             raise Exception("application users group not found")
         app_group_users = [
-            u for u in self._get_users_for_group(group_id=app_group["appPermissionId"]) if u not in self.local_users
+            u
+            for u in self._get_users_for_group(group_id=app_group["appPermissionId"])
+            if u not in self.local_users
         ]
 
         for group in groups:
             name = group["name"]
 
-            users = [u for u in self._get_users_for_group(group_id=group["appPermissionId"]) if u in app_group_users]
+            users = [
+                u
+                for u in self._get_users_for_group(group_id=group["appPermissionId"])
+                if u in app_group_users
+            ]
             self.scan_groups[name] = {
                 "description": group["description"],
                 "users": users,
@@ -157,7 +171,10 @@ class ScanScim:
             name = tag["name"]
             if not name.startswith(self.britive_group_prefix):
                 continue
-            if tag["userTagIdentityProviders"][0]["identityProvider"]["name"] != self.britive_idp_name:
+            if (
+                tag["userTagIdentityProviders"][0]["identityProvider"]["name"]
+                != self.britive_idp_name
+            ):
                 continue
             self.tenant_groups[name] = {"id": tag["userTagId"], "users": []}
 
@@ -191,27 +208,39 @@ class ScanScim:
 
     def diff(self):
         logging.info("performing diff")
-        self.users_to_create = self._diff(source=self.scan_users, compare=self.tenant_users)
+        self.users_to_create = self._diff(
+            source=self.scan_users, compare=self.tenant_users
+        )
 
-        active_users = [u for u, v in self.tenant_users.items() if v["status"] == "active"]
+        active_users = [
+            u for u, v in self.tenant_users.items() if v["status"] == "active"
+        ]
 
         self.users_to_disable = self._diff(source=active_users, compare=self.scan_users)
         lower_scan_users = [i.lower() for i in self.scan_users]
         self.users_to_enable = [
-            u for u, v in self.tenant_users.items() if v["status"] == "inactive" and u.lower() in lower_scan_users
+            u
+            for u, v in self.tenant_users.items()
+            if v["status"] == "inactive" and u.lower() in lower_scan_users
         ]
 
-        self.tags_to_create = self._diff(source=self.scan_groups, compare=self.tenant_groups)
+        self.tags_to_create = self._diff(
+            source=self.scan_groups, compare=self.tenant_groups
+        )
 
         for group, details in self.scan_groups.items():
             tag_users = self.tenant_groups.get(group, {}).get("users", [])
-            entitlements_to_create = self._diff(source=details["users"], compare=tag_users)
+            entitlements_to_create = self._diff(
+                source=details["users"], compare=tag_users
+            )
             if len(entitlements_to_create) > 0:
                 self.entitlements_to_create[group] = entitlements_to_create
 
         for tag, details in self.tenant_groups.items():
             scan_users = self.scan_groups.get(tag, {}).get("users", [])
-            entitlements_to_remove = self._diff(source=details["users"], compare=scan_users)
+            entitlements_to_remove = self._diff(
+                source=details["users"], compare=scan_users
+            )
             if len(entitlements_to_remove) > 0:
                 self.entitlements_to_remove[tag] = entitlements_to_remove
 
@@ -225,13 +254,21 @@ class ScanScim:
             tenant_user = self.tenant_users.get(username, None)
             if tenant_user:
                 if tenant_user["status"] == "active":
-                    logging.info(f"user {username} already exists and is active - skipping")
+                    logging.info(
+                        f"user {username} already exists and is active - skipping"
+                    )
                 if tenant_user["status"] == "inactive":
-                    self.b.identity_management.users.enable(user_id=tenant_user["userId"])
-                    logging.info(f"user {username} already exists and was inactive - made active")
+                    self.b.identity_management.users.enable(
+                        user_id=tenant_user["userId"]
+                    )
+                    logging.info(
+                        f"user {username} already exists and was inactive - made active"
+                    )
                     continue
 
-            response = self.b.identity_management.users.create(idp=self.identity_provider_id, **details)
+            response = self.b.identity_management.users.create(
+                idp=self.identity_provider_id, **details
+            )
             new_fields = {
                 "userId": response["userId"],
                 "status": response["status"],
@@ -270,7 +307,9 @@ class ScanScim:
             tag_id = self.tenant_groups[tag_name]["id"]
             for username in usernames:
                 user_id = self.tenant_users[username]["userId"]
-                self.b.identity_management.tags.remove_user(tag_id=tag_id, user_id=user_id)
+                self.b.identity_management.tags.remove_user(
+                    tag_id=tag_id, user_id=user_id
+                )
                 logging.info(f"removed {username} to {tag_name}")
 
     def disable_users(self):
@@ -300,7 +339,9 @@ def confirm():
 
 
 def build_args():
-    parser = argparse.ArgumentParser(description="Python script to simulate SCIM actions based on Britive scan data.")
+    parser = argparse.ArgumentParser(
+        description="Python script to simulate SCIM actions based on Britive scan data."
+    )
     parser.add_argument(
         "-n",
         "--num-allowable-users-to-disable-before-error",
@@ -309,7 +350,9 @@ def build_args():
         help="Threshold on number of allowable Britive tenant users to disable before the script stop execution.",
     )
 
-    parser.add_argument("--confirm", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--confirm", action=argparse.BooleanOptionalAction, default=True
+    )
 
     parser.add_argument(
         "-f",
@@ -356,14 +399,27 @@ def process():
     scan_scim.collect_tenant_data()
     scan_scim.diff()
 
-    logging.info(f"users to create: {json.dumps(scan_scim.users_to_create, default=str)}")
-    logging.info(f"users to enable: {json.dumps(scan_scim.users_to_enable, default=str)}")
+    logging.info(
+        f"users to create: {json.dumps(scan_scim.users_to_create, default=str)}"
+    )
+    logging.info(
+        f"users to enable: {json.dumps(scan_scim.users_to_enable, default=str)}"
+    )
     logging.info(f"tags to create: {json.dumps(scan_scim.tags_to_create, default=str)}")
-    logging.info(f"entitlements to create: {json.dumps(scan_scim.entitlements_to_create, default=str)}")
-    logging.info(f"users to disable: {json.dumps(scan_scim.users_to_disable, default=str)}")
-    logging.info(f"entitlements to remove: {json.dumps(scan_scim.entitlements_to_remove, default=str)}")
+    logging.info(
+        f"entitlements to create: {json.dumps(scan_scim.entitlements_to_create, default=str)}"
+    )
+    logging.info(
+        f"users to disable: {json.dumps(scan_scim.users_to_disable, default=str)}"
+    )
+    logging.info(
+        f"entitlements to remove: {json.dumps(scan_scim.entitlements_to_remove, default=str)}"
+    )
 
-    if len(scan_scim.users_to_disable) > args.num_allowable_users_to_disable_before_error:
+    if (
+        len(scan_scim.users_to_disable)
+        > args.num_allowable_users_to_disable_before_error
+    ):
         raise Exception(
             "performing actions would result in more than "
             f"{args.num_allowable_users_to_disable_before_error} to be disabled so not "
