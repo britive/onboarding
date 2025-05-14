@@ -73,7 +73,7 @@ try:
         (item["id"] for item in idp_list if item["name"] == "Britive"), None
     )
     if not britive_idp:
-        raise ValueError(f"Britive Identity Provider ID not found.")
+        raise ValueError("Britive Identity Provider ID not found.")
 except Exception as e:
     print(f"{caution}Error retrieving Britive IDP: {e}{Style.RESET_ALL}")
     exit(1)

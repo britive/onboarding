@@ -2,8 +2,6 @@
 import argparse
 import time
 
-from google.cloud import iam, iam_credentials_v1
-from google.iam.v1 import policy_pb2 as iam_policy
 from google.oauth2 import service_account
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError

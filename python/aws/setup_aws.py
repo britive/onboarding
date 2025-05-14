@@ -73,7 +73,7 @@ class BritiveInt:
             ],
         }
         if self.sess:
-            print(f"Adding invalidation")
+            print("Adding invalidation")
             inv_trust = ["sts:TagSession"]
             trust_policy["Statement"][0]["Action"].extend(inv_trust)
         print(f"TrustPolicy: \n {json.dumps(trust_policy)}")
