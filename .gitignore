@@ -707,4 +707,6 @@ sample.py
 *britive/sample.py
 
 .vscode/
-,vscode/*
+.vscode/*
+parameters.json
+metadata.xml
