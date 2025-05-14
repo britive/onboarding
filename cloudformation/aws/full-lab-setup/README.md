@@ -11,11 +11,23 @@ This CloudFormation template sets up a complete AWS environment integrated with 
 
 ## 🔧 Parameters
 
-| Parameter                         | Description                                                                       |
-|-----------------------------------|-----------------------------------------------------------------------------------|
-| `TenantName`                      | Name of your Britive tenant (e.g. `example` if URL is `example.britive-app.com`)  |
-| `SamlMetadataDocumentXmlContent`  | Contents of the SAML metadata XML downloaded from Britive                         |
-| `DeployAwsInvalidationFeature`    | Set to `true` to enable extra IAM permissions for AWS Invalidation                |
+### Prepare Parameters
+
+1. Tenant name is the prefix part of your tenant URL.
+2. AWS Invalidation fucntion is optional but recommended for all AWS Integrations
+3. SamlMetadata for your Tenant is available under System Admin > Security > SAML Configurations.
+   Download the metadata xml file and transform it as follows for processing with cloudformation.
+   ```bash
+   tr '\n' ' ' < metadata.xml | sed 's/>[ \t]*</></g' | sed 's/<\/root><root>/<\/root>\n<root>/g' | sed 's/"/\\"/g'
+   ```
+   Copy the output of the above command as the "SamlMetadataDocumentXmlContent" in the parameters.json file.
+
+| Parameter                         | Description                                                                                |
+|-----------------------------------|--------------------------------------------------------------------------------------------|
+| `TenantName`                      | Name of your Britive tenant (e.g. `example` if URL is `example.britive-app.com`)           |
+| `SamlMetadataDocumentXmlContent`  | Contents of the SAML metadata XML downloaded from Britive after above formatting changes   |
+| `DeployAwsInvalidationFeature`    | Set to `true` to enable extra IAM permissions for AWS Invalidation                         |
+
 
 ## 🚀 How to Deploy
 

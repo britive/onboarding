@@ -19,6 +19,56 @@ Conditions:
     !Equals [!Ref DeployAwsInvalidationFeature, "true"]
 
 Resources:
+  BritiveSamlProvider:
+    Type: AWS::IAM::SAMLProvider
+    Properties:
+      Name: !Sub "britive-${TenantName}"
+      SamlMetadataDocument: !Ref SamlMetadataDocumentXmlContent
+
+  BritiveIntegrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      Description: !Sub "Britive Integration Role"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/IAMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess
+      MaxSessionDuration: 3600
+      RoleName: !Sub "britive-${TenantName}-integration-role"
+
+  BritiveIntegrationRoleInlinePolicyForAwsInvalidation:
+    Type: AWS::IAM::Policy
+    Condition: ShouldDeployAwsInvalidationFeature
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:CreatePolicy
+              - iam:DeletePolicy
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicyVersion
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicyVersions
+            Resource: arn:aws:iam::*:policy/britive/managed/*
+      PolicyName: aws-invalidation
+      Roles:
+        - !Ref BritiveIntegrationRole
+
   BritiveKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -182,7 +232,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: ami-0c02fb55956c7d316
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       KeyName: !Ref BritiveEC2KeyPair
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
@@ -195,7 +245,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.small
-      ImageId: ami-0b69ea66ff7391e80
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base}}"
       KeyName: !Ref BritiveEC2KeyPair
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
