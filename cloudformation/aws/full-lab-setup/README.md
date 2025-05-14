@@ -1,5 +1,3 @@
-*BETA*
-
 # Britive AWS CloudFormation Stack
 
 This CloudFormation template sets up a complete AWS environment integrated with Britive, including:
@@ -31,9 +29,22 @@ This CloudFormation template sets up a complete AWS environment integrated with 
 
 ## 🚀 How to Deploy
 
+### Command-line interface
+
+Run the following command to create the stack.
+```bash
+aws cloudformation create-stack \
+  --stack-name britive-lab-resources \
+  --template-body file://britive_lab_resources.yaml \
+  --parameters file://parameters.json \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+### AWS Console
+
 1. Open the AWS CloudFormation Console.
 2. Click **"Create stack"** > **"With new resources (standard)"**.
-3. Upload the `britive_infra.yaml` template file.
+3. Upload the `britive_lab_resources.yaml` template file.
 4. Provide required parameters:
    - Britive tenant name
    - SAML metadata XML content
