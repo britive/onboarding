@@ -253,3 +253,89 @@ Resources:
       Tags:
         - Key: Name
           Value: Britive-Windows
+
+  # ----- Create Test Roles to Integrate with Britive and prove JIT use-cases ---- #
+
+  BritiveReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      RoleName: "Readonly-admin-role"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+      MaxSessionDuration: 3600
+      Description: Britive ReadOnly Role for limited access
+
+  BritivePowerUserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      RoleName: !Sub "Poweruser-role"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+      MaxSessionDuration: 3600
+      Description: Elevated access role for Britive users
+
+  BritiveEC2AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      RoleName: "EC2-Fullaccess-role"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+      MaxSessionDuration: 3600
+      Description: Britive ReadOnly Role for limited access
+
+  BritiveS3AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      RoleName: !Sub "S3-Fullaccess-role"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      MaxSessionDuration: 3600
+      Description: Elevated access role for Britive users
