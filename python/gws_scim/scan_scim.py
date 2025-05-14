@@ -4,8 +4,9 @@ import logging
 import os
 import time
 
-from britive.britive import Britive
 from dotenv import load_dotenv
+
+from britive.britive import Britive
 
 
 class ScanScim:

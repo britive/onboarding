@@ -12,8 +12,9 @@ except ImportError:
     import json
 
 import jmespath
-from britive.britive import Britive
 from colorama import Fore, Style
+
+from britive.britive import Britive
 
 """
 This code requires a .env file with the information about the Britive tenant to connect to.

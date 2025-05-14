@@ -4,9 +4,10 @@ import json
 import os
 
 import boto3
-from britive.britive import Britive
 from colorama import Fore, Style
 from dotenv import load_dotenv
+
+from britive.britive import Britive
 
 
 class BritiveInt:
