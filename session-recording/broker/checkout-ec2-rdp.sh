@@ -4,7 +4,7 @@ USER_EMAIL=${BRITIVE_USER_EMAIL:-"test@example.com"}
 USERNAME="${USER_EMAIL%%@*}"
 USERNAME="${USERNAME//[^a-zA-Z0-9\.]/}"
 
-DOMAIN=${DOMAIN:-"ad.test.com"}
+DOMAIN=${domain:-"ad.britivetest.com"}
 
 finish () {
   exit $1
@@ -33,6 +33,9 @@ JSON_STRING='{
 
 JSON=$(echo -n $JSON_STRING|jq -r tostring)
 
+REGION=$(ec2metadata --availability-zone)
+
+SECRET_KEY=$(aws --region ${REGION::-1} secretsmanager get-secret-value --secret-id ${json_secret_key} --query "SecretString" | jq -r | jq -r .key)
 
 sign() {
     echo -n "${JSON}" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"${SECRET_KEY}" -binary
