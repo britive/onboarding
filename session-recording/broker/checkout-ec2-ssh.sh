@@ -67,7 +67,7 @@ REGION=$(ec2metadata --availability-zone)
 SECRET_KEY=$(aws --region ${REGION::-1} secretsmanager get-secret-value --secret-id ${json_secret_key} --query "SecretString" | jq -r | jq -r .key)
 
 sign() {
-    echo -n "${JSON}" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"${SECRET_KEY}" -binary
+    echo -n "${JSON}" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"${json_secret_key}" -binary
     echo -n "${JSON}"
 }
 
