@@ -1,8 +1,10 @@
 #!/bin/bash
 
+expires=$(date -d "+${expiration} seconds" +%s 2> /dev/null || date -v "+${expiration}S" +%s)
+
 JSON_STRING='{
   "username": "'${username}'",
-  "expires": "'$(date -d "+${expiration} seconds" +%s)'000",
+  "expires": "'${expires}'000",
   "connections": {
     "'${connection_name}'": '${connection}'
   }
