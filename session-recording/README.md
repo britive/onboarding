@@ -1,13 +1,17 @@
 # Session recording
 
-These examples cover session recording features for SSH and rDP sessions curated by Britive access broker.
+These examples cover session recording features for SSH and RDP sessions curated by Britive Access Broker.
 
 
 ## Background
 
-This example uses Britive access broker and Apache Guacamole to achieve proxied user session into servers and allows for video recording of the user session. The sessions curated by Britive are short-lived and does nto require user to install any special tools or copying credentials. The credential rotation is compeltely handled by Britive access broker.
+This example uses Britive Access Broker and Apache Guacamole to achieve proxied user session into servers and allows for video recording of the user session. These sessions are curated by Britive, are short-lived, and do not require end users to install any special tools or to copy credentials -- the credential rotation is handled entirely by Britive Access Broker.
 
-Apache Guacamole’s proxy service, called guacd, is the core backend component responsible for brokering remote desktop sessions between users and target systems. Unlike traditional remote access tools that run directly in a client application, Guacamole uses guacd to handle protocols like RDP, VNC, and SSH, and then streams the session over the web using HTML5. This proxy receives connection requests from the Guacamole web frontend and manages the actual protocol communication, abstracting it into a format that browsers can render. By separating the frontend (web application) from the backend (guacd), Guacamole enables secure, clientless remote access through a browser without plugins.
+Traditional remote access tools often run as a local client application, however, the Guacamole client requires nothing more than a modern web browser when accessing one of the served protocols, such as RDP/SSH/VNC.
+
+Apache Guacamole’s `guacd` service, is the backend component responsible for proxying remote sessions between the Guacamole web interface and target systems. The `guacd` proxy handles the actual protocol communication and exposes the connection to the Guacamole web application.
+
+By separating the frontend (web application) from the backend (`guacd`), Guacamole enables secure, clientless remote access through a browser without any additional plugins.
 
 ## [example_user.json](user.json)
 
@@ -15,20 +19,20 @@ Contains the JSON object to encode for use with the [Encrypted JSON Auth](https:
 
 ### Example
 
-```json
+```py
 {
   "username": "first.last@britive.com",
-  "expires": "1740000000000", // expiration in epoch time, including milliseconds
+  "expires": "1750000000000", # expiration in epoch time, including milliseconds
   "connections": {
-    "connection-name": { // name to give the connection
-      "protocol": "ssh", // connection protocol, e.g. ssh, rdp, vnc, etc.
+    "connection-name": { # name to give the connection
+      "protocol": "ssh", # connection protocol, e.g. ssh, rdp, vnc, etc.
       "parameters": {
-        "hostname": "1.2.3.4", // hostname or IP
-        "port": "22", // port
-        "username": "ubuntu", // username
-        "private-key": "...", // ssh private key, with substituted newlines, e.g. s/\n/\\n/g
-        "recording-path": "/home/guacd/recordings", // location for recordings
-        "recording-name": "${GUAC_DATE}-${GUAC_TIME}-${GUAC_USERNAME}-connection-name" // name of the recording
+        "hostname": "1.2.3.4", # hostname or IP
+        "port": "22", # port
+        "username": "ubuntu", # username
+        "private-key": "...", # ssh private key, with substituted newlines, e.g. s/\n/\\n/g
+        "recording-path": "/home/guacd/recordings", # location for recordings
+        "recording-name": "${GUAC_DATE}-${GUAC_TIME}-${GUAC_USERNAME}-connection-name" # name of the recording
       }
     }
   }
