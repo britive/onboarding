@@ -64,10 +64,13 @@ Parameters:
     Type: String
     Default: "false"
     Description: Specify whether the required VPC endpoints should be created - [true|false].
+    AllowedValues: ["true", "false"]
   RouteTableId:
     Type: String
+    Default: ""
     Description: If creating VPC endpoints, specify the route table ID for the S3 gateway endpoint.
-    AllowedPattern: "^rtb-[a-z0-9]+$"
+    AllowedPattern: "^$|^rtb-[a-z0-9]+$"
+    ConstraintDescription: "Must be a valid Route Table ID or left blank."
   LoadBalancerArn:
     Type: String
     Description: Specify the ARN of the ALB to add the HTTPS listener to.
@@ -102,8 +105,10 @@ Parameters:
     Description: OPTIONAL - ECR image URI for the image used to convert and sync recordings to S3.
   S3BucketArnGuacSync:
     Type: String
-    AllowedPattern: "^arn:aws:s3:::[a-z0-9.-]{1,255}$"
+    Default: ""
     Description: OPTIONAL - S3 bucket ARN where converted recordings will be placed.
+    AllowedPattern: "^$|^arn:aws:s3:::[a-z0-9.-]{1,255}$"
+    ConstraintDescription: "Must be a valid email S3 bucket ARN or left blank."
 Conditions:
   CreateSyncService: !Not
     - !Or
@@ -196,7 +201,7 @@ Resources:
       SecurityGroupIds:
         - !Ref VpcSecurityGroupId
         - !Ref GuacSecurityGroup
-      SubnetIds: 
+      SubnetIds:
         - !Ref FirstSubnetId
         - !Ref SecondSubnetId
   EcrDockerVpcEndpoint:
@@ -417,20 +422,20 @@ Resources:
       SecurityGroups:
         - !Ref GuacSecurityGroup
   RecordingsAccessPoint:
-      Type: AWS::EFS::AccessPoint
-      Properties:
-        FileSystemId: !Ref RecordingsFileSystem
-        PosixUser:
-          Uid: "1001"
-          Gid: "1001"
-          SecondaryGids:
-            - "1000"
-        RootDirectory:
-          CreationInfo:
-            OwnerUid: "1001"
-            OwnerGid: "1001"
-            Permissions: "0755"
-          Path: "/recordings"
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref RecordingsFileSystem
+      PosixUser:
+        Uid: "1001"
+        Gid: "1001"
+        SecondaryGids:
+          - "1000"
+      RootDirectory:
+        CreationInfo:
+          OwnerUid: "1001"
+          OwnerGid: "1001"
+          Permissions: "0755"
+        Path: "/recordings"
   GuacdTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
