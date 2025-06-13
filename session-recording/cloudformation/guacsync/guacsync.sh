@@ -2,12 +2,17 @@
 
 setup() {
     DIR=${REC_DIR:-$HOME/recordings}
-    UNCONVERTED=$(find "${DIR}" -type f ! -iname "*.m4v" -mmin +.25 -exec awk -F';' 'NR==1 && /size/{if (system("test ! -f " FILENAME ".m4v")==0) print FILENAME}' {} \; | sort)
+    UNCONVERTED=()
+    while IFS= read -r -d '' file; do
+        if [ ! -f "${file}.m4v" ]; then
+            UNCONVERTED+=("$file")
+        fi
+    done < <(find "$DIR" -type f ! -name "*.m4v" -print0)
 }
 
 convert() {
     count=0
-    for FILE in ${UNCONVERTED}; do
+    for FILE in "${UNCONVERTED[@]}"; do
         SIZE=$(awk -F';' '/size/ {gsub("[[:digit:]].size,[[:digit:]].[[:digit:]],?[[:digit:]].","",$1); gsub(",[[:digit:]].","x",$1); print $1}' "${FILE}")
         if [[ "${SIZE}" == "0x0" ]]; then SIZE="1280x720"; fi
 
