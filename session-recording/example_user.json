@@ -1,16 +1,16 @@
 {
-  "username": "user-test@britive.com",
-  "expires": "1739174066000",
+  "username": "first.last@britive.com",
+  "expires": "1750000000000",
   "connections": {
     "remote-agent-demo": {
       "protocol": "ssh",
       "parameters": {
-        "hostname": "10.11.12.13",
+        "hostname": "1.2.3.4",
         "port": "22",
         "username": "ubuntu",
         "private-key": "<ssh private key, with substituted newlines>",
         "recording-path": "/home/guacd/recordings",
-        "recording-name": "${GUAC_DATE}-${GUAC_TIME}-${GUAC_USERNAME}-remote-agent-demo"
+        "recording-name": "${GUAC_DATE}-${GUAC_TIME}-${GUAC_USERNAME}-connection-name"
       }
     }
   }
