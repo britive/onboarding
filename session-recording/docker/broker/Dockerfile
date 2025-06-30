@@ -22,7 +22,7 @@ COPY ./britive-broker-0.1.3.jar /root/broker/britive-broker-0.1.3.jar
 
 # config and bootstrap
 COPY ./broker-config.yml /root/broker/config/broker-config.yml
-COPY ./name-generator.sh /root/broker/bootstrap/tenant-generator.sh
+COPY ./tenant-generator.sh /root/broker/bootstrap/tenant-generator.sh
 COPY ./token-generator.sh /root/broker/bootstrap/token-generator.sh
 
 
