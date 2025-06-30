@@ -1,4 +1,4 @@
 config:
   bootstrap:
-    tenant_subdomain: tenant-generator.sh
-    authentication_token_generator: token-generator.sh
+    tenant_subdomain: $BRITIVE_TENANT
+    authentication_token: $BRITIVE_TOKEN
