@@ -1,4 +1,13 @@
 services:
+  broker:
+    image: broker-docker:latest
+    environment:
+      BRITIVE_TOKEN: $BRITIVE_TOKEN
+      BRITIVE_TENANT: $BRITIVE_TENANT
+    ports:
+      - 2222:22
+    volumes:
+      - $PWD/setup.yml:/root/setup.yml
   guacd:
     image: guacamole/guacd
     hostname: guacd
