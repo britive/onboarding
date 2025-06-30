@@ -19,10 +19,21 @@ This example helps with setting up the Britive broker and Guacd service under on
 1. Copy this directory on the desired server or virtual machine.
 2. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
 3. Generate a JSON secret key (update the text as needed in the following command):
+On Linux:
 
   ```sh
   echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
   ```
+
+On Windows:
+
+```powershell
+$input = "britiveallthethings"
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($input)
+$hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($bytes)
+$md5 = [System.BitConverter]::ToString($hash) -replace "-", ""
+$md5.ToLower()
+```
 
   Update the docker-compose.yml file with the generated key.
 
