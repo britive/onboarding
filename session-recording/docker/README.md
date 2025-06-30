@@ -16,15 +16,15 @@ By separating the frontend (web application) from the backend (`guacd`), Guacamo
 
 This example helps with setting up the Britive broker and Guacd service under one Docker package. The following steps would allow for a quick deployment of these service to create ephemeral user session for RDP and SSH and record the same with the help of the guacd service.
 
-- Copy this directory on the desired server or virtual machine.
-- Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
-- Generate a JSON secret key
+1. Copy this directory on the desired server or virtual machine.
+2. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
+3. Generate a JSON secret key
 
 ```sh
 echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
 ```
 
-- Update the docker-compose.yml file with the generated key.
+Update the docker-compose.yml file with the generated key.
 
 ```yaml
 guacamole:
@@ -33,14 +33,14 @@ guacamole:
 
 ```
 
-- Now, we are ready to now create the docker service for the broker and start all services.
-- While in the directory run Docker build process:
+Now, we are ready to now create the docker service for the broker and start all services.
+4. While in the directory run Docker build process:
 
 ```sh
 docker build -t broker-docker .
 ```
 
-- Once complete, run the broker compose to stand up the services:
+5. Once complete, run the broker compose to stand up the services:
 
 ```sh
 docker compose up
