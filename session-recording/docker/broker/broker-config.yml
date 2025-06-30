@@ -1,4 +1,4 @@
 config:
   bootstrap:
-    tenant_subdomain: $BRITIVE_TENANT
-    authentication_token: $BRITIVE_TOKEN
+    tenant_subdomain: demo
+    authentication_token: TOKEN_HERE!

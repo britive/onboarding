@@ -2,8 +2,8 @@ services:
   broker:
     image: broker-docker:latest
     environment:
-      BRITIVE_TOKEN: $BRITIVE_TOKEN
-      BRITIVE_TENANT: $BRITIVE_TENANT
+#      britive.broker.authentication.token: demo
+      BRITIVE_TOKEN: BRITIVE_TOKEN
     ports:
       - 2222:22
   guacd:
