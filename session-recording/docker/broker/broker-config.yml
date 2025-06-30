@@ -1,4 +1,4 @@
 config:
   bootstrap:
     tenant_subdomain: demo
-    authentication_token: TOKEN_HERE!
+    authentication_token: TOKEN HERE!
