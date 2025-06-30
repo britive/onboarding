@@ -24,7 +24,7 @@ This example helps with setting up the Britive broker and Guacd service under on
   echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
   ```
 
-  a. Update the docker-compose.yml file with the generated key.
+  Update the docker-compose.yml file with the generated key.
 
   ```yaml
   guacamole:
