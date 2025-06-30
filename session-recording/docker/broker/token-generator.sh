@@ -1,2 +1,2 @@
 #!/bin/bash
-cat $BROKER_TOKEN
+echo $BRITIVE_TOKEN
