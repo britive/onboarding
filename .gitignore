@@ -710,3 +710,6 @@ sample.py
 .vscode/*
 parameters.json
 metadata.xml
+
+# Britve
+britive-broker-0.1.3.jar

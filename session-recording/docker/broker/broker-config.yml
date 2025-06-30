@@ -1,0 +1,4 @@
+config:
+  bootstrap:
+    tenant_subdomain: $BRITIVE_TENANT
+    authentication_token_generator: $BRITIVE_TOKEN
