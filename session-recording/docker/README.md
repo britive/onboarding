@@ -34,6 +34,7 @@ guacamole:
 ```
 
 Now, we are ready to now create the docker service for the broker and start all services.
+
 4. While in the directory run Docker build process:
 
 ```sh
