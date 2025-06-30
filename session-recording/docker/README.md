@@ -19,44 +19,45 @@ This example helps with setting up the Britive broker and Guacd service under on
 1. Copy this directory on the desired server or virtual machine.
 2. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
 3. Generate a JSON secret key (update the text as needed in the following command):
-On Linux:
+    On Linux:
 
-  ```sh
-  echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
-  ```
+      ```sh
+      echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
+      ```
 
-On Windows:
+    On Windows:
 
-```powershell
-$input = "britiveallthethings"
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($input)
-$hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($bytes)
-$md5 = [System.BitConverter]::ToString($hash) -replace "-", ""
-$md5.ToLower()
-```
+    ```powershell
+    $input = "britiveallthethings"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($input)
+    $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($bytes)
+    $md5 = [System.BitConverter]::ToString($hash) -replace "-", ""
+    $md5.ToLower()
+    ```
 
-  Update the docker-compose.yml file with the generated key.
+      Update the docker-compose.yml file with the generated key.
 
-  ```yaml
-  guacamole:
-    environment:
-      JSON_SECRET_KEY: "<json secret key goes here>"
+      ```yaml
+      guacamole:
+        environment:
+          JSON_SECRET_KEY: "<json secret key goes here>"
 
-  ```
+      ```
 
 4. While in the directory run Docker build process:
 
-```sh
-docker build -t broker-docker .
-```
+    ```sh
+    docker build -t broker-docker .
+    ```
 
 5. Once complete, run the broker compose to stand up the services:
 
-```sh
-docker compose up
-```
+    ```sh
+    docker compose up
+    ```
 
 This would complete the broker and guacamole install. The broker service would start automatically and you should see an instance of the broker running on britive admin portal.
 
-Note:
-The synchronization option allow you to synchronize the recording to your AWS S3 bucket.
+> Info
+>
+> The synchronization option allow you to synchronize the recording to your AWS S3 bucket.
