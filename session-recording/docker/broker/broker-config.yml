@@ -1,4 +1,4 @@
 config:
   bootstrap:
-    tenant_subdomain: /root/broker/bootstrap/tenant-generator.sh
-    authentication_token_generator: /root/broker/bootstrap/token-generator.sh
+    tenant_subdomain: tenant-generator.sh
+    authentication_token_generator: token-generator.sh
