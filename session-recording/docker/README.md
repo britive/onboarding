@@ -20,20 +20,18 @@ This example helps with setting up the Britive broker and Guacd service under on
 2. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
 3. Generate a JSON secret key
 
-```sh
-echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
-```
+  ```sh
+  echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
+  ```
 
-Update the docker-compose.yml file with the generated key.
+  a. Update the docker-compose.yml file with the generated key.
 
-```yaml
-guacamole:
-  environment:
-    JSON_SECRET_KEY: "<json secret key goes here>"
+  ```yaml
+  guacamole:
+    environment:
+      JSON_SECRET_KEY: "<json secret key goes here>"
 
-```
-
-Now, we are ready to now create the docker service for the broker and start all services.
+  ```
 
 4. While in the directory run Docker build process:
 
