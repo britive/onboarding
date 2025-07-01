@@ -2,7 +2,6 @@
 
 These examples cover session recording features for SSH and RDP sessions curated by Britive Access Broker.
 
-
 ## Background
 
 This example uses Britive Access Broker and Apache Guacamole to achieve proxied user session into servers and allows for video recording of the user session. These sessions are curated by Britive, are short-lived, and do not require end users to install any special tools or to copy credentials -- the credential rotation is handled entirely by Britive Access Broker.
