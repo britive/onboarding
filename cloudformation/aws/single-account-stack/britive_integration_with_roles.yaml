@@ -94,6 +94,8 @@ Resources:
               Federated: !Ref BritiveSamlProvider
             Action:
               - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
             Condition:
               StringEquals:
                 SAML:aud: https://signin.aws.amazon.com/saml
@@ -136,6 +138,8 @@ Resources:
               Federated: !Ref BritiveSamlProvider
             Action:
               - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
             Condition:
               StringEquals:
                 SAML:aud: https://signin.aws.amazon.com/saml
