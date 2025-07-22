@@ -18,7 +18,7 @@ RUN mkdir -p /root/broker/config/ /root/broker/bootstrap/ /root/broker/cache /va
 RUN pip3 install jmespath britive>=4.1.3 pyjwt cryptography jinja2 pyyaml --break-system-packages
 
 # broker jar
-COPY ./britive-broker-0.1.3.jar /root/broker/britive-broker-0.1.3.jar
+COPY ./britive-broker-1.0.0.jar /root/broker/britive-broker-1.0.0.jar
 
 # config and bootstrap
 COPY ./broker-config.yml /root/broker/config/broker-config.yml
