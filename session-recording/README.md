@@ -8,9 +8,75 @@ This example uses Britive Access Broker and Apache Guacamole to achieve proxied 
 
 Traditional remote access tools often run as a local client application, however, the Guacamole client requires nothing more than a modern web browser when accessing one of the served protocols, such as RDP/SSH/VNC.
 
-Apache Guacamole’s `guacd` service, is the backend component responsible for proxying remote sessions between the Guacamole web interface and target systems. The `guacd` proxy handles the actual protocol communication and exposes the connection to the Guacamole web application.
-
 By separating the frontend (web application) from the backend (`guacd`), Guacamole enables secure, clientless remote access through a browser without any additional plugins.
+
+Apache Guacamole initiates RDP (Remote Desktop Protocol) connections **through the `guacd` daemon**, which acts as a proxy between the browser client and the target remote desktop (e.g., Windows machine). Here’s how the flow works and clarifies your confusion:
+
+---
+
+## 🔧 Key Components
+
+* **Guacamole Client (Web App)**: Runs in the browser. HTML5 and JavaScript frontend.
+* **Guacamole Server (`guacd`)**: Native daemon that speaks RDP, VNC, or SSH.
+* **Remote Desktop Machine**: Windows host with RDP service running.
+
+---
+
+## 📡 Flow: How RDP Connection is Established
+
+1. **User connects via browser** to the Guacamole web interface (typically over HTTPS).
+2. **Guacamole web server (Tomcat)** sends connection parameters (hostname/IP, port, username, password, etc.) to `guacd`.
+3. **`guacd` opens an RDP connection** directly to the target machine using the RDP protocol.
+4. **`guacd` encodes the RDP session** into an optimized stream using the Guacamole protocol (a stateless, websocket-based protocol).
+5. **Web browser receives the stream** and renders the session using JavaScript (no plugin needed).
+
+---
+
+## 🔍 Clarification: Where the Connection Happens
+
+* **The RDP connection is *not* made by the browser.**
+  The browser does not speak RDP and never connects to the Windows machine directly.
+
+* **`guacd` must have network access to the target Windows machine.**
+  If it cannot reach the RDP port (default 3389) on the machine, the session will fail.
+
+* **The browser only talks to the Guacamole web app**, and that app forwards commands to `guacd`.
+
+---
+
+## 🔒 Security & Proxy-Like Behavior
+
+Guacamole **feels like a proxy** from the user’s perspective because:
+
+* You only need access to the Guacamole web app (not the RDP target directly).
+* The RDP traffic is encapsulated in web protocols (e.g., WebSocket).
+* You can enforce strong access controls at the Guacamole layer without exposing remote hosts.
+
+But **it’s not a traditional reverse proxy** — Guacamole is an active RDP client and protocol translator, not a TCP-level proxy.
+
+---
+
+## 🖼️ Diagram
+
+```plaintext
+[Browser (HTML5)]
+      ↓ WebSocket (Guacamole Protocol)
+[Guacamole Web App (Tomcat)]
+      ↓ TCP
+[guacd (RDP/VNC/SSH client)]
+      ↓ RDP
+[Windows Server (RDP enabled)]
+```
+
+---
+
+## 🧠 Summary
+
+* **RDP connection is made by `guacd`**, not the browser.
+* Browser receives rendered session stream via WebSocket.
+* `guacd` **must** have network access to the RDP host.
+
+If you're running Guacamole in Docker or in a restricted VPC, make sure the container/network can reach your RDP targets.
 
 ## [example_user.json](user.json)
 
@@ -50,7 +116,9 @@ Sign and encrypt the `user.json` file, or any other file, with a JSON secret key
 ./encrypt-token.sh <json-secret-key> <file>
 ```
 
-### Example
+### Example Shared secret
+
+How to generate encryption key for the broker to set up with a guacamole service.
 
 #### Generate a JSON secret key
 
