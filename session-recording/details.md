@@ -30,15 +30,11 @@ It initiates RDP over the network using:
    * Guacamole does not need a local agent or software on the Windows machine.
    * It simply uses RDP to log in — just like Microsoft’s Remote Desktop Client would.
 
----
-
 ## ❌ What Guacamole *Does Not* Need
 
 * ❌ No Guacamole agent installed on the Windows server.
 * ❌ No prior login or local software configuration.
 * ❌ No browser plugin or remote tunnel from the Windows host.
-
----
 
 ## 🔍 So… “How does it work without access?”
 
@@ -73,15 +69,11 @@ This file **bypasses the need for user logins in Guacamole’s own UI**. The fil
    * Pass connection details to `guacd`.
 4. Guacamole web app connects to `guacd`, which **initiates the actual RDP/SSH/VNC session**.
 
----
-
 ## 🔐 Security: Signing and Trust
 
 * The JSON must be **signed** using a secret key that Guacamole knows (configured in `guacamole.properties`).
 * Guacamole verifies the signature before accepting the connection definitions.
 * If the JWT is tampered with, authentication fails.
-
----
 
 ## 🧾 JSON Auth Example
 

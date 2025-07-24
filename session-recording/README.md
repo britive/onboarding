@@ -12,15 +12,11 @@ By separating the frontend (web application) from the backend (`guacd`), Guacamo
 
 Apache Guacamole initiates RDP (Remote Desktop Protocol) connections **through the `guacd` daemon**, which acts as a proxy between the browser client and the target remote desktop (e.g., Windows machine). Here’s how the flow works and clarifies your confusion:
 
----
-
 ## 🔧 Key Components
 
 * **Guacamole Client (Web App)**: Runs in the browser. HTML5 and JavaScript frontend.
 * **Guacamole Server (`guacd`)**: Native daemon that speaks RDP, VNC, or SSH.
 * **Remote Desktop Machine**: Windows host with RDP service running.
-
----
 
 ## 📡 Flow: How RDP Connection is Established
 
@@ -29,8 +25,6 @@ Apache Guacamole initiates RDP (Remote Desktop Protocol) connections **through t
 3. **`guacd` opens an RDP connection** directly to the target machine using the RDP protocol.
 4. **`guacd` encodes the RDP session** into an optimized stream using the Guacamole protocol (a stateless, websocket-based protocol).
 5. **Web browser receives the stream** and renders the session using JavaScript (no plugin needed).
-
----
 
 ## 🔍 Clarification: Where the Connection Happens
 
@@ -42,8 +36,6 @@ Apache Guacamole initiates RDP (Remote Desktop Protocol) connections **through t
 
 * **The browser only talks to the Guacamole web app**, and that app forwards commands to `guacd`.
 
----
-
 ## 🔒 Security & Proxy-Like Behavior
 
 Guacamole **feels like a proxy** from the user’s perspective because:
@@ -54,22 +46,6 @@ Guacamole **feels like a proxy** from the user’s perspective because:
 
 But **it’s not a traditional reverse proxy** — Guacamole is an active RDP client and protocol translator, not a TCP-level proxy.
 
----
-
-## 🖼️ Diagram
-
-```plaintext
-[Browser (HTML5)]
-      ↓ WebSocket (Guacamole Protocol)
-[Guacamole Web App (Tomcat)]
-      ↓ TCP
-[guacd (RDP/VNC/SSH client)]
-      ↓ RDP
-[Windows Server (RDP enabled)]
-```
-
----
-
 ## 🧠 Summary
 
 * **RDP connection is made by `guacd`**, not the browser.
@@ -77,6 +53,8 @@ But **it’s not a traditional reverse proxy** — Guacamole is an active RDP cl
 * `guacd` **must** have network access to the RDP host.
 
 If you're running Guacamole in Docker or in a restricted VPC, make sure the container/network can reach your RDP targets.
+
+---
 
 ## [example_user.json](user.json)
 
@@ -133,3 +111,5 @@ fb57d11d533339aea1e37c2a5a1cb92c
 ./encrypt-token.sh fb57d11d533339aea1e37c2a5a1cb92c user.json
 {"token": "dziPjv9S6NgNgsA7V5TCsdUlxRb8OZO3h3Rbi52cfHS9An6hXgMfvpOMq3RLTBUFqC87j8RkN1jJ1zkyQa%2FgmiO07x2P%2FewLiKG86a60v%2BlUCv%2Blh9wd2ENMLjTnhmLhTWkpNgKHfQHQt%2F34K19------oSwJ%2FPLEiuSMvYO6Z72H5%2----------JiDI%2BZ6ap2ZKyB"}
 ```
+
+---
