@@ -1,8 +1,8 @@
-# Session recording
+# 📽️ Session recording
 
 These examples cover session recording features for SSH and RDP sessions curated by Britive Access Broker.
 
-## Background
+## 📜 Background
 
 This example uses Britive Access Broker and Apache Guacamole to achieve proxied user session into servers and allows for video recording of the user session. These sessions are curated by Britive, are short-lived, and do not require end users to install any special tools or to copy credentials -- the credential rotation is handled entirely by Britive Access Broker.
 
@@ -56,7 +56,7 @@ If you're running Guacamole in Docker or in a restricted VPC, make sure the cont
 
 ---
 
-## [example_user.json](user.json)
+## » [example_user.json](user.json)
 
 Contains the JSON object to encode for use with the [Encrypted JSON Auth](https://guacamole.apache.org/doc/gug/json-auth.html)
 
@@ -84,7 +84,7 @@ Contains the JSON object to encode for use with the [Encrypted JSON Auth](https:
 
 > Additional connection parameter information: [configuring-connections](https://guacamole.apache.org/doc/gug/configuring-guacamole.html#configuring-connections)
 
-## [encrypt-token.sh](encrypt-token.sh)
+## 📌 [encrypt-token.sh](encrypt-token.sh)
 
 Sign and encrypt the `user.json` file, or any other file, with a JSON secret key.
 
