@@ -713,5 +713,6 @@ metadata.xml
 
 # Britve
 britive-broker-0.1.3.jar
+britive-broker-1.0.0.jar
 *.jar
 docker.zip
