@@ -143,11 +143,11 @@ def process_tags():
     tags = jmespath.search("tags", data) or []
     print(f"{info}Processing {len(tags)} Tags...{Style.RESET_ALL}")
     for tag in tags:
-        print(f"{tag['name']}")
         if DRY_RUN:
             print(f"{warn}[Dry-Run] Would create tag: {tag['name']}{Style.RESET_ALL}")
             tag["id"] = f"simulated-{tag['name']}-id"
         else:
+            print(f"Tage name: {tag['name']}")
             tag_response = br.identity_management.tags.create(
                 name=tag["name"], description=tag["description"], idp=britive_idp
             )
@@ -159,7 +159,6 @@ def process_users():
     print(f"{info}Processing {len(users)} Users...{Style.RESET_ALL}")
     for user in users:
         try:
-            print(f"{user['email']} on {user['idp']}")
             idp_response = br.identity_management.identity_providers.get_by_name(
                 user["idp"]
             )
@@ -168,7 +167,6 @@ def process_users():
             password = "".join(
                 secrets.choice(string.ascii_letters + string.digits) for _ in range(12)
             )
-            print(f"{warn}[Password] {password}{Style.RESET_ALL}")
 
             if DRY_RUN:
                 print(
@@ -176,6 +174,7 @@ def process_users():
                 )
                 user["id"] = f"simulated-{user['username']}-id"
             else:
+                print(f"{user['email']} on {user['idp']}")
                 response = br.identity_management.users.create(
                     idp=user_idp,
                     email=user["email"],
@@ -211,6 +210,7 @@ def process_applications():
 
 def process_profiles():
     apps = jmespath.search("apps", data) or []
+    print(f"{info}Processing profiles for {len(apps)} applications...{Style.RESET_ALL}")
     for app in apps:
         envs = app.get("envs", [])
         for env in envs:
@@ -242,6 +242,7 @@ def process_profiles():
 
 def process_notification():
     notes = jmespath.search("notification", data) or []
+    print(f"{info}Processing {len(notes)} notification mediums...{Style.RESET_ALL}")
     for note in notes:
         if DRY_RUN:
             print(
@@ -271,19 +272,23 @@ def process_idps():
 
 
 def process_broker_pool():
-    if DRY_RUN:
-        print(
-            f"{warn}[Dry-Run] Would create Broker Pool: Primary Pool{Style.RESET_ALL}"
-        )
-    else:
-        response = br.access_broker.pools.create(
-            name="Primary Pool", description="Broker Pool for Britive Broker"
-        )
-        print(f"{green}Created Broker Pool: {response['pool-id']}{Style.RESET_ALL}")
+    bps = jmespath.search("brokerPools", data) or []
+    print(f"{info}Processing {len(bps)} Broker Pools...{Style.RESET_ALL}")
+    for bp in bps:
+        if DRY_RUN:
+            print(f"{warn}[Dry-Run] Would create Broker Pool: {bp['name']}{Style.RESET_ALL}")
+            bp["id"] = f"simulated-{bp['name']}-id"
+        else:
+            response = br.access_broker.pools.create(
+                name=br["name"], description=br["description"]
+            )
+            bp["id"] = response["pool-id"]
+            print(f"{green}Created Broker Pool: {bp["id"]}{Style.RESET_ALL}")
 
 
 def process_resource_types():
     rts = jmespath.search("resourcesTypes", data) or []
+    print(f"{info}Processing {len(rts)} Resource Types...{Style.RESET_ALL}")
     for rt in rts:
         if DRY_RUN:
             print(
