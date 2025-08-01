@@ -1,187 +1,192 @@
 apps:
-- name: Britive
-  description: Britive for Britive. Short-lived Admin access
-  type: Britive
-  envs:
-  - name: POC Tenant
-    description: Britive PoC Tenant
-  profiles:
-  - name: Britive Tenant Admin
-    description: ''
-    Expiration: '7200000'
-- name: AWS
-  type: AWS
-  profiles:
-  - name: Account Admin
-    description: Administrative privileges on AWS Account
-    Expiration: '14400000'
-  - name: S3 Developer Full Access
-    description: Developer access into S3
-    Expiration: '14400000'
-- name: AWS Account
-  type: AWS Standalone
-  profiles:
-  - name: Account Admin
-    description: Administrative privileges on AWS Account
-    Expiration: '14400000'
-  - name: S3 Developer Full Access
-    description: Developer access into S3
-    Expiration: '14400000'
-- name: Google Workspace
-  type: Google Workspace
-  envs:
-  - name: Sandbox
-    description: Google Workspace
-  profiles:
-  - name: Google Workspace Admin
-    description: Temporary elevation for admin role
-    Expiration: '7200000'
+  - name: Britive
+    description: Britive for Britive. Short-lived Admin access
+    type: Britive
+    envs:
+      - name: POC Tenant
+        description: Britive PoC Tenant
+    profiles:
+      - name: Britive Tenant Admin
+        description: ''
+        Expiration: '7200000'
+  - name: AWS
+    type: AWS
+    profiles:
+      - name: Account Admin
+        description: Administrative privileges on AWS Account
+        Expiration: '14400000'
+      - name: S3 Developer Full Access
+        description: Developer access into S3
+        Expiration: '14400000'
+  - name: AWS Account
+    type: AWS Standalone
+    profiles:
+      - name: Account Admin
+        description: Administrative privileges on AWS Account
+        Expiration: '14400000'
+      - name: S3 Developer Full Access
+        description: Developer access into S3
+        Expiration: '14400000'
+  - name: Google Workspace
+    type: Google Workspace
+    envs:
+      - name: Sandbox
+        description: Google Workspace
+    profiles:
+      - name: Google Workspace Admin
+        description: Temporary elevation for admin role
+        Expiration: '7200000'
+brokerPools:
+  - name: LinuxBrokers
+    description: Brokers running on Linux machines
+  - name: WindowsBrokers
+    description: Brokers running on Windows domain-joined machines
 idps:
-- name: Okta
-  type: SAML
-  description: Okta Sandbox connection for SSO and SCIM
+  - name: Okta
+    type: SAML
+    description: Okta Sandbox connection for SSO and SCIM
 notification:
-- description: Slack for approval and other Britive notices
-  name: Slack_TEST
-  url: https://britive-hq.slack.com/api/
-  type: slack
+  - description: Slack for approval and other Britive notices
+    name: Slack_TEST
+    url: https://britive-hq.slack.com/api/
+    type: slack
 resourcesTypes:
-- name: ActiveDirectory
-  description: Active Directory Domains for permission management
-  permissions:
-  - name: AddUserToGroup
-    description: Adds user to group
-    variables:
-    - user
-    - group
-    checkout: ''
-    checkin: ''
-  profiles:
-  - name: Domain Admin Group
+  - name: ActiveDirectory
+    description: Active Directory Domains for permission management
+    permissions:
+      - name: AddUserToGroup
+        description: Adds user to group
+        variables:
+          - user
+          - group
+        checkout: ''
+        checkin: ''
+    profiles:
+      - name: Domain Admin Group
+        description: ''
+        Expiration: '7200000'
+    resources:
+      - name: Domain01
+        description: ''
+  - name: HelloWorld
+    description: Hellow World | Sample broker bootstrap and unit test
+    permissions:
+      - name: ConfirmUser
+        description: Returns Username upon checkout
+        variables:
+          - username
+        checkout: echo $username
+        checkin: echo 'checked-in'
+    profiles:
+      - name: Hellow World
+        description: ''
+        Expiration: '1200000'
+    resources:
+      - name: Server1
+        description: ''
+  - name: LinuxSSH
     description: ''
-    Expiration: '7200000'
-  resources:
-  - name: Domain01
+    permissions:
+      - name: ''
+        description: ''
+        variables:
+          - ''
+          - ''
+        checkout: ''
+        checkin: ''
+    profiles:
+      - name: SSH Sudo
+        description: ''
+        Expiration: '14400000'
+      - name: SSH NoSudo
+        description: ''
+        Expiration: '14400000'
+    resources:
+      - name: Server01
+        description: ''
+  - name: WindowsRDP
     description: ''
-- name: HelloWorld
-  description: Hellow World | Sample broker bootstrap and unit test
-  permissions:
-  - name: ConfirmUser
-    description: Returns Username upon checkout
-    variables:
-    - username
-    checkout: echo $username
-    checkin: echo 'checked-in'
-  profiles:
-  - name: Hellow World
+    permissions:
+      - name: ''
+        description: ''
+        variables:
+          - ''
+          - ''
+        checkout: ''
+        checkin: ''
+    profiles:
+      - name: Local Admin
+        description: ''
+        Expiration: '7200000'
+    resources:
+      - name: Server01
+        description: ''
+  - name: AuroraMySQL
     description: ''
-    Expiration: '1200000'
-  resources:
-  - name: Server1
+    permissions:
+      - name: ''
+        description: ''
+        variables:
+          - ''
+          - ''
+        checkout: ''
+        checkin: ''
+    profiles:
+      - name: DB Admin
+        description: ''
+        Expiration: '7200000'
+    resources:
+      - name: DB01
+        description: ''
+  - name: AuroraPostgres
     description: ''
-- name: LinuxSSH
-  description: ''
-  permissions:
-  - name: ''
-    description: ''
-    variables:
-    - ''
-    - ''
-    checkout: ''
-    checkin: ''
-  profiles:
-  - name: SSH Sudo
-    description: ''
-    Expiration: '14400000'
-  - name: SSH NoSudo
-    description: ''
-    Expiration: '14400000'
-  resources:
-  - name: Server01
-    description: ''
-- name: WindowsRDP
-  description: ''
-  permissions:
-  - name: ''
-    description: ''
-    variables:
-    - ''
-    - ''
-    checkout: ''
-    checkin: ''
-  profiles:
-  - name: Local Admin
-    description: ''
-    Expiration: '7200000'
-  resources:
-  - name: Server01
-    description: ''
-- name: AuroraMySQL
-  description: ''
-  permissions:
-  - name: ''
-    description: ''
-    variables:
-    - ''
-    - ''
-    checkout: ''
-    checkin: ''
-  profiles:
-  - name: DB Admin
-    description: ''
-    Expiration: '7200000'
-  resources:
-  - name: DB01
-    description: ''
-- name: AuroraPostgres
-  description: ''
-  permissions:
-  - name: ''
-    description: ''
-    variables:
-    - ''
-    - ''
-    checkout: ''
-    checkin: ''
-  profiles:
-  - name: DB Admin
-    description: Temporary elevation for Database Admin
-    Expiration: '7200000'
-  resources:
-  - name: DB01
-    description: ''
+    permissions:
+      - name: ''
+        description: ''
+        variables:
+          - ''
+          - ''
+        checkout: ''
+        checkin: ''
+    profiles:
+      - name: DB Admin
+        description: Temporary elevation for Database Admin
+        Expiration: '7200000'
+    resources:
+      - name: DB01
+        description: ''
 tags:
-- name: User Admins
-  description: Admins participating in the user management
-- name: Help Desk Users
-  description: Users participating in the Demo
-- name: Managers
-  description: Approvers will approve the profiles or checkouts
-- name: Tenant Admins
-  description: Admins managing the Britive Platform
+  - name: User Admins
+    description: Admins participating in the user management
+  - name: Help Desk Users
+    description: Users participating in the Demo
+  - name: Managers
+    description: Approvers will approve the profiles or checkouts
+  - name: Tenant Admins
+    description: Admins managing the Britive Platform
 users:
-- username: adamwoodard@mailinator.com
-  firstname: Adam
-  lastname: Woodard
-  email: adamwoodard@mailinator.com
-  idp: Britive
-- username: paulbarnett@mailinator.com
-  firstname: Paul
-  lastname: Barnett
-  email: paulbarnett@mailinator.com
-  idp: Britive
-- username: briannarussell@mailinator.com
-  firstname: Brianna
-  lastname: Russell
-  email: briannarussell@mailinator.com
-  idp: Britive
-- username: alexdavis@mailinator.com
-  firstname: Alex
-  lastname: Davis
-  email: alexdavis@mailinator.com
-  idp: Britive
-- username: christinenichols@mailinator.com
-  firstname: Christine
-  lastname: Nichols
-  email: christinenichols@mailinator.com
-  idp: Britive
+  - username: adamwoodard@mailinator.com
+    firstname: Adam
+    lastname: Woodard
+    email: adamwoodard@mailinator.com
+    idp: Britive
+  - username: paulbarnett@mailinator.com
+    firstname: Paul
+    lastname: Barnett
+    email: paulbarnett@mailinator.com
+    idp: Britive
+  - username: briannarussell@mailinator.com
+    firstname: Brianna
+    lastname: Russell
+    email: briannarussell@mailinator.com
+    idp: Britive
+  - username: alexdavis@mailinator.com
+    firstname: Alex
+    lastname: Davis
+    email: alexdavis@mailinator.com
+    idp: Britive
+  - username: christinenichols@mailinator.com
+    firstname: Christine
+    lastname: Nichols
+    email: christinenichols@mailinator.com
+    idp: Britive
