@@ -1,9 +1,8 @@
-
 # README
 
 ## Overview
 
-This script automates various tasks using the Britive API, such as processing identity providers, user identities, service identities, applications, tags, and more. It interacts with the Britive platform to create and manage resources using a `.json` file (`britive/data_input.json`) as input.
+This script automates various tasks using the Britive API, such as processing identity providers, user identities, service identities, applications, tags, and more. It interacts with the Britive platform to create and manage resources using a `.yaml` file (`britive/data_input.yaml`) as input.
 
 ## Prerequisites
 
@@ -16,7 +15,7 @@ Ensure that you have Python 3.x installed on your machine.
 Install the following Python packages before running the script:
 
 ```bash
-pip install britive simplejson colorama jmespath python-dotenv
+pip install britive pyyaml colorama jmespath python-dotenv
 ```
 
 ### 3. Environment Configuration
@@ -32,29 +31,21 @@ This information is required for the script to connect to the Britive API.
 
 ### 4. Input Data
 
-The script reads from a JSON file located at `britive/data_input.json`, which contains the necessary information to create users, applications, tags, and more. Ensure that this file is properly formatted.
+The script reads from a YAML file located at `britive/data_input.yaml`, which contains the necessary information to create users, applications, tags, and more. Ensure that this file is properly formatted.
 
-Example structure of `data_input.json`:
+Example structure of `data_input.yaml`:
 
-```json
-{
-    "users": [
-        {
-            "email": "user@example.com",
-            "firstname": "John",
-            "lastname": "Doe",
-            "username": "johndoe",
-            "idp": "Britive"
-        }
-    ],
-    "tags": [
-        {
-            "name": "Tag1",
-            "description": "Sample tag"
-        }
-    ]
-    ...
-}
+```yaml
+users:
+  - email: user@example.com
+    firstname: John
+    lastname: Doe
+    username: johndoe
+    idp: Britive
+
+tags:
+  - name: Tag1
+    description: Sample tag
 ```
 
 ## Usage
@@ -69,38 +60,52 @@ python script.py [options]
 
 - `-i`, `--idps`: Process Identity Providers
 - `-u`, `--users`: Process User Identities
-- `-s`, `--services`: Process Service Identities
+- `-s`, `--services`: Process Service Identities (reserved)
 - `-t`, `--tags`: Process Tags
 - `-a`, `--applications`: Process Applications
 - `-p`, `--profiles`: Process Profiles for each application
 - `-n`, `--notification`: Process Notification Mediums
 - `-r`, `--resourceTypes`: Process creation of Resource Types
-- `-b`, `--brokerPool`: Process broker pool. Creates one primary broker pool
+- `-b`, `--brokerPool`: Process broker pool (creates one primary broker pool)
+- `--dry-run`: Simulate operations without making any changes to the Britive tenant
 
-### Example
+### Examples
 
-To process users and tags, run:
+Process users and tags:
 
 ```bash
 python script.py --users --tags
 ```
 
-### Output
+Simulate processing identity providers and applications without making changes:
 
-The script outputs logs to the console, showing the progress for each resource being processed (e.g., users, applications, tags).
+```bash
+python script.py --idps --applications --dry-run
+```
+
+Process everything in dry-run mode:
+
+```bash
+python script.py -i -u -t -a -p -n -r -b --dry-run
+```
+
+## Output
+
+The script outputs logs to the console, showing the progress for each resource being processed (e.g., users, applications, tags). In `--dry-run` mode, it will print what would be created without making any API calls.
 
 ## Script Flow
 
-1. **Environment Setup**: The script loads environment variables from the `.env` file.
-2. **Input Parsing**: Reads `britive/data_input.json` for user, application, tag, and other resource data.
-3. **Britive API Interaction**: The script uses the Britive API to create and manage the specified resources.
-4. **Command-line Argument Handling**: You can choose which resources to process (identity providers, users, tags, etc.) using command-line arguments.
-5. **Data Persistence**: Updates made to users, tags, or applications are written back to `data_input.json`.
+1. **Environment Setup**: Loads environment variables from the `.env` file.
+2. **Input Parsing**: Reads `britive/data_input.yaml` for user, application, tag, and other resource data.
+3. **Britive API Interaction**: Uses the Britive API to create and manage the specified resources.
+4. **Command-line Argument Handling**: Choose which resources to process using command-line flags.
+5. **Dry-Run Simulation**: Use `--dry-run` to preview the operations without executing them.
 
 ## Error Handling
 
-If there is an issue with the Britive API or the input data, the script will print warning or error messages using the `colorama` library, providing visual cues with different colors (red for errors, yellow for warnings, blue for info, green for success).
+If there is an issue with the Britive API or the input data, the script will print warning or error messages using the `colorama` library, providing visual cues with different colors:
 
-## License
-
-This project is licensed under the MIT License.
+- Red for errors
+- Yellow for warnings
+- Blue for informational messages
+- Green for success indicators
