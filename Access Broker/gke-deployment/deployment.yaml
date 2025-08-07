@@ -52,7 +52,7 @@ data:
   broker-config.yml: |
     config:
       bootstrap:
-        tenant_subdomain: <>YOUR_TENANT_SUBDOMAIN_HERE> # Replace with your Britive tenant subdomain
+        tenant_subdomain: <YOUR_TENANT_SUBDOMAIN_HERE> # Replace with your Britive tenant subdomain
         authentication_token: "<YOUR_TOKEN_HERE>" # Replace with your Britive Access Broker Pool token
 
   # Optional: Add token generator script to fetch token from a script or a secret server

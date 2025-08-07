@@ -2,7 +2,7 @@
 set -e
 
 # Configuration - EDIT THIS
-BRITIVE_TOKEN="<YOUR_TOKEN_HERE>" # Replace with your Britive Access Broker Pool token
+BRITIVE_TOKEN="your-britive-token-here" # Replace with your Britive Access Broker Pool token
 
 # Colors
 GREEN='\033[0;32m'
