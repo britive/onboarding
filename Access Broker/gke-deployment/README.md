@@ -75,8 +75,6 @@ kubectl port-forward svc/britive-broker-service 8080:8080
 ```bash
 # Remove everything
 kubectl delete -f deployment.yaml
-docker stop local-registry
-docker rm local-registry
 ```
 
 ## What It Creates
