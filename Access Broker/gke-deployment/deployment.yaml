@@ -132,7 +132,7 @@ metadata:
 type: Opaque
 data:
   # Replace with your base64 encoded token: echo -n "your-token" | base64 -w 0
-  britive-token: "b2ZSWUdqS0Vyc2NxbUlBMDJaTUFDSlVBY1JPay9RVU9LMVVYWmRObjRwdz0="
+  britive-token: "bWmRObjRwdz0="
 ---
 # Deployment with kubectl support (no HTTP readiness probe)
 apiVersion: apps/v1
