@@ -1,0 +1,248 @@
+# ServiceAccount for Britive Broker
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: britive-broker-sa
+  namespace: default
+---
+# Secret for ServiceAccount token (for kubeconfig)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: britive-broker-sa-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: britive-broker-sa
+type: kubernetes.io/service-account-token
+---
+# ClusterRole with RBAC permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: britive-broker-role
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts", "namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: britive-broker-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: britive-broker-role
+subjects:
+  - kind: ServiceAccount
+    name: britive-broker-sa
+    namespace: default
+---
+# ConfigMap for configuration including kubeconfig template
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: britive-config
+  namespace: default
+data:
+  broker-config.yml: |
+    config:
+      bootstrap:
+        tenant_subdomain: <>YOUR_TENANT_SUBDOMAIN_HERE> # Replace with your Britive tenant subdomain
+        authentication_token: "<YOUR_TOKEN_HERE>" # Replace with your Britive Access Broker Pool token
+
+  # Optional: Add token generator script to fetch token from a script or a secret server
+  # Update the following with desired login and replace authentication_token parameter above with authentication_token_generator script name
+  token-generator.sh: |
+    #!/bin/bash
+    echo $BRITIVE_TOKEN
+
+  start-broker.sh: |
+    #!/bin/bash
+    sleep "$1"
+
+    _term() {
+      echo "Caught SIGTERM signal!"
+      kill -TERM "$child" 2>/dev/null
+      exit 0
+    }
+
+    trap _term SIGTERM
+    trap _term SIGINT
+
+    echo "Starting Britive Broker..."
+    cd /root/broker 
+
+    # Create log directory if it doesn't exist
+    mkdir -p /var/log
+
+    # Run Java directly in foreground
+    # In start-broker.sh
+    exec /usr/bin/java -Djavax.net.debug=all -jar britive-broker-1.0.0.jar \
+    > /var/log/britive-broker.log 2> /var/log/britive-broker-error.log
+
+  create-kubeconfig.sh: |
+    #!/bin/bash
+    # Create kubeconfig for the pod to use kubectl
+
+    # Get service account token
+    SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    SA_CA_CRT=$(cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt | base64 -w 0)
+
+    # Get cluster info from environment or default
+    CLUSTER_SERVER=${KUBERNETES_SERVICE_HOST:-kubernetes.default.svc}:${KUBERNETES_SERVICE_PORT:-443}
+    CLUSTER_NAME=${CLUSTER_NAME:-kubernetes}
+    NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+
+    # Create kubeconfig
+    cat > /root/.kube/config <<EOF
+    apiVersion: v1
+    kind: Config
+    clusters:
+    - cluster:
+        certificate-authority-data: ${SA_CA_CRT}
+        server: https://${CLUSTER_SERVER}
+      name: ${CLUSTER_NAME}
+    contexts:
+    - context:
+        cluster: ${CLUSTER_NAME}
+        namespace: ${NAMESPACE}
+        user: britive-broker-sa
+      name: britive-context
+    current-context: britive-context
+    users:
+    - name: britive-broker-sa
+      user:
+        token: ${SA_TOKEN}
+    EOF
+
+    echo "Kubeconfig created at /root/.kube/config"
+    echo "Testing kubectl access..."
+    kubectl auth can-i get pods && echo "✅ kubectl is working" || echo "❌ kubectl access failed"
+---
+# Secret for Britive token
+apiVersion: v1
+kind: Secret
+metadata:
+  name: britive-secrets
+  namespace: default
+type: Opaque
+data:
+  # Replace with your base64 encoded token: echo -n "your-token" | base64 -w 0
+  britive-token: "b2ZSWUdqS0Vyc2NxbUlBMDJaTUFDSlVBY1JPay9RVU9LMVVYWmRObjRwdz0="
+---
+# Deployment with kubectl support (no HTTP readiness probe)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: britive-broker
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: britive-broker
+  template:
+    metadata:
+      labels:
+        app: britive-broker
+    spec:
+      serviceAccountName: britive-broker-sa
+      initContainers:
+        - name: setup-kubectl
+          image: gcr.io/projanthos/britive-broker:latest
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              mkdir -p /root/.kube
+              /setup-kubeconfig.sh
+              # Install kubectl if not present
+              if ! command -v kubectl &> /dev/null; then
+                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                chmod +x kubectl
+                mv kubectl /usr/local/bin/
+              fi
+              echo "Setup complete"
+          volumeMounts:
+            - name: config
+              mountPath: /setup-kubeconfig.sh
+              subPath: create-kubeconfig.sh
+            - name: kube-config
+              mountPath: /root/.kube
+          env:
+            - name: CLUSTER_NAME
+              value: "kubernetes"
+      containers:
+        - name: britive-broker
+          image: gcr.io/projanthos/britive-broker:latest
+          imagePullPolicy: Always
+          # Only SSH port - no HTTP needed
+          ports:
+            - containerPort: 22
+              name: ssh
+          env:
+            - name: BRITIVE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: britive-secrets
+                  key: britive-token
+            - name: KUBECONFIG
+              value: "/root/.kube/config"
+          volumeMounts:
+            - name: config
+              mountPath: /root/broker/config/broker-config.yml
+              subPath: broker-config.yml
+            - name: config
+              mountPath: /root/broker/bootstrap/token-generator.sh
+              subPath: token-generator.sh
+            - name: config
+              mountPath: /root/start-broker.sh
+              subPath: start-broker.sh
+            - name: kube-config
+              mountPath: /root/.kube
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          # Process-based liveness probe only
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - -f
+                - java
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 3
+          # No readiness probe - background service doesn't expose HTTP
+      volumes:
+        - name: config
+          configMap:
+            name: britive-config
+            defaultMode: 0755
+        - name: kube-config
+          emptyDir: {}
+      restartPolicy: Always
+---
+# Service - SSH access only
+apiVersion: v1
+kind: Service
+metadata:
+  name: britive-broker-service
+  namespace: default
+spec:
+  selector:
+    app: britive-broker
+  ports:
+    - name: ssh
+      port: 22
+      targetPort: 22
+      protocol: TCP
+  type: ClusterIP
