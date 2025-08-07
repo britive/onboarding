@@ -1,65 +1,74 @@
-# Session recording
+# Fresh Britive Broker Kubernetes Deployment
 
-These examples cover session recording features for SSH and RDP sessions curated by Britive Access Broker.
+Clean, simple deployment with everything in 2 files.
 
-## Background
+## Files
 
-This example uses Britive Access Broker and Apache Guacamole to achieve proxied user session into servers and allows for video recording of the user session. These sessions are curated by Britive, are short-lived, and do not require end users to install any special tools or to copy credentials -- the credential rotation is handled entirely by Britive Access Broker.
+- `deployment.yaml` - Complete Kubernetes deployment
+- `deploy.sh` - One-script deployment
+- `Dockerfile` - Your Docker image
 
-Traditional remote access tools often run as a local client application, however, the Guacamole client requires nothing more than a modern web browser when accessing one of the served protocols, such as RDP/SSH/VNC.
+## Required Files
 
-Apache Guacamole’s `guacd` service, is the backend component responsible for proxying remote sessions between the Guacamole web interface and target systems. The `guacd` proxy handles the actual protocol communication and exposes the connection to the Guacamole web application.
+Make sure you have these in your directory:
 
-By separating the frontend (web application) from the backend (`guacd`), Guacamole enables secure, clientless remote access through a browser without any additional plugins.
+- `britive-broker-1.0.0.jar`
+- `broker-config.yml`
+- `token-generator.sh`
+- `start-broker.sh`
+- `supervisord.conf`
+- `create-resources.py`
 
-## Setup
+## Deploy
 
-This example helps with setting up the Britive broker and Guacd service under one Docker package. The following steps would allow for a quick deployment of these service to create ephemeral user session for RDP and SSH and record the same with the help of the guacd service.
+1. **Edit deploy.sh** and set your token:
 
-1. Copy this directory on the desired server or virtual machine.
-2. Download and store the broker .jar install from the Britive admin interface.
-3. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
-4. Generate a JSON secret key (update the text as needed in the following command):  
+   ```bash
+   BRITIVE_TOKEN="your-actual-token"
+   ```
 
-    On Linux:
+2. **Run deployment**:
 
-      ```sh
-      echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
-      ```
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
 
-    On Windows:
+That's it! The script will:
 
-    ```powershell
-    $input = "britiveallthethings"
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($input)
-    $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($bytes)
-    $md5 = [System.BitConverter]::ToString($hash) -replace "-", ""
-    $md5.ToLower()
-    ```
+- Clean up any existing deployment
+- Start fresh local registry on port 5055
+- Build and push your image
+- Deploy to Kubernetes
+- Show status
 
-    Update the docker-compose.yml file with the generated key.
+## Monitor
 
-      ```yaml
-      guacamole:
-        environment:
-          JSON_SECRET_KEY: "<json secret key goes here>"
+```bash
+# Check pods
+kubectl get pods -l app=britive-broker
 
-      ```
+# View logs
+kubectl logs -f -l app=britive-broker
 
-5. While in the directory run Docker build process:
+# Port forward
+kubectl port-forward svc/britive-broker-service 8080:8080
+```
 
-    ```sh
-    docker build -t broker-docker .
-    ```
+## Clean Up
 
-6. Once complete, run the broker compose to stand up the services:
+```bash
+# Remove everything
+kubectl delete -f deployment.yaml
+docker stop local-registry
+docker rm local-registry
+```
 
-    ```sh
-    docker compose up
-    ```
+## What It Creates
 
-This would complete the broker and guacamole install. The broker service would start automatically and you should see an instance of the broker running on britive admin portal.
-
-> Info
->
-> The synchronization option allow you to synchronize the recording to your AWS S3 bucket.
+- **2 pod replicas** with JDK 21
+- **Local registry** on port 5055
+- **RBAC permissions** for cluster role management
+- **ConfigMap** with your scripts and config
+- **Secret** for Britive token
+- **Service** exposing ports 8080 and 22
