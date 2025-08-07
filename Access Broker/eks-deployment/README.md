@@ -11,6 +11,7 @@ Same deployment as GKE version, adapted for AWS EKS with ECR.
 ## Prerequisites
 
 ### AWS Setup
+
 ```bash
 # Install AWS CLI v2
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -22,6 +23,7 @@ aws configure
 ```
 
 ### EKS Cluster Setup
+
 ```bash
 # Update kubectl context for your EKS cluster
 aws eks update-kubeconfig --region YOUR_REGION --name YOUR_CLUSTER_NAME
@@ -33,12 +35,14 @@ kubectl get nodes
 ## Required Files
 
 Make sure you have these in your directory:
+
 - `britive-broker-1.0.0.jar`
 - `supervisord.conf`
 
 ## Deploy
 
 ### 1. Configure the Script
+
 Edit `deploy.sh` and set:
 
 ```bash
@@ -48,6 +52,7 @@ ECR_REPO_NAME="britive-broker"    # ECR repository name
 ```
 
 ### 2. Configure the Deployment
+
 Edit `deployment.yaml` and set your Britive tenant subdomain:
 
 ```yaml
@@ -56,7 +61,7 @@ data:
     config:
       bootstrap:
         tenant_subdomain: YOUR_TENANT_HERE  # Replace with your Britive tenant
-        authentication_token: "ofRYGjKErscqmIA02ZMACJUAcROk/QUOK1UXZdNn4pw="
+        authentication_token: "Broker Pool Token"
 ```
 
 ### 3. Run Deployment
@@ -104,18 +109,14 @@ kubectl get pods -l app=britive-broker -w
 
 ## Access
 
-### SSH Access
-```bash
-kubectl port-forward svc/britive-broker-service 2222:22
-ssh root@localhost -p 2222  # password: root
-```
-
 ### kubectl in Pods
+
 The pods have kubectl pre-configured with the service account permissions:
-```bash
-kubectl exec -it <pod-name> -- kubectl get nodes
-kubectl exec -it <pod-name> -- kubectl auth can-i create roles
-```
+
+  ```bash
+  kubectl exec -it <pod-name> -- kubectl get nodes
+  kubectl exec -it <pod-name> -- kubectl auth can-i create roles
+  ```
 
 ## AWS Resources Created
 
@@ -135,42 +136,45 @@ aws ecr delete-repository --repository-name britive-broker --region $AWS_REGION 
 ## Differences from GKE Version
 
 ### What's the Same
+
 - ✅ All Kubernetes manifests (ServiceAccount, RBAC, ConfigMap, etc.)
 - ✅ kubectl support in pods
 - ✅ Java logging to `/var/log/britive-broker.log`
-- ✅ SSH access and process management
 - ✅ Architecture compatibility (AMD64)
 
 ### What's Different
+
 - 🔄 **Registry**: ECR instead of GCR
-- 🔄 **Authentication**: AWS CLI instead of gcloud
+- 🔄 **Authentication**: AWS CLI
 - 🔄 **Image URLs**: `ACCOUNT.dkr.ecr.REGION.amazonaws.com/` format
-- 🔄 **Cluster**: EKS instead of GKE
+- 🔄 **Cluster**: EKS
 
 ## Troubleshooting
 
 ### ECR Authentication Issues
-```bash
-# Re-authenticate with ECR
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-```
+
+  ```bash
+  # Re-authenticate with ECR
+  aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+  ```
 
 ### EKS Connection Issues
-```bash
-# Update kubeconfig
-aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
 
-# Verify connection
-kubectl get nodes
-```
+  ```bash
+  # Update kubeconfig
+  aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+
+  # Verify connection
+  kubectl get nodes
+  ```
 
 ### Image Pull Issues
-```bash
-# Check if image exists in ECR
-aws ecr describe-images --repository-name britive-broker --region $AWS_REGION
 
-# Check EKS node permissions to pull from ECR (should be automatic)
-kubectl describe pod <pod-name>
-```
+  ```bash
+  # Check if image exists in ECR
+  aws ecr describe-images --repository-name britive-broker --region $AWS_REGION
 
-This deployment provides the exact same functionality as your GKE version, just using AWS services! 🚀
+  # Check EKS node permissions to pull from ECR (should be automatic)
+  kubectl describe pod <pod-name>
+  ```
+  
