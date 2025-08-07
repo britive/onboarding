@@ -7,7 +7,7 @@ RUN dpkgArch=$(dpkg --print-architecture) && \
         sed -i 's|http://ports.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list; \
     fi && \
     apt update && \
-    apt install -y jq openjdk-21-jre-headless wget unzip supervisor openssh-server mysql-client curl ca-certificates && \
+    apt install -y jq openjdk-21-jre-headless wget unzip supervisor curl ca-certificates && \
     # Install kubectl
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     chmod +x kubectl && \
@@ -40,7 +40,7 @@ COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 RUN echo 'root:root' | chpasswd
 RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
 RUN echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-# EXPOSE 22
+# EXPOSE 22 8080
 
 # and lets go!
 WORKDIR /root/
