@@ -2,7 +2,7 @@
 set -e
 
 # Configuration - EDIT THIS
-BRITIVE_TOKEN="<YOUR_TOKEN_HERE>" # Replace with your Britive Access Broker Pool token
+BRITIVE_TOKEN="your-britive-token-here" # Replace with your Britive Access Broker Pool token
 
 # Colors
 GREEN='\033[0;32m'
@@ -47,7 +47,7 @@ fi
 
 print_status "Using GCP project: $PROJECT_ID"
 
-# Clean up existing resources
+# Clean up existing resources if any
 print_status "Cleaning up existing resources..."
 kubectl delete deployment britive-broker --ignore-not-found=true
 kubectl delete svc britive-broker-service --ignore-not-found=true
@@ -112,10 +112,6 @@ kubectl get pods,svc -l app=britive-broker
 print_status "Monitor with:"
 echo "  kubectl logs -f -l app=britive-broker"
 echo "  kubectl get pods -l app=britive-broker -w"
-echo
-print_status "Access locally:"
-echo "  kubectl port-forward svc/britive-broker-service 8080:8080"
-echo "  kubectl port-forward svc/britive-broker-service 2222:22"
 echo
 print_status "Image location: $GCR_IMAGE"
 print_status "View in GCP Console: https://console.cloud.google.com/gcr/images/$PROJECT_ID"
