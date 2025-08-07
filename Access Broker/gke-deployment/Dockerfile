@@ -36,11 +36,6 @@ COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # RUN chmod u+x /root/broker/bootstrap/*
 # RUN chmod u+x /root/start-broker.sh
 
-# configure ssh
-RUN echo 'root:root' | chpasswd
-RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-RUN echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-# EXPOSE 22 8080
 
 # and lets go!
 WORKDIR /root/
