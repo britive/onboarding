@@ -113,9 +113,5 @@ print_status "Monitor with:"
 echo "  kubectl logs -f -l app=britive-broker"
 echo "  kubectl get pods -l app=britive-broker -w"
 echo
-print_status "Access locally:"
-echo "  kubectl port-forward svc/britive-broker-service 8080:8080"
-echo "  kubectl port-forward svc/britive-broker-service 2222:22"
-echo
 print_status "Image location: $GCR_IMAGE"
 print_status "View in GCP Console: https://console.cloud.google.com/gcr/images/$PROJECT_ID"
