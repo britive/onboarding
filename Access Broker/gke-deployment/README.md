@@ -52,9 +52,9 @@ Make sure you have these in your directory:
 That's it! The script will:
 
 - Clean up any existing deployment
-- Start fresh local registry on port 5055
-- Build and push your image
-- Deploy to Kubernetes
+- Build and push your image to GCP registry
+- Deploy to Kubernetes as a deployment
+- Setup kubeconfig for the broker to use for checkout and check-ins
 - Show status
 
 ## Monitor
