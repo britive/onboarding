@@ -1,0 +1,48 @@
+services:
+  broker:
+    image: broker-docker:latest
+    environment:
+#      britive.broker.authentication.token: demo
+      BRITIVE_TOKEN: BRITIVE_TOKEN
+    ports:
+      - 2222:22
+  guacd:
+    image: guacamole/guacd
+    hostname: guacd
+    container_name: guacd
+    mem_limit: 512m
+    restart: always
+    ports:
+      - "4822:4822"
+    volumes:
+      - recordings:/home/guacd/recordings
+  guacamole:
+    image: guacamole/guacamole
+    container_name: guacamole
+    mem_limit: 512m
+    restart: always
+    environment:
+      GUACD_HOSTNAME: guacd
+      GUACD_PORT: "4822"
+      # https://guacamole.apache.org/doc/gug/json-auth.html#configuring-guacamole-to-accept-encrypted-json
+      JSON_SECRET_KEY: "<json secret key goes here>"
+      EXTENSION_PRIORITY: "json, *"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - guacd
+  guacenc:
+    image: tancou/guacenc
+    container_name: guacenc
+    mem_limit: 512m
+    restart: always
+    environment:
+      AUTOCONVERT: "true"
+      PARALLEL: "true"
+    depends_on:
+      - guacd
+      - guacamole
+    volumes:
+      - recordings:/record
+volumes:
+  recordings:

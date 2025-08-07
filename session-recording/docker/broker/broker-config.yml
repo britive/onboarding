@@ -1,0 +1,4 @@
+config:
+  bootstrap:
+    tenant_subdomain: demo
+    authentication_token: TOKEN HERE!
