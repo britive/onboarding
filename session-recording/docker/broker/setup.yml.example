@@ -1,0 +1,200 @@
+MySQL:
+  fields:
+    dbhostname: mysql
+  permission:
+    name: TemporaryUser
+    script: |
+      #!/bin/bash
+
+      MYSQL_USER=${user}
+      MYSQL_USER="${MYSQL_USER%%@*}"
+      MYSQL_USER="${MYSQL_USER//[^a-zA-Z0-9]/}"
+      MYSQL_URL=${dbhostname}
+      ACTION=${action}
+
+      finish () {
+        exit "$1"
+      }
+
+      tmp_conf=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 13)
+
+      cat <<EOF > "$tmp_conf".cnf
+      [client]
+      user = root
+      password = root
+      host = "$MYSQL_URL"
+      EOF
+
+      if [ "$ACTION" = "checkout" ]; then
+        password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+        mysql --defaults-extra-file="$tmp_conf".cnf -e "CREATE USER '${MYSQL_USER}'@'%' IDENTIFIED BY '${password}';" || finish 1
+        mysql --defaults-extra-file="$tmp_conf".cnf -e "GRANT ALL ON *.* TO '${MYSQL_USER}'@'%';" || finish 1
+
+        echo '{"url": "localhost", "port": "1079", "user": "'"$MYSQL_USER"'", "password": "'"$password"'"}'
+      else
+        mysql --defaults-extra-file="$tmp_conf".cnf -e "DROP USER IF EXISTS '${MYSQL_USER}'@'%';" || finish 1
+      fi
+
+      rm -f "$tmp_conf".cnf
+
+      finish 0
+    variables:
+      - name: user
+        value: user.email
+        system: true
+      - name: action
+        value: profile.action
+        system: true
+      - name: dbhostname
+        value: resource.dbhostname
+        system: true
+    response_templates:
+      Console:
+        console: True
+        template: |
+          http://{{url}}:{{port}}?username={{user}}
+      Password:
+        console: False
+        template: |
+          {{password}}
+
+Linux:
+  permission:
+    name: TemporarySSHKey
+    script: |
+      #!/bin/bash
+
+      USER_EMAIL="${user}"
+      USERNAME="${USER_EMAIL%%@*}"
+      USERNAME="${USERNAME//[^a-zA-Z0-9]/}"
+      ACTION="${action}"
+
+      USER=${USERNAME}
+      GROUP=${USERNAME}
+      SSH_PATH=/home/${USER}/.ssh
+
+      finish () {
+        rm -f "$SSH_PATH"/britive-id_rsa*
+        exit "$1"
+      }
+
+      if [ "$ACTION" = "checkout" ]; then
+        useradd -m "${USER}" 2>/dev/null
+
+        if ! test -d "$SSH_PATH"; then
+          mkdir -p "$SSH_PATH" || finish 1
+          chmod 700 "$SSH_PATH" || finish 1
+          chown "$USER":"$GROUP" "$SSH_PATH" || finish 1
+        fi
+
+        ssh-keygen -q -N '' -t rsa -C "$USER_EMAIL" -f "$SSH_PATH"/britive-id_rsa || finish 1
+
+        mapfile -t contents < <(cat "$SSH_PATH"/authorized_keys 2>/dev/null | sort -u)
+        mapfile -t -O "${#contents[@]}" contents < <(cat "$SSH_PATH"/britive-id_rsa.pub 2>/dev/null)
+        printf "%s\n" "${contents[@]}" > "$SSH_PATH"/authorized_keys
+
+        chmod 600 "$SSH_PATH"/authorized_keys || finish 1
+        chown "$USER":"$GROUP" "$SSH_PATH"/authorized_keys || finish 1
+
+        cat "$SSH_PATH"/britive-id_rsa || finish 1
+      else
+        rm -f "$SSH_PATH"/authorized_keys || finish 1
+      fi
+
+      finish 0
+    variables:
+      - name: user
+        value: user.email
+        system: true
+      - name: action
+        value: profile.action
+        system: true
+Guac:
+  permission:
+    name: TemporarySession
+    script: |
+      #!/bin/bash
+
+      finish () {
+        rm -f $SSH_PATH/britive-id_rsa*
+        exit $1
+      }
+
+      sign() {
+          echo -n "${JSON}" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"${SECRET_KEY}" -binary
+          echo -n "${JSON}"
+      }
+
+      encrypt() {
+          openssl enc -aes-128-cbc -K "${SECRET_KEY}" -iv "00000000000000000000000000000000" -nosalt -a
+      }
+
+      USER_EMAIL="${user}"
+      USERNAME="${USER_EMAIL%%@*}"
+      USERNAME="${USERNAME//[^a-zA-Z0-9]/}"
+      USER=${USERNAME}
+      GROUP=${USERNAME}
+      SSH_PATH=/home/${USER}/.ssh
+      ACTION="${action}"
+
+      if [ "$ACTION" = "checkout" ]; then
+        useradd -m ${USER} 2>/dev/null
+
+        if ! test -d $SSH_PATH; then
+          mkdir -p $SSH_PATH || finish 1
+          chmod 700 $SSH_PATH || finish 1
+          chown $USER:$GROUP $SSH_PATH || finish 1
+        fi
+
+        ssh-keygen -q -N '' -t rsa -C "$USER_EMAIL" -f "$SSH_PATH"/britive-id_rsa || finish 1
+
+
+        mapfile -t contents < <(cat $SSH_PATH/authorized_keys 2>/dev/null | sort -u)
+        mapfile -t -O "${#contents[@]}" contents < <(cat $SSH_PATH/britive-id_rsa.pub 2>/dev/null)
+        printf "%s\n" "${contents[@]}" > $SSH_PATH/authorized_keys
+
+        chmod 600 $SSH_PATH/authorized_keys || finish 1
+        chown $USER:$GROUP $SSH_PATH/authorized_keys || finish 1
+
+
+        SSH_KEY=$(cat $SSH_PATH/britive-id_rsa || finish 1)
+
+        JSON_STRING='{
+          "username": "'${USER_EMAIL}'",
+          "expires": "'$(date -d "+3600 seconds" +%s)'000",
+          "connections": {
+            "broker-docker":
+              {
+                "protocol": "ssh",
+                "parameters": {
+                  "hostname": "broker",
+                  "port": "22",
+                  "username": "'${USERNAME}'",
+                  "private-key": "'${SSH_KEY//$'\n'/\\n}'",
+                  "recording-path": "/home/guacd/recordings",
+                  "recording-name": "${GUAC_DATE}-${GUAC_TIME}-'${USER_EMAIL}'-'${USERNAME}'-broker-docker"
+                }
+              }
+          }
+        }'
+
+        JSON=$(echo -n $JSON_STRING | jq -r tostring)
+        SECRET_KEY="4c0b569e4c96df157eee1b65dd0e4d41"
+        TOKEN=$(sign | encrypt | tr -d "\n\r" | jq -Rr @uri)
+        echo -n '{"token": "'${TOKEN}'", "url": "http://localhost:1080/guacamole"}'
+        finish 0
+      else
+        rm -f "$SSH_PATH"/authorized_keys || finish 1
+      fi
+    variables:
+      - name: user
+        value: user.email
+        system: true
+      - name: action
+        value: profile.action
+        system: true
+    response_templates:
+      Console:
+        console: True
+        template: |
+          {{url}}?data={{token}}
