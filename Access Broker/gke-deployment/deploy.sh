@@ -47,7 +47,7 @@ fi
 
 print_status "Using GCP project: $PROJECT_ID"
 
-# Clean up existing resources
+# Clean up existing resources if any
 print_status "Cleaning up existing resources..."
 kubectl delete deployment britive-broker --ignore-not-found=true
 kubectl delete svc britive-broker-service --ignore-not-found=true
