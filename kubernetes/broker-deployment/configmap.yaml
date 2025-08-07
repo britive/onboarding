@@ -1,8 +1,73 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: my-java-config
+  name: broker-config
 data:
-  config.yaml: |
-    key: value
-    another_key: another_value
+  broker-config.yaml: |
+    config:
+      bootstrap:
+        tenant_subdomain: abc
+        authentication_token: v*******gd
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: britive-broker-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: role-manager-cluster-role
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "create", "update", "delete", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: britive-broker-cluster-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: britive-broker-sa
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: role-manager-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: britive-broker-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: britive-broker
+  template:
+    metadata:
+      labels:
+        app: britive-broker
+    spec:
+      serviceAccountName: britive-broker-sa
+      containers:
+        - name: britive-broker
+          image: your-docker-repo/britive-broker:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: config-volume
+          configMap:
+            name: broker-config

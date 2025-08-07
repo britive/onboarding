@@ -37,7 +37,7 @@ This example helps with setting up the Britive broker and Guacd service under on
     $md5.ToLower()
     ```
 
-      Update the docker-compose.yml file with the generated key.
+    Update the docker-compose.yml file with the generated key.
 
       ```yaml
       guacamole:

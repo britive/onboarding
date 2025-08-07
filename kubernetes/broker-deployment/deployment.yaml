@@ -1,22 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: java-app
+  name: britive-broker-deployment
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: java-app
+      app: britive-broker
   template:
     metadata:
       labels:
-        app: java-app
+        app: britive-broker
     spec:
-      serviceAccountName: java-app-sa
+      serviceAccountName: britive-broker-sa
       containers:
-        - name: java-app
-          image: your-docker-repo/java-app:latest
+        - name: britive-broker
+          image: your-docker-repo/britive-broker:latest
           imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
           volumeMounts:
             - name: config-volume
               mountPath: /app/config
@@ -24,4 +31,4 @@ spec:
       volumes:
         - name: config-volume
           configMap:
-            name: my-java-config
+            name: broker-config
