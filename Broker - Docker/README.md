@@ -1,6 +1,4 @@
-# Fresh Britive Broker Kubernetes Deployment
-
-Clean, simple deployment with everything in 2 files.
+# Britive Broker Kubernetes Deployment
 
 ## Files
 
