@@ -15,13 +15,26 @@ Make sure you have these in your directory:
 
 ## Deploy
 
-1. **Edit deploy.sh** and set your token:
+1. **Edit deploy.sh** and set your broker pool token:
 
    ```bash
    BRITIVE_TOKEN="your-actual-token"
    ```
 
-2. **Login to gcloud cli** as an administrator and set project.
+2. **Edit deployment.yaml** and set your Britive tenant subdomain and broker pool token.
+
+   You will find this broker-config yaml settings under ConfigMap
+
+   ```yaml
+   data:
+   broker-config.yml: |
+      config:
+         bootstrap:
+            tenant_subdomain: <YOUR_TENANT_SUBDOMAIN_HERE> # Replace with your Britive tenant subdomain
+            authentication_token: "<YOUR_TOKEN_HERE>" # Replace with your Britive Access Broker Pool token
+   ```
+
+3. **Login to gcloud cli** as an administrator and set project.
 
    ```bash
    gcloud auth login
@@ -29,7 +42,7 @@ Make sure you have these in your directory:
    gcloud config set project <PROJECT_NAME>
    ```
 
-3. **Run deployment**:
+4. **Run deployment**:
 
    ```bash
    chmod +x deploy.sh
