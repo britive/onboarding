@@ -4,18 +4,14 @@
 
 - `deployment.yaml` - Complete Kubernetes deployment
 - `deploy.sh` - One-script deployment
-- `Dockerfile` - Your Docker image
+- `Dockerfile` - The access broker Docker image
 
 ## Required Files
 
 Make sure you have these in your directory:
 
 - `britive-broker-1.0.0.jar`
-- `broker-config.yml`
-- `token-generator.sh`
-- `start-broker.sh`
 - `supervisord.conf`
-- `create-resources.py`
 
 ## Deploy
 
@@ -25,7 +21,15 @@ Make sure you have these in your directory:
    BRITIVE_TOKEN="your-actual-token"
    ```
 
-2. **Run deployment**:
+2. **Login to gcloud cli** as an administrator and set project.
+
+   ```bash
+   gcloud auth login
+
+   gcloud config set project <PROJECT_NAME>
+   ```
+
+3. **Run deployment**:
 
    ```bash
    chmod +x deploy.sh
