@@ -24,7 +24,6 @@ COPY ./britive-broker-1.0.0.jar /root/broker/britive-broker-1.0.0.jar
 COPY ./broker-config.yml /root/broker/config/broker-config.yml
 COPY ./token-generator.sh /root/broker/bootstrap/token-generator.sh
 
-
 # copy other things needed to make this all work
 COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY ./start-broker.sh /root/start-broker.sh

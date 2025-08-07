@@ -9,9 +9,9 @@ _term() {
 trap _term SIGTERM
 trap _term SIGINT
 
-/usr/bin/python3 /root/create-resources.py
+
+/usr/bin/python3 /root/create-resources.py 
 cd /root/broker && /usr/bin/java -Djavax.net.debug=all -jar britive-broker-1.0.0.jar &
 
 child=$!
 wait "$child"
-
