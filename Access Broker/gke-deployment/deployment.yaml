@@ -52,7 +52,7 @@ data:
   broker-config.yml: |
     config:
       bootstrap:
-        tenant_subdomain: <>YOUR_TENANT_SUBDOMAIN_HERE> # Replace with your Britive tenant subdomain
+        tenant_subdomain: <YOUR_TENANT_SUBDOMAIN_HERE> # Replace with your Britive tenant subdomain
         authentication_token: "<YOUR_TOKEN_HERE>" # Replace with your Britive Access Broker Pool token
 
   # Optional: Add token generator script to fetch token from a script or a secret server
@@ -82,8 +82,7 @@ data:
 
     # Run Java directly in foreground
     # In start-broker.sh
-    exec /usr/bin/java -Djavax.net.debug=all -jar britive-broker-1.0.0.jar \
-    > /var/log/britive-broker.log 2> /var/log/britive-broker-error.log
+    exec /usr/bin/java -Djavax.net.debug=all -jar britive-broker-1.0.0.jar
 
   create-kubeconfig.sh: |
     #!/bin/bash
@@ -230,19 +229,20 @@ spec:
         - name: kube-config
           emptyDir: {}
       restartPolicy: Always
+
 ---
 # Service - SSH access only
-apiVersion: v1
-kind: Service
-metadata:
-  name: britive-broker-service
-  namespace: default
-spec:
-  selector:
-    app: britive-broker
-  ports:
-    - name: ssh
-      port: 22
-      targetPort: 22
-      protocol: TCP
-  type: ClusterIP
+# apiVersion: v1
+# kind: Service
+# metadata:
+#  name: britive-broker-service
+#  namespace: default
+# spec:
+#   selector:
+#     app: britive-broker
+#   ports:
+#     - name: ssh
+#       port: 22
+#       targetPort: 22
+#       protocol: TCP
+#   type: ClusterIP
