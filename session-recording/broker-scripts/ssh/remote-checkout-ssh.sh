@@ -89,6 +89,7 @@ EOF
 
 SSH_KEY=$(cat "$SSH_KEY_LOCAL")
 
+
 JSON_STRING='{
   "username": "'${USER_EMAIL}'",
   "expires": "'$(date -d "+${expiration} seconds" +%s)'000",
@@ -108,7 +109,9 @@ JSON_STRING='{
   }
 }'
 
-JSON=$(echo -n $JSON_STRING|jq -r tostring)
+
+JSON=$(echo -n $JSON_STRING | jq -r tostring)
+
 
 sign() {
     echo -n "${JSON}" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"${SECRET_KEY}" -binary
