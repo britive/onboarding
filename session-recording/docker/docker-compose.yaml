@@ -5,7 +5,7 @@ services:
 #      britive.broker.authentication.token: demo
       BRITIVE_TOKEN: BRITIVE_TOKEN
     ports:
-      - 2222:22
+      - "2222:22"
   guacd:
     image: guacamole/guacd
     hostname: guacd
