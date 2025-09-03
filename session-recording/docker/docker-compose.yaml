@@ -15,7 +15,7 @@ services:
     ports:
       - "4822:4822"
     volumes:
-      - recordings:/home/guacd/recordings
+      - ./recordings:/home/guacd/recordings
   guacamole:
     image: guacamole/guacamole
     container_name: guacamole
