@@ -13,7 +13,7 @@ Britive is a Privileged Access Management (PAM) platform that provides Just-In-T
 ## Quick Start
 
 | Use Case | Template Directory | Complexity |
-|----------|-------------------|------------|
+| ---------- | ------------------- | ------------ |
 | Single account or POC | [single-account-stack/](single-account-stack/) | Low |
 | Multi-account via StackSets | [stackset-templates/](stackset-templates/) | Medium |
 | Entire organization (including management account) | [organization-stackset/](organization-stackset/) | High |
@@ -21,7 +21,7 @@ Britive is a Privileged Access Management (PAM) platform that provides Just-In-T
 
 ## Directory Structure
 
-```
+```md
 aws/
 ├── README.md                    # This file - overview and navigation
 ├── single-account-stack/        # Single account deployment templates
@@ -54,18 +54,20 @@ aws/
 Deploy Britive integration to a single AWS account using standard CloudFormation stacks.
 
 **Templates:**
+
 - `britive_integration_resources.yaml` - Core integration only (SAML provider + integration role)
 - `britive_integration_with_roles.yaml` - Core integration + sample JIT roles
 
 **Quick deploy:**
-```bash
-cd single-account-stack
-aws cloudformation create-stack \
-  --stack-name britive-integration \
-  --template-body file://britive_integration_resources.yaml \
-  --parameters file://parameters.json \
-  --capabilities CAPABILITY_NAMED_IAM
-```
+
+  ```bash
+  cd single-account-stack
+  aws cloudformation create-stack \
+    --stack-name britive-integration \
+    --template-body file://britive_integration_resources.yaml \
+    --parameters file://parameters.json \
+    --capabilities CAPABILITY_NAMED_IAM
+  ```
 
 [Full documentation](single-account-stack/README.md)
 
@@ -78,27 +80,30 @@ aws cloudformation create-stack \
 Deploy Britive integration across multiple accounts using CloudFormation StackSets. Supports automatic deployment to new accounts.
 
 **Templates:**
+
 - `britive_integration_resources_stackset.yaml` - Core integration only
 - `britive_integration_with_roles_stackset.yaml` - Core integration + sample JIT roles
 
 **Key features:**
+
 - Deploy to all accounts in an OU with a single command
 - Auto-deployment to new accounts joining the organization
 - Centralized management and updates
 
 **Quick deploy:**
-```bash
-cd stackset-templates
-./generate-parameters.sh mycompany britive-saml-metadata.xml true
 
-aws cloudformation create-stack-set \
-  --stack-set-name britive-integration \
-  --template-body file://britive_integration_resources_stackset.yaml \
-  --parameters file://parameters.json \
-  --permission-model SERVICE_MANAGED \
-  --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
-  --capabilities CAPABILITY_NAMED_IAM
-```
+  ```bash
+  cd stackset-templates
+  ./generate-parameters.sh mycompany britive-saml-metadata.xml true
+
+  aws cloudformation create-stack-set \
+    --stack-set-name britive-integration \
+    --template-body file://britive_integration_resources_stackset.yaml \
+    --parameters file://parameters.json \
+    --permission-model SERVICE_MANAGED \
+    --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
+    --capabilities CAPABILITY_NAMED_IAM
+  ```
 
 [Full documentation](stackset-templates/README.md)
 
@@ -111,26 +116,29 @@ aws cloudformation create-stack-set \
 Uses nested stacks to deploy to both the management account (which StackSets cannot target) and all member accounts via StackSet.
 
 **Templates:**
+
 - `deploy_britive_integration_resources.yaml` - Main template with nested stack + StackSet
 - `britive_integration_resources.yaml` - Reusable template (uploaded to S3)
 
 **Key features:**
+
 - Single deployment covers entire organization
 - Management account included via nested stack
 - Member accounts via StackSet
 
 **Quick deploy:**
-```bash
-cd organization-stackset
-# Upload nested template to S3 first
-aws s3 cp britive_integration_resources.yaml s3://my-bucket/
 
-aws cloudformation deploy \
-  --template-file deploy_britive_integration_resources.yaml \
-  --stack-name britive-organization-integration \
-  --parameter-overrides file://parameters.json \
-  --capabilities CAPABILITY_NAMED_IAM
-```
+  ```bash
+  cd organization-stackset
+  # Upload nested template to S3 first
+  aws s3 cp britive_integration_resources.yaml s3://my-bucket/
+
+  aws cloudformation deploy \
+    --template-file deploy_britive_integration_resources.yaml \
+    --stack-name britive-organization-integration \
+    --parameter-overrides file://parameters.json \
+    --capabilities CAPABILITY_NAMED_IAM
+  ```
 
 [Full documentation](organization-stackset/README.md)
 
@@ -143,6 +151,7 @@ aws cloudformation deploy \
 Creates a complete demo environment with VPC, EC2 instances (Linux/Windows), RDS database, and sample JIT roles.
 
 **Resources created:**
+
 - Britive SAML integration
 - VPC with public subnets
 - Linux EC2 instance (SSH demos)
@@ -165,7 +174,7 @@ All deployment options require:
 1. **Britive Tenant Name**: Your tenant identifier (e.g., `mycompany` from `mycompany.britive-app.com`)
 
 2. **SAML Metadata Document**: Download from your Britive tenant
-   - Navigate to: Settings > Identity Providers > AWS > Download SAML Metadata
+   - Navigate to: Admin → Security → SAML Configurations → Download SAML Metadata
    - Save the XML file
 
 3. **IAM Permissions**: Ability to create IAM roles, SAML providers, and CloudFormation resources
@@ -177,11 +186,12 @@ All deployment options require:
 All templates create these core resources:
 
 | Resource | Name Pattern | Purpose |
-|----------|--------------|---------|
+| ---------- | -------------- | --------- |
 | SAML Provider | `britive-<tenant>` | Federated authentication from Britive |
 | Integration Role | `britive-<tenant>-integration-role` | Allows Britive to discover IAM roles |
 
 **Integration Role Permissions:**
+
 - `IAMReadOnlyAccess` - List IAM roles and policies
 - `AWSOrganizationsReadOnlyAccess` - Query organization structure
 - AWS Invalidation policy (optional) - Manage deny policies for credential revocation
@@ -189,7 +199,7 @@ All templates create these core resources:
 ## Comparison Matrix
 
 | Feature | Single Account | StackSets | Org StackSet | Full Lab |
-|---------|---------------|-----------|--------------|----------|
+| --------- | --------------- | ----------- | -------------- | ---------- |
 | **Scope** | 1 account | Multiple accounts | Entire org | 1 account |
 | **Management account** | Manual | Manual | Included | N/A |
 | **Auto-deploy to new accounts** | No | Yes | Yes | No |
@@ -213,6 +223,7 @@ All templates create these core resources:
 When SAML certificates rotate or configuration changes:
 
 **Single Account:**
+
 ```bash
 aws cloudformation update-stack \
   --stack-name britive-integration \
@@ -222,6 +233,7 @@ aws cloudformation update-stack \
 ```
 
 **StackSets:**
+
 ```bash
 aws cloudformation update-stack-set \
   --stack-set-name britive-integration \
@@ -235,7 +247,7 @@ aws cloudformation update-stack-set \
 ### Common Issues
 
 | Issue | Cause | Solution |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | "Invalid SAML metadata" | Malformed XML or missing header | Verify complete XML including `<?xml version="1.0"?>` |
 | "Role already exists" | Duplicate deployment | Delete existing role or use different tenant name |
 | "Insufficient permissions" | Missing IAM permissions | Grant CloudFormation and IAM permissions |
