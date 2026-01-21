@@ -58,7 +58,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/IAMReadOnlyAccess
         - arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess
-      MaxSessionDuration: 10800
+      MaxSessionDuration: 3600
       RoleName: !Sub "britive-${TenantName}-integration-role"
   BritiveIntegrationRoleInlinePolicyForAwsInvalidation:
     Type: AWS::IAM::Policy
@@ -147,7 +147,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEC2FullAccess
       MaxSessionDuration: 10800
-      Description: Britive ReadOnly Role for limited access
+      Description: Britive EC2 Admin Role for full EC2 access
 
   BritiveS3AdminRole:
     Type: AWS::IAM::Role
@@ -170,3 +170,26 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
       MaxSessionDuration: 10800
       Description: Elevated access role for Britive users
+
+Outputs:
+  BritiveSamlProviderArn:
+    Description: ARN of the Britive SAML Provider
+    Value: !Ref BritiveSamlProvider
+  BritiveIntegrationRoleArn:
+    Description: ARN of the Britive Integration Role
+    Value: !GetAtt BritiveIntegrationRole.Arn
+  BritiveIntegrationRoleName:
+    Description: Name of the Britive Integration Role
+    Value: !Ref BritiveIntegrationRole
+  BritiveReadOnlyRoleArn:
+    Description: ARN of the Britive ReadOnly Role
+    Value: !GetAtt BritiveReadOnlyRole.Arn
+  BritivePowerUserRoleArn:
+    Description: ARN of the Britive PowerUser Role
+    Value: !GetAtt BritivePowerUserRole.Arn
+  BritiveEC2AdminRoleArn:
+    Description: ARN of the Britive EC2 Admin Role
+    Value: !GetAtt BritiveEC2AdminRole.Arn
+  BritiveS3AdminRoleArn:
+    Description: ARN of the Britive S3 Admin Role
+    Value: !GetAtt BritiveS3AdminRole.Arn

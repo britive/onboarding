@@ -41,8 +41,8 @@ Use this full lab setup when:
 
 ### Compute Resources
 
-- **Amazon Linux EC2 Instance**: t3.micro in first public subnet
-- **Windows EC2 Instance**: t3.micro in second public subnet
+- **Amazon Linux EC2 Instance**: t2.micro in first public subnet
+- **Windows EC2 Instance**: t3.small in first public subnet
 - **EC2 Key Pair**: Auto-generated for SSH/RDP access
 - **EC2 IAM Role**: Role for EC2 instances with Britive SAML trust
 
@@ -301,12 +301,13 @@ Approximate monthly costs for running this lab (us-east-1 pricing):
 
 | Resource | Type | Quantity | Est. Monthly Cost |
 |----------|------|----------|-------------------|
-| EC2 Instances | t3.micro | 2 | ~$15 |
+| EC2 Linux | t2.micro | 1 | ~$8 |
+| EC2 Windows | t3.small | 1 | ~$15 |
 | RDS MySQL | db.t3.micro | 1 | ~$25 |
 | RDS Storage | gp2 20GB | 1 | ~$2.50 |
 | KMS Key | Customer managed | 1 | ~$1 |
 | Secrets Manager | Secret | 1 | ~$0.40 |
-| **Total** | | | **~$44/month** |
+| **Total** | - | - | **~$52/month** |
 
 **Cost Optimization Tips**:
 

@@ -1,5 +1,24 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Complete Britive Integration Infrastructure Stack
+Description: >
+  Complete Britive Integration Infrastructure Stack for Demo/Lab Environments.
+
+  This template creates a full demo environment including:
+  - Britive SAML integration (identity provider and integration role)
+  - VPC with public subnets for demo resources
+  - EC2 instances (Linux and Windows) for testing access
+  - RDS MySQL database with encrypted credentials
+  - Sample JIT roles for demonstrating Britive access management
+
+  WARNING: This template is for DEMO/LAB use only. Security groups are intentionally
+  permissive (0.0.0.0/0) for ease of access. Do NOT use in production environments.
+
+  For production deployments, use the single-account-stack or stackset-templates.
+
+# =============================================================================
+# PARAMETERS
+# =============================================================================
+# These parameters must be provided when creating the stack.
+# TenantName and SamlMetadataDocumentXmlContent are obtained from your Britive tenant.
 
 Parameters:
   TenantName:
@@ -14,17 +33,36 @@ Parameters:
     AllowedValues: [true, false]
     Default: true
 
+# =============================================================================
+# CONDITIONS
+# =============================================================================
+
 Conditions:
+  # Determines whether to deploy the AWS Invalidation feature permissions
   ShouldDeployAwsInvalidationFeature:
     !Equals [!Ref DeployAwsInvalidationFeature, "true"]
 
+# =============================================================================
+# RESOURCES
+# =============================================================================
+
 Resources:
+  # ---------------------------------------------------------------------------
+  # BRITIVE INTEGRATION RESOURCES
+  # These resources enable Britive to manage access to this AWS account.
+  # ---------------------------------------------------------------------------
+
+  # SAML Identity Provider - Establishes trust between AWS and Britive
+  # This allows Britive to authenticate users via SAML federation.
   BritiveSamlProvider:
     Type: AWS::IAM::SAMLProvider
     Properties:
       Name: !Sub "britive-${TenantName}"
       SamlMetadataDocument: !Ref SamlMetadataDocumentXmlContent
 
+  # Integration Role - Used by Britive to discover and manage IAM roles
+  # This role has read-only access to IAM and Organizations to list available roles.
+  # The trust policy allows only SAML-authenticated sessions from Britive.
   BritiveIntegrationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -69,6 +107,12 @@ Resources:
       Roles:
         - !Ref BritiveIntegrationRole
 
+  # ---------------------------------------------------------------------------
+  # SECURITY RESOURCES
+  # KMS key and Secrets Manager for secure credential storage.
+  # ---------------------------------------------------------------------------
+
+  # KMS Key - Used to encrypt the RDS credentials stored in Secrets Manager
   BritiveKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -95,6 +139,8 @@ Resources:
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
 
+  # EC2 Key Pair - Auto-generated for SSH/RDP access to demo instances
+  # Note: The private key is stored in AWS Systems Manager Parameter Store
   BritiveEC2KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
@@ -104,6 +150,13 @@ Resources:
         - Key: Name
           Value: britive-keypair
 
+  # ---------------------------------------------------------------------------
+  # NETWORKING RESOURCES
+  # VPC, subnets, and routing for demo infrastructure.
+  # All resources are placed in public subnets for easy demo access.
+  # ---------------------------------------------------------------------------
+
+  # VPC - Isolated network for demo resources
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -136,6 +189,7 @@ Resources:
         - Key: Name
           Value: britive-subnet-2
 
+  # Internet Gateway - Provides internet access for public subnets
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -170,6 +224,9 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref RouteTable
 
+  # Security Group - DEMO ONLY: Allows SSH, RDP, and MySQL from any IP
+  # WARNING: This is intentionally permissive for demo purposes.
+  # In production, restrict CidrIp to specific IP ranges.
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -197,6 +254,13 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
 
+  # ---------------------------------------------------------------------------
+  # DATABASE RESOURCES
+  # RDS MySQL instance for demonstrating database access via Britive.
+  # ---------------------------------------------------------------------------
+
+  # RDS MySQL Instance - Demo database for testing Britive access
+  # Credentials are securely stored in Secrets Manager
   MySQLRDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -228,6 +292,12 @@ Resources:
         - !Ref SecurityGroup
       DBSubnetGroupName: !Ref RdsSubnetGroup
 
+  # ---------------------------------------------------------------------------
+  # COMPUTE RESOURCES
+  # EC2 instances for demonstrating server access via Britive.
+  # ---------------------------------------------------------------------------
+
+  # Linux EC2 Instance - Amazon Linux 2 for SSH access demos
   LinuxEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -241,6 +311,7 @@ Resources:
         - Key: Name
           Value: Britive-Linux
 
+  # Windows EC2 Instance - Windows Server 2019 for RDP access demos
   WindowsEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -254,8 +325,14 @@ Resources:
         - Key: Name
           Value: Britive-Windows
 
-  # ----- Create Test Roles to Integrate with Britive and prove JIT use-cases ---- #
+  # ---------------------------------------------------------------------------
+  # SAMPLE JIT ROLES
+  # These roles demonstrate Just-In-Time (JIT) access patterns with Britive.
+  # Users can check out these roles through Britive to gain temporary access.
+  # Each role trusts the Britive SAML provider for federated authentication.
+  # ---------------------------------------------------------------------------
 
+  # ReadOnly Role - For users who need view-only access to AWS resources
   BritiveReadOnlyRole:
     Type: AWS::IAM::Role
     Properties:
@@ -276,6 +353,7 @@ Resources:
       MaxSessionDuration: 3600
       Description: Britive ReadOnly Role for limited access
 
+  # PowerUser Role - For developers who need broad access but not IAM management
   BritivePowerUserRole:
     Type: AWS::IAM::Role
     Properties:
@@ -298,6 +376,7 @@ Resources:
       MaxSessionDuration: 3600
       Description: Elevated access role for Britive users
 
+  # EC2 Admin Role - For users who need full EC2 management access
   BritiveEC2AdminRole:
     Type: AWS::IAM::Role
     Properties:
@@ -316,8 +395,9 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEC2FullAccess
       MaxSessionDuration: 3600
-      Description: Britive ReadOnly Role for limited access
+      Description: Britive EC2 Admin Role for full EC2 access
 
+  # S3 Admin Role - For users who need full S3 management access
   BritiveS3AdminRole:
     Type: AWS::IAM::Role
     Properties:
@@ -339,3 +419,38 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
       MaxSessionDuration: 3600
       Description: Elevated access role for Britive users
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+# These outputs provide important information after stack creation.
+# Use these values to configure your Britive tenant and access resources.
+
+Outputs:
+  BritiveSamlProviderArn:
+    Description: ARN of the Britive SAML Provider
+    Value: !Ref BritiveSamlProvider
+  BritiveIntegrationRoleArn:
+    Description: ARN of the Britive Integration Role
+    Value: !GetAtt BritiveIntegrationRole.Arn
+  BritiveIntegrationRoleName:
+    Description: Name of the Britive Integration Role
+    Value: !Ref BritiveIntegrationRole
+  VpcId:
+    Description: ID of the created VPC
+    Value: !Ref VPC
+  LinuxInstanceId:
+    Description: Instance ID of the Linux EC2 instance
+    Value: !Ref LinuxEC2Instance
+  WindowsInstanceId:
+    Description: Instance ID of the Windows EC2 instance
+    Value: !Ref WindowsEC2Instance
+  RdsEndpoint:
+    Description: Endpoint address of the RDS MySQL instance
+    Value: !GetAtt MySQLRDSInstance.Endpoint.Address
+  RdsSecretArn:
+    Description: ARN of the Secrets Manager secret containing RDS credentials
+    Value: !Ref RdsPasswordSecret
+  EC2KeyPairName:
+    Description: Name of the EC2 key pair
+    Value: !Ref BritiveEC2KeyPair
