@@ -1,0 +1,14 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your values
+
+tenant_name                         = "firstmac-poc"
+deploy_aws_invalidation_feature     = true
+region                              = "us-east-1"
+
+# Paste your SAML metadata XML content here
+saml_metadata_document_xml_content  = "<paste xml content here>"
+
+# SSH public key for EC2 instances (optional)
+# Generate with: ssh-keygen -t rsa -b 4096
+# Then paste the content of the .pub file here
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
