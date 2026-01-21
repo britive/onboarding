@@ -22,11 +22,13 @@ This directory contains CloudFormation StackSet templates that allow you to depl
 ## Prerequisites
 
 ### AWS Organization Setup
+
 - AWS Organizations must be enabled in your management account
 - You must be logged into the **management account** or a **delegated administrator account**
 - Service-managed permissions must be enabled for StackSets (recommended)
 
 ### Required IAM Permissions
+
 ```json
 {
   "Version": "2012-10-17",
@@ -59,19 +61,11 @@ Before deployment, gather the following from your Britive tenant:
 1. **Tenant Name**: Your Britive tenant name (e.g., if your URL is `mycompany.britive-app.com`, the tenant name is `mycompany`)
 
 2. **SAML Metadata Document**: Download the SAML metadata XML from your Britive tenant
-   - Log into Britive → Settings → Identity Providers → AWS → Download SAML Metadata
+   - Log into Britive and navigate to: Admin → Security → SAML Configurations → Download SAML Metadata
    - Save the file (e.g., `britive-saml-metadata.xml`)
 
-#### How to Obtain SAML Metadata from Britive
+Example SAML metadata structure:
 
-1. Log into your Britive tenant at `https://<your-tenant>.britive-app.com`
-2. Navigate to **Settings** (gear icon)
-3. Go to **Identity Providers** section
-4. Find **AWS** in the list
-5. Click **Download SAML Metadata** or **View Metadata**
-6. Save the XML file to your local machine
-
-**Example SAML metadata structure:**
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://your-tenant.britive-app.com">
@@ -92,12 +86,10 @@ Before deployment, gather the following from your Britive tenant:
 
 If this is your first time using StackSets with service-managed permissions, you need to enable trusted access:
 
-**Via AWS Console:**
-1. Go to **AWS Organizations** console
-2. Navigate to **Services** → **Trusted access**
-3. Find **CloudFormation StackSets** and click **Enable trusted access**
+**Via AWS Console:** Go to **AWS Organizations** console → **Services** → **Trusted access** → Find **CloudFormation StackSets** and click **Enable trusted access**.
 
-**Via AWS CLI:**
+Via AWS CLI:
+
 ```bash
 aws organizations enable-aws-service-access \
   --service-principal member.org.stacksets.cloudformation.amazonaws.com
@@ -140,10 +132,12 @@ aws organizations enable-aws-service-access \
 
      **Method 2: Use a Single-Line Format**
      - If copy-paste has issues, you can minify the XML first:
+
      ```bash
      # Remove newlines and extra spaces
      cat britive-saml-metadata.xml | tr -d '\n' | tr -s ' '
      ```
+
      - Copy the output and paste into the Console
 
    - **Enable AWS Invalidation Feature**: Select `true` or `false` (default: `true`)
@@ -235,12 +229,14 @@ Choose one of the following deployment options:
 ### Prerequisites for CLI Deployment
 
 1. Install and configure AWS CLI v2:
+
 ```bash
 aws --version  # Should be 2.x or higher
 aws configure  # Set up your credentials
 ```
 
-2. Verify you're using the management account:
+1. Verify you're using the management account:
+
 ```bash
 aws sts get-caller-identity
 ```
@@ -251,7 +247,7 @@ aws sts get-caller-identity
 
 Create a parameters file to avoid putting sensitive data in command history. First, prepare your SAML metadata:
 
-**Option A: Inline the SAML XML in JSON (Simple but requires escaping)**
+Option A - Inline the SAML XML in JSON (simple but requires escaping):
 
 ```bash
 # Read and escape SAML metadata for JSON
@@ -276,9 +272,7 @@ cat > parameters.json << EOF
 EOF
 ```
 
-**Option B: Create a helper script (Easiest)**
-
-Save this as `generate-parameters.sh`:
+Option B - Create a helper script (easiest). Save this as `generate-parameters.sh`:
 
 ```bash
 #!/bin/bash
@@ -391,13 +385,15 @@ EOF
 
 ### Step 2: Get Required IDs
 
-**Get your Root OU ID:**
+Get your Root OU ID:
+
 ```bash
 ROOT_OU_ID=$(aws organizations list-roots --query 'Roots[0].Id' --output text)
 echo "Root OU ID: $ROOT_OU_ID"
 ```
 
-**List all Organizational Units:**
+List all Organizational Units:
+
 ```bash
 aws organizations list-organizational-units-for-parent \
   --parent-id $ROOT_OU_ID \
@@ -405,7 +401,8 @@ aws organizations list-organizational-units-for-parent \
   --output table
 ```
 
-**List all accounts in your organization:**
+List all accounts in your organization:
+
 ```bash
 aws organizations list-accounts \
   --query 'Accounts[].[Name,Id,Status]' \
@@ -525,7 +522,7 @@ aws cloudformation describe-stack-instance \
 ### Deployment Options Explained
 
 | Parameter | Description | Values |
-|-----------|-------------|--------|
+| ----------- | ------------- | -------- |
 | `--permission-model` | How StackSets gets permissions | `SERVICE_MANAGED` (recommended) or `SELF_MANAGED` |
 | `--auto-deployment` | Auto-deploy to new accounts | `Enabled=true` (recommended for OUs) |
 | `RetainStacksOnAccountRemoval` | Keep stacks when account leaves OU | `true` or `false` |
@@ -549,19 +546,22 @@ aws cloudformation describe-stack-instance \
 
 ### Via AWS CLI
 
-**Check StackSet status:**
+Check StackSet status:
+
 ```bash
 aws cloudformation describe-stack-set \
   --stack-set-name britive-integration
 ```
 
-**List all stack instances:**
+List all stack instances:
+
 ```bash
 aws cloudformation list-stack-instances \
   --stack-set-name britive-integration
 ```
 
-**View specific stack instance details:**
+View specific stack instance details:
+
 ```bash
 aws cloudformation describe-stack-instance \
   --stack-set-name britive-integration \
@@ -569,14 +569,16 @@ aws cloudformation describe-stack-instance \
   --stack-instance-region us-east-1
 ```
 
-**List recent operations:**
+List recent operations:
+
 ```bash
 aws cloudformation list-stack-set-operations \
   --stack-set-name britive-integration \
   --max-results 10
 ```
 
-**View operation details:**
+View operation details:
+
 ```bash
 aws cloudformation describe-stack-set-operation \
   --stack-set-name britive-integration \
@@ -588,11 +590,12 @@ aws cloudformation describe-stack-set-operation \
 ## Updating StackSets
 
 ### When to Update
+
 - Changing SAML metadata (e.g., certificate rotation)
 - Enabling/disabling AWS invalidation feature
 - Modifying the template itself
 
-### Via AWS Console
+### Update via AWS Console
 
 1. Go to **CloudFormation** → **StackSets**
 2. Select your StackSet
@@ -602,9 +605,10 @@ aws cloudformation describe-stack-set-operation \
 6. Choose deployment targets (accounts/OUs to update)
 7. Click **Next** and **Submit**
 
-### Via AWS CLI
+### Update via AWS CLI
 
-**Update StackSet with new parameters:**
+Update StackSet with new parameters:
+
 ```bash
 aws cloudformation update-stack-set \
   --stack-set-name britive-integration \
@@ -616,7 +620,8 @@ aws cloudformation update-stack-set \
     MaxConcurrentPercentage=50
 ```
 
-**Update only specific stack instances:**
+Update only specific stack instances:
+
 ```bash
 aws cloudformation update-stack-instances \
   --stack-set-name britive-integration \
@@ -631,7 +636,7 @@ aws cloudformation update-stack-instances \
 
 ## Deleting StackSets
 
-### Via AWS Console
+### Deleting via AWS Console
 
 1. Go to **CloudFormation** → **StackSets**
 2. Select your StackSet
@@ -643,11 +648,10 @@ aws cloudformation update-stack-instances \
    - Click **Actions** → **Delete StackSet**
    - Confirm deletion
 
-### Via AWS CLI
+### Deleting via AWS CLI
 
-**Step 1: Delete all stack instances**
+Step 1 - Delete all stack instances. For OU-based deployments:
 
-For OU-based deployments:
 ```bash
 aws cloudformation delete-stack-instances \
   --stack-set-name britive-integration \
@@ -658,6 +662,7 @@ aws cloudformation delete-stack-instances \
 ```
 
 For account-based deployments:
+
 ```bash
 aws cloudformation delete-stack-instances \
   --stack-set-name britive-integration \
@@ -667,7 +672,8 @@ aws cloudformation delete-stack-instances \
   --call-as SELF
 ```
 
-**Step 2: Wait for instances to be deleted**
+Step 2 - Wait for instances to be deleted:
+
 ```bash
 # Monitor deletion progress
 aws cloudformation list-stack-instances \
@@ -676,7 +682,8 @@ aws cloudformation list-stack-instances \
   --output table
 ```
 
-**Step 3: Delete the StackSet**
+Step 3 - Delete the StackSet:
+
 ```bash
 aws cloudformation delete-stack-set \
   --stack-set-name britive-integration \
@@ -688,17 +695,17 @@ aws cloudformation delete-stack-set \
 ## Auto-Deployment for New Accounts
 
 When you enable auto-deployment, StackSets automatically deploy to:
+
 - **New accounts** created in the organization
 - **Accounts moved** into the targeted OUs
 - Ensures consistent Britive integration across all accounts without manual intervention
 
 ### Verify Auto-Deployment is Enabled
 
-**Via Console:**
-1. Go to StackSet details
-2. Check **Auto-deployment** status in the overview
+Via Console: Go to StackSet details and check **Auto-deployment** status in the overview.
 
-**Via CLI:**
+Via CLI:
+
 ```bash
 aws cloudformation describe-stack-set \
   --stack-set-name britive-integration \
@@ -710,7 +717,7 @@ aws cloudformation describe-stack-set \
 ## Parameters Reference
 
 | Parameter | Description | Example | Required |
-|-----------|-------------|---------|----------|
+| ----------- | ------------- | --------- | ---------- |
 | `TenantName` | Britive tenant name (without .britive-app.com) | `mycompany` | Yes |
 | `SamlMetadataDocumentXmlContent` | Full XML content from SAML metadata file | `<?xml version="1.0"?>...` | Yes |
 | `DeployAwsInvalidationFeature` | Enable additional IAM permissions for AWS invalidation | `true` or `false` | No (default: `true`) |
@@ -720,7 +727,7 @@ aws cloudformation describe-stack-set \
 ## Comparison: Single Account vs StackSet
 
 | Feature | Single Account Stack | StackSet |
-|---------|---------------------|----------|
+| --------- | --------------------- | ---------- |
 | **Deployment Scope** | One account at a time | Multiple accounts simultaneously |
 | **Management** | Individual stack per account | Centralized management |
 | **Updates** | Update each stack individually | Single update applies to all |
@@ -748,13 +755,10 @@ aws cloudformation describe-stack-set \
 
 ### Stack Instance Failed
 
-**Via Console:**
-1. Go to **StackSets** → Select your StackSet → **Stack instances** tab
-2. Find failed instances (Status: `FAILED`)
-3. Click on the account ID to view error details
-4. Check **Events** tab for specific error messages
+Via Console: Go to **StackSets** → Select your StackSet → **Stack instances** tab. Find failed instances (Status: `FAILED`), click on the account ID to view error details, and check the **Events** tab for specific error messages.
 
-**Via CLI:**
+Via CLI:
+
 ```bash
 # Find failed instances
 aws cloudformation list-stack-instances \
@@ -770,25 +774,31 @@ aws cloudformation describe-stack-instance \
   --query 'StackInstance.StatusReason'
 ```
 
-**Common Causes:**
+Common causes include:
+
 - Resource already exists (e.g., role name conflict)
 - Insufficient permissions in target account
 - Service limits reached (e.g., IAM role limit)
 
 ### Permission Issues
 
-**Symptoms:**
+Symptoms:
+
 - Error: "User is not authorized to perform cloudformation:CreateStackSet"
 - StackSet creation fails
 
-**Solutions:**
+Solutions:
+
 1. Ensure you're in the management account or delegated administrator
 2. Verify trusted access is enabled:
+
    ```bash
    aws organizations list-aws-service-access-for-organization \
      --query 'EnabledServicePrincipals[?ServicePrincipal==`member.org.stacksets.cloudformation.amazonaws.com`]'
    ```
+
 3. Enable trusted access if not enabled:
+
    ```bash
    aws organizations enable-aws-service-access \
      --service-principal member.org.stacksets.cloudformation.amazonaws.com
@@ -798,30 +808,25 @@ aws cloudformation describe-stack-instance \
 
 **Error:** "Resource already exists: britive-mycompany-integration-role"
 
-**Solutions:**
+Solutions:
 
-**Option 1: Delete existing resources**
-- Manually delete the conflicting resources in the target account(s)
-- Re-run the StackSet deployment
-
-**Option 2: Skip accounts with existing resources**
-- Deploy to accounts without conflicts first
-- Handle conflicting accounts separately
-
-**Option 3: Import existing resources (Advanced)**
-- Use CloudFormation import to bring existing resources under StackSet management
+- **Option 1 - Delete existing resources:** Manually delete the conflicting resources in the target account(s), then re-run the StackSet deployment.
+- **Option 2 - Skip accounts with existing resources:** Deploy to accounts without conflicts first, then handle conflicting accounts separately.
+- **Option 3 - Import existing resources (advanced):** Use CloudFormation import to bring existing resources under StackSet management.
 
 ### SAML Metadata Issues
 
 **Error:** "Invalid SAML metadata document"
 
-**Solutions:**
+Solutions:
+
 1. Verify XML is well-formed (no extra spaces, newlines)
 2. Ensure entire XML content is copied including `<?xml version="1.0"?>` header
 3. Check for special characters that need escaping in JSON format
 4. Download fresh SAML metadata from Britive
 
-**Test SAML metadata:**
+Test SAML metadata:
+
 ```bash
 # Validate XML structure
 xmllint --noout saml-metadata.xml && echo "Valid XML" || echo "Invalid XML"
@@ -829,11 +834,13 @@ xmllint --noout saml-metadata.xml && echo "Valid XML" || echo "Invalid XML"
 
 ### Deployment Timeout
 
-**Symptoms:**
+Symptoms:
+
 - Operations taking longer than expected
 - Some instances stuck in `RUNNING` state
 
-**Solutions:**
+Solutions:
+
 1. Check AWS Service Health Dashboard for CloudFormation issues
 2. Reduce `MaxConcurrentPercentage` to deploy more slowly
 3. Increase `FailureTolerancePercentage` to continue despite some failures
@@ -841,10 +848,12 @@ xmllint --noout saml-metadata.xml && echo "Valid XML" || echo "Invalid XML"
 
 ### Auto-Deployment Not Working
 
-**Symptoms:**
+Symptoms:
+
 - New accounts not automatically getting stacks
 
-**Verify:**
+Verify:
+
 ```bash
 # Check auto-deployment configuration
 aws cloudformation describe-stack-set \
@@ -852,7 +861,8 @@ aws cloudformation describe-stack-set \
   --query 'StackSet.AutoDeployment'
 ```
 
-**Solutions:**
+Solutions:
+
 1. Ensure auto-deployment is enabled and targeting the correct OUs
 2. Verify new accounts are in the targeted OUs
 3. Check that trusted access is enabled for CloudFormation StackSets
@@ -862,11 +872,13 @@ aws cloudformation describe-stack-set \
 ## Getting Help
 
 ### AWS Resources
-- **CloudFormation StackSets Documentation**: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/what-is-cfnstacksets.html
-- **AWS Organizations Documentation**: https://docs.aws.amazon.com/organizations/
+
+- **CloudFormation StackSets Documentation**: <https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/what-is-cfnstacksets.html>
+- **AWS Organizations Documentation**: <https://docs.aws.amazon.com/organizations/>
 - **AWS Support**: Open a support case in the AWS Console
 
 ### Britive Resources
+
 - **Britive Documentation**: Contact your Britive account team
 - **SAML Configuration**: Consult Britive AWS integration guides
 
@@ -901,21 +913,26 @@ aws cloudformation list-stack-set-operation-results \
 ## Additional Notes
 
 ### IAM Resources are Global
+
 While you must specify a region for StackSet deployment (e.g., `us-east-1`), the IAM resources created (SAML providers, roles) are global and accessible from all regions.
 
 ### Cost Considerations
+
 - StackSets themselves have no additional cost
 - You pay for the CloudFormation stacks created in each account (no charge for IAM resources)
 - No ongoing costs for IAM roles and SAML providers
 
 ### Compliance and Security
+
 - All IAM resources are created with least-privilege access
 - SAML provider uses federated authentication
 - Integration role has read-only access to IAM and Organizations
 - AWS Invalidation feature adds write permissions only to `britive/managed/*` policy namespace
 
 ### Multi-Region Considerations
+
 If you need to deploy to multiple regions (though not typical for IAM resources):
+
 ```bash
 aws cloudformation create-stack-instances \
   --stack-set-name britive-integration \
