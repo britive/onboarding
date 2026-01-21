@@ -19,7 +19,7 @@ Britive's CloudFormation templates automate the setup and configuration of secur
 Choose the deployment method that best fits your needs:
 
 | Deployment Method | Use Case | Best For |
-|-------------------|----------|----------|
+| ------------------- | ---------- | ---------- |
 | [**Single Account Stack**](aws/single-account-stack/) | Deploy to one AWS account | Testing, POC, standalone accounts |
 | [**StackSet Templates**](aws/stackset-templates/) | Deploy to multiple accounts via StackSets | Production, organization-wide deployment |
 | [**Organization StackSet**](aws/organization-stackset/) | Deploy to entire organization with nested stacks | Complete org automation including management account |
