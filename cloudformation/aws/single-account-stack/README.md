@@ -75,10 +75,8 @@ You need permissions to create IAM resources in the target account:
 ### Step 1: Download from Britive
 
 1. Log into your Britive tenant at `https://<your-tenant>.britive-app.com`
-2. Navigate to **Settings** (gear icon) → **Identity Providers**
-3. Find **AWS** in the list
-4. Click **Download SAML Metadata** or **View Metadata**
-5. Save the XML file (e.g., `britive-saml-metadata.xml`)
+2. Navigate to Admin → Security → SAML Configurations → Download SAML Metadata
+3. Save the XML file (e.g., `britive-saml-metadata.xml`)
 
 ### Step 2: Verify the File
 

@@ -46,7 +46,7 @@ Before deployment, obtain from your Britive tenant:
 
 1. **Tenant Name**: Your Britive tenant name (e.g., `mycompany` from `mycompany.britive-app.com`)
 2. **SAML Metadata Document**: Download from Britive
-   - Navigate to: Settings → Identity Providers → AWS → Download SAML Metadata
+   - Navigate to: Admin → Security → SAML Configurations → Download SAML Metadata
    - Save the XML file
 
 ## Deployment Steps
@@ -98,7 +98,7 @@ Edit the `parameters.json` file with your specific values:
 **Parameter descriptions:**
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+| ----------- | ------------- | --------- |
 | `TenantName` | Britive tenant name (without .britive-app.com) | `mycompany` |
 | `SamlMetadataDocumentXmlContent` | Full SAML metadata XML content | `<?xml version="1.0"?>...` |
 | `DeployAwsInvalidationFeature` | Enable AWS invalidation permissions | `true` or `false` |
@@ -308,7 +308,7 @@ aws cloudformation wait stack-delete-complete \
 ## Comparison with Other Deployment Methods
 
 | Feature | Organization StackSet (This) | StackSet Templates | Single Account |
-|---------|------------------------------|-------------------|----------------|
+| --------- | ------------------------------ | ------------------- | ---------------- |
 | **Management Account** | ✅ Included via nested stack | ❌ Manual deployment needed | N/A |
 | **Member Accounts** | ✅ Via StackSet | ✅ Via StackSet | ❌ One at a time |
 | **Single Deployment** | ✅ Yes | ❌ Two separate deployments | ❌ Per account |
