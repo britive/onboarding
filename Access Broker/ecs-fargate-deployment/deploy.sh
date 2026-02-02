@@ -18,9 +18,15 @@ set -e
 # CONFIGURATION - MODIFY THESE VALUES
 #==============================================================================
 
-# Your Britive broker pool token (required)
-# Get this from: Britive Console > System Administration > Broker Pools > Create/Select Pool > Token
+# Secrets Configuration
+# Option 1: Set BRITIVE_TOKEN directly here (for simple deployments)
+# Option 2: Use secrets.json file for multiple secrets (recommended)
+#
+# Get your Britive token from: Britive Console > System Administration > Broker Pools > Create/Select Pool > Token
 BRITIVE_TOKEN="your-britive-token-here"
+
+# Secrets are stored in AWS Secrets Manager under this prefix
+SECRETS_PREFIX="britive-broker/secrets"
 
 # AWS Configuration
 AWS_REGION="${AWS_REGION:-us-west-2}"
@@ -84,6 +90,13 @@ for file in "${REQUIRED_FILES[@]}"; do
     fi
 done
 log_success "Required files found"
+
+# Check for secrets.json (optional but recommended)
+USE_SECRETS_FILE=false
+if [ -f "secrets.json" ]; then
+    log_success "Found secrets.json - will use for secrets configuration"
+    USE_SECRETS_FILE=true
+fi
 
 # Check AWS CLI
 log_info "Checking AWS CLI..."
@@ -322,31 +335,94 @@ else
     log_success "Task role exists"
 fi
 
-# Create Secrets Manager secret for Britive token
-log_info "Setting up Secrets Manager secret..."
-SECRET_NAME="britive-broker/token"
-SECRET_ARN=""
+# Create Secrets Manager secrets
+log_info "Setting up Secrets Manager secrets..."
 
-if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --region "$AWS_REGION" &> /dev/null; then
-    log_info "Updating existing secret..."
-    aws secretsmanager update-secret \
-        --secret-id "$SECRET_NAME" \
-        --secret-string "{\"britive-token\":\"$BRITIVE_TOKEN\"}" \
-        --region "$AWS_REGION" > /dev/null
-    SECRET_ARN=$(aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --query "ARN" --output text --region "$AWS_REGION")
+# Array to track all secret ARNs for IAM policy
+declare -a SECRET_ARNS
+declare -a SECRET_NAMES
+
+# Function to create or update a secret
+create_or_update_secret() {
+    local secret_key="$1"
+    local secret_value="$2"
+    local description="$3"
+    local full_secret_name="${SECRETS_PREFIX}/${secret_key}"
+
+    if aws secretsmanager describe-secret --secret-id "$full_secret_name" --region "$AWS_REGION" &> /dev/null; then
+        log_info "Updating secret: $secret_key"
+        aws secretsmanager update-secret \
+            --secret-id "$full_secret_name" \
+            --secret-string "$secret_value" \
+            --region "$AWS_REGION" > /dev/null
+    else
+        log_info "Creating secret: $secret_key"
+        aws secretsmanager create-secret \
+            --name "$full_secret_name" \
+            --description "$description" \
+            --secret-string "$secret_value" \
+            --region "$AWS_REGION" > /dev/null
+    fi
+
+    # Get the ARN
+    local arn=$(aws secretsmanager describe-secret --secret-id "$full_secret_name" --query "ARN" --output text --region "$AWS_REGION")
+    SECRET_ARNS+=("$arn")
+    SECRET_NAMES+=("$secret_key")
+    log_success "Secret configured: $secret_key"
+}
+
+# Process secrets from secrets.json if available
+if [ "$USE_SECRETS_FILE" = true ]; then
+    log_info "Processing secrets from secrets.json..."
+
+    # Process main secrets
+    SECRETS_JSON=$(cat secrets.json)
+
+    # Extract and create each secret from the secrets object
+    echo "$SECRETS_JSON" | jq -r '.secrets | to_entries[] | select(.value.value != "" and .value.value != "your-britive-token-here") | @base64' | while read -r entry; do
+        key=$(echo "$entry" | base64 -d | jq -r '.key')
+        value=$(echo "$entry" | base64 -d | jq -r '.value.value')
+        desc=$(echo "$entry" | base64 -d | jq -r '.value.description // "Britive broker secret"')
+
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
+            create_or_update_secret "$key" "$value" "$desc"
+        fi
+    done
+
+    # Process custom secrets
+    echo "$SECRETS_JSON" | jq -r '.custom_secrets | to_entries[] | select(.value != "" and .value != null) | @base64' | while read -r entry; do
+        key=$(echo "$entry" | base64 -d | jq -r '.key')
+        value=$(echo "$entry" | base64 -d | jq -r '.value')
+
+        if [ -n "$value" ] && [ "$value" != "null" ]; then
+            create_or_update_secret "$key" "$value" "Custom secret for Britive broker"
+        fi
+    done
 else
-    log_info "Creating new secret..."
-    SECRET_ARN=$(aws secretsmanager create-secret \
-        --name "$SECRET_NAME" \
-        --description "Britive Access Broker token" \
-        --secret-string "{\"britive-token\":\"$BRITIVE_TOKEN\"}" \
-        --query "ARN" \
-        --output text \
-        --region "$AWS_REGION")
+    # Fallback: Use BRITIVE_TOKEN from script configuration
+    if [ "$BRITIVE_TOKEN" != "your-britive-token-here" ]; then
+        create_or_update_secret "BRITIVE_TOKEN" "$BRITIVE_TOKEN" "Britive Access Broker token"
+    fi
 fi
-log_success "Secret configured: $SECRET_ARN"
 
-# Add Secrets Manager permission to execution role
+# Get all secrets for this deployment (in case some were created outside this run)
+ALL_SECRET_ARNS=$(aws secretsmanager list-secrets \
+    --filter Key=name,Values="${SECRETS_PREFIX}" \
+    --query "SecretList[*].ARN" \
+    --output text \
+    --region "$AWS_REGION" 2>/dev/null | tr '\t' '\n')
+
+if [ -z "$ALL_SECRET_ARNS" ]; then
+    log_error "No secrets found. Please configure BRITIVE_TOKEN or secrets.json"
+    exit 1
+fi
+
+# Build JSON array of all secret ARNs
+ARN_ARRAY=$(echo "$ALL_SECRET_ARNS" | jq -R . | jq -s .)
+
+log_success "Total secrets configured: $(echo "$ALL_SECRET_ARNS" | wc -l | tr -d ' ')"
+
+# Add Secrets Manager permission to execution role for all secrets
 log_info "Adding Secrets Manager permissions to execution role..."
 cat > /tmp/secrets-policy.json << EOF
 {
@@ -357,7 +433,7 @@ cat > /tmp/secrets-policy.json << EOF
       "Action": [
         "secretsmanager:GetSecretValue"
       ],
-      "Resource": "$SECRET_ARN"
+      "Resource": ${ARN_ARRAY}
     }
   ]
 }
@@ -374,15 +450,44 @@ rm /tmp/secrets-policy.json
 log_info "Preparing task definition..."
 cp task-definition.json task-definition-deploy.json
 
-sed -i.bak "s|REPLACE_WITH_ECR_IMAGE|$ECR_REPO_URI:latest|g" task-definition-deploy.json
-sed -i.bak "s|REPLACE_WITH_EXECUTION_ROLE_ARN|$EXECUTION_ROLE_ARN|g" task-definition-deploy.json
-sed -i.bak "s|REPLACE_WITH_TASK_ROLE_ARN|$TASK_ROLE_ARN|g" task-definition-deploy.json
-sed -i.bak "s|REPLACE_WITH_SECRET_ARN|$SECRET_ARN|g" task-definition-deploy.json
-sed -i.bak "s|REPLACE_WITH_REGION|$AWS_REGION|g" task-definition-deploy.json
+# Build secrets array for task definition
+# Each secret in Secrets Manager becomes an environment variable
+SECRETS_JSON_ARRAY="["
+first_secret=true
 
-rm -f task-definition-deploy.json.bak
+for secret_arn in $ALL_SECRET_ARNS; do
+    # Extract secret name from ARN (last part after the colon)
+    secret_name=$(echo "$secret_arn" | sed 's/.*:secret://' | sed 's/-.*//' | sed "s|${SECRETS_PREFIX}/||")
+    # Get the full secret name (without the random suffix)
+    full_name=$(aws secretsmanager describe-secret --secret-id "$secret_arn" --query "Name" --output text --region "$AWS_REGION" 2>/dev/null)
+    # Extract just the key name from the path
+    key_name="${full_name#${SECRETS_PREFIX}/}"
 
-log_success "Task definition prepared"
+    if [ "$first_secret" = true ]; then
+        first_secret=false
+    else
+        SECRETS_JSON_ARRAY+=","
+    fi
+
+    SECRETS_JSON_ARRAY+="{\"name\":\"${key_name}\",\"valueFrom\":\"${secret_arn}\"}"
+done
+
+SECRETS_JSON_ARRAY+="]"
+
+# Use jq to properly inject secrets array into task definition
+jq --argjson secrets "$SECRETS_JSON_ARRAY" \
+   --arg image "$ECR_REPO_URI:latest" \
+   --arg exec_role "$EXECUTION_ROLE_ARN" \
+   --arg task_role "$TASK_ROLE_ARN" \
+   --arg region "$AWS_REGION" \
+   '.executionRoleArn = $exec_role |
+    .taskRoleArn = $task_role |
+    .containerDefinitions[0].image = $image |
+    .containerDefinitions[0].secrets = $secrets |
+    .containerDefinitions[0].logConfiguration.options["awslogs-region"] = $region' \
+   task-definition.json > task-definition-deploy.json
+
+log_success "Task definition prepared with $(echo "$ALL_SECRET_ARNS" | wc -l | tr -d ' ') secrets"
 
 # Register task definition
 log_info "Registering task definition..."

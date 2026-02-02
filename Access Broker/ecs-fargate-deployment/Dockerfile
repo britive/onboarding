@@ -33,9 +33,11 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 RUN mkdir -p /root/broker/config \
     && mkdir -p /root/broker/bootstrap \
     && mkdir -p /root/broker/cache \
+    && mkdir -p /root/broker/secrets \
     && mkdir -p /root/.kube \
     && mkdir -p /var/log/supervisor \
-    && mkdir -p /var/run/sshd
+    && mkdir -p /var/run/sshd \
+    && chmod 700 /root/broker/secrets
 
 # Copy Britive broker JAR
 COPY britive-broker-1.0.0.jar /root/broker/
