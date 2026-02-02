@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Britive Access Broker startup script for ECS Fargate
-# Handles graceful shutdown and logging
+# Handles graceful shutdown, secrets management, and logging
 
 # Signal handler for graceful shutdown
 cleanup() {
@@ -21,6 +21,34 @@ if [ "$DELAY" -gt 0 ]; then
     echo "Waiting $DELAY seconds before starting..."
     sleep $DELAY
 fi
+
+# Secrets directory for file-based secrets
+SECRETS_DIR="${SECRETS_DIR:-/root/broker/secrets}"
+mkdir -p "$SECRETS_DIR"
+
+# Write environment-based secrets to files for applications that need file-based access
+# This allows secrets to be accessed either as environment variables or files
+echo "Setting up secrets directory: $SECRETS_DIR"
+
+# Write BRITIVE_TOKEN to file if set
+if [ ! -z "$BRITIVE_TOKEN" ]; then
+    echo "$BRITIVE_TOKEN" > "$SECRETS_DIR/BRITIVE_TOKEN"
+    chmod 600 "$SECRETS_DIR/BRITIVE_TOKEN"
+    echo "BRITIVE_TOKEN written to secrets directory"
+fi
+
+# Write any custom secrets that start with BROKER_ prefix to files
+env | grep "^BROKER_" | while IFS='=' read -r key value; do
+    if [ ! -z "$value" ]; then
+        echo "$value" > "$SECRETS_DIR/$key"
+        chmod 600 "$SECRETS_DIR/$key"
+        echo "$key written to secrets directory"
+    fi
+done
+
+# List secrets directory contents (without showing values)
+echo "Secrets directory contents:"
+ls -la "$SECRETS_DIR" 2>/dev/null || echo "  (empty)"
 
 # Setup kubeconfig from environment if provided
 if [ ! -z "$KUBECONFIG_BASE64" ]; then

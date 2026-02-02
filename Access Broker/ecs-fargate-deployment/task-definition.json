@@ -21,14 +21,13 @@
         {
           "name": "KUBECONFIG",
           "value": "/root/.kube/config"
-        }
-      ],
-      "secrets": [
+        },
         {
-          "name": "BRITIVE_TOKEN",
-          "valueFrom": "REPLACE_WITH_SECRET_ARN:britive-token::"
+          "name": "SECRETS_DIR",
+          "value": "/root/broker/secrets"
         }
       ],
+      "secrets": [],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {

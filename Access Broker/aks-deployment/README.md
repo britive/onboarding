@@ -11,6 +11,7 @@ The Britive Access Broker enables secure, just-in-time access to your Kubernetes
 Before deploying, ensure you have:
 
 1. **Azure CLI** installed and configured
+
    ```bash
    # Install Azure CLI
    # macOS
@@ -24,12 +25,14 @@ Before deploying, ensure you have:
    ```
 
 2. **Docker** installed and running
+
    ```bash
    # Verify Docker is running
    docker info
    ```
 
 3. **kubectl** installed and configured for your AKS cluster
+
    ```bash
    # Install kubectl
    az aks install-cli
@@ -55,11 +58,13 @@ Before deploying, ensure you have:
 ### Option 1: Automated Deployment (Recommended)
 
 1. Copy the broker JAR file to this directory:
+
    ```bash
    cp /path/to/britive-broker-1.0.0.jar .
    ```
 
 2. Edit `deploy.sh` and set your configuration:
+
    ```bash
    BRITIVE_TOKEN="your-britive-token-here"
    ACR_NAME="britivebroker"           # Your ACR name
@@ -67,12 +72,14 @@ Before deploying, ensure you have:
    ```
 
 3. Run the deployment script:
+
    ```bash
    chmod +x deploy.sh
    ./deploy.sh
    ```
 
 The script will:
+
 - Validate all prerequisites
 - Create ACR if it doesn't exist
 - Attach ACR to your AKS cluster
@@ -83,16 +90,19 @@ The script will:
 ### Option 2: Manual Deployment
 
 1. **Create Azure Container Registry** (if needed):
+
    ```bash
    az acr create --resource-group <RG_NAME> --name <ACR_NAME> --sku Basic
    ```
 
 2. **Attach ACR to AKS**:
+
    ```bash
    az aks update --name <AKS_NAME> --resource-group <RG_NAME> --attach-acr <ACR_NAME>
    ```
 
 3. **Build and push the Docker image**:
+
    ```bash
    # Login to ACR
    az acr login --name <ACR_NAME>
@@ -108,11 +118,13 @@ The script will:
 4. **Update deployment.yaml**:
    - Replace `YOUR_ACR_NAME.azurecr.io` with your actual ACR login server
    - Replace `REPLACE_WITH_BASE64_TOKEN` with your base64-encoded token:
+
      ```bash
      echo -n "your-token" | base64
      ```
 
 5. **Apply the deployment**:
+
    ```bash
    kubectl apply -f deployment.yaml
    ```
@@ -140,7 +152,7 @@ The default deployment creates 2 replicas for high availability. Modify `spec.re
 ## Files
 
 | File | Description |
-|------|-------------|
+| ------ | ------------- |
 | `deploy.sh` | Automated deployment script |
 | `deployment.yaml` | Kubernetes manifests (ServiceAccount, RBAC, ConfigMap, Secret, Deployment, Service) |
 | `Dockerfile` | Container image definition |
@@ -172,12 +184,14 @@ These permissions enable the broker to manage access control for just-in-time ac
 ## Monitoring & Troubleshooting
 
 ### Check Deployment Status
+
 ```bash
 kubectl get pods -l app=britive-broker
 kubectl get deployment britive-broker
 ```
 
 ### View Logs
+
 ```bash
 # All broker pods
 kubectl logs -l app=britive-broker -f
@@ -190,16 +204,19 @@ kubectl logs <pod-name> --previous
 ```
 
 ### Describe Pod (for troubleshooting)
+
 ```bash
 kubectl describe pod -l app=britive-broker
 ```
 
 ### Check Events
+
 ```bash
 kubectl get events --sort-by='.lastTimestamp' | grep britive
 ```
 
 ### Verify ACR Access
+
 ```bash
 # Check if AKS can pull from ACR
 az aks check-acr --name <AKS_NAME> --resource-group <RG_NAME> --acr <ACR_NAME>
@@ -208,16 +225,19 @@ az aks check-acr --name <AKS_NAME> --resource-group <RG_NAME> --acr <ACR_NAME>
 ### Common Issues
 
 1. **ImagePullBackOff**: ACR not attached to AKS
+
    ```bash
    az aks update --name <AKS_NAME> --resource-group <RG_NAME> --attach-acr <ACR_NAME>
    ```
 
 2. **CrashLoopBackOff**: Check logs for Java errors
+
    ```bash
    kubectl logs -l app=britive-broker --previous
    ```
 
 3. **Pending Pods**: Check resource quotas and node capacity
+
    ```bash
    kubectl describe pod -l app=britive-broker
    ```
@@ -240,6 +260,7 @@ kubectl delete serviceaccount britive-broker-sa
 ```
 
 To also remove the ACR repository:
+
 ```bash
 az acr repository delete --name <ACR_NAME> --repository britive-broker --yes
 ```
@@ -253,10 +274,3 @@ az acr repository delete --name <ACR_NAME> --repository britive-broker --yes
 3. **ACR Security**: Use Azure Private Link for ACR if your AKS cluster uses private networking.
 
 4. **Pod Security**: The broker runs as root for kubectl access. Consider pod security policies for additional hardening.
-
-## Support
-
-For issues with:
-- **Britive Platform**: Contact Britive support
-- **AKS/Azure**: Check Azure documentation or contact Azure support
-- **This deployment**: Check the troubleshooting section above
