@@ -1,3 +1,6 @@
+# DRAFT - Beta Deployment strategy
+
+
 # Britive Access Broker - AWS ECS Fargate Deployment
 
 This directory contains everything needed to deploy the Britive Access Broker on AWS ECS Fargate (serverless container orchestration).
@@ -7,6 +10,7 @@ This directory contains everything needed to deploy the Britive Access Broker on
 The Britive Access Broker enables secure, just-in-time access management through the Britive platform. This deployment uses AWS ECS Fargate for serverless container orchestration, eliminating the need to manage underlying EC2 instances.
 
 **Key Features:**
+
 - All secrets stored securely in AWS Secrets Manager
 - Support for multiple secrets with easy management
 - Secrets available as environment variables and files at runtime
@@ -374,12 +378,6 @@ aws ecs describe-tasks \
     --cluster britive-broker-cluster \
     --tasks <task-arn> \
     --region us-west-2
-```
-
-### View in AWS Console
-
-```
-https://us-west-2.console.aws.amazon.com/ecs/home?region=us-west-2#/clusters/britive-broker-cluster/services
 ```
 
 ### Common Issues
