@@ -1,3 +1,5 @@
+# DRAFT - Beta Deployment strategy
+
 # Britive Broker AWS EKS Deployment
 
 Same deployment as GKE version, adapted for AWS EKS with ECR.
