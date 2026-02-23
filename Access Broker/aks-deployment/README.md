@@ -51,7 +51,7 @@ Before deploying, ensure you have:
    - Create a new pool or select an existing one
    - Copy the broker pool token
 
-6. **britive-broker-1.0.0.jar** file in this directory
+6. **britive-broker-\<version\>.jar** file in this directory (e.g. `britive-broker-2.0.0.jar`)
 
 ## Quick Start
 
@@ -60,12 +60,13 @@ Before deploying, ensure you have:
 1. Copy the broker JAR file to this directory:
 
    ```bash
-   cp /path/to/britive-broker-1.0.0.jar .
+   cp /path/to/britive-broker-2.0.0.jar .
    ```
 
 2. Edit `deploy.sh` and set your configuration:
 
    ```bash
+   BROKER_VERSION="2.0.0"             # Broker JAR version (default: 2.0.0)
    BRITIVE_TOKEN="your-britive-token-here"
    ACR_NAME="britivebroker"           # Your ACR name
    RESOURCE_GROUP="your-rg-name"      # Your Azure resource group
@@ -76,6 +77,12 @@ Before deploying, ensure you have:
    ```bash
    chmod +x deploy.sh
    ./deploy.sh
+   ```
+
+   To deploy a specific broker version without editing the script, use the `--broker-version` flag:
+
+   ```bash
+   ./deploy.sh --broker-version 1.5.0
    ```
 
 The script will:
@@ -133,17 +140,17 @@ The script will:
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `BRITIVE_TOKEN` | Broker pool authentication token | Yes |
-| `KUBECONFIG` | Path to kubeconfig (auto-configured) | No |
+| Variable          | Description                          | Required |
+|-------------------|--------------------------------------|----------|
+| `BRITIVE_TOKEN`   | Broker pool authentication token     | Yes      |
+| `KUBECONFIG`      | Path to kubeconfig (auto-configured) | No       |
 
 ### Resource Limits
 
 | Resource | Request | Limit |
 |----------|---------|-------|
-| Memory | 512Mi | 1Gi |
-| CPU | 250m | 500m |
+| Memory   | 512Mi   | 1Gi   |
+| CPU      | 250m    | 500m  |
 
 ### Replicas
 
@@ -174,10 +181,10 @@ The default deployment creates 2 replicas for high availability. Modify `spec.re
 
 The broker requires the following Kubernetes permissions:
 
-| API Group | Resources | Verbs |
-|-----------|-----------|-------|
-| rbac.authorization.k8s.io | roles, rolebindings, clusterroles, clusterrolebindings | get, list, watch, create, update, patch, delete |
-| "" (core) | serviceaccounts, namespaces | get, list, watch, create, update, patch, delete |
+| API Group                  | Resources                                              | Verbs                                           |
+|----------------------------|--------------------------------------------------------|-------------------------------------------------|
+| rbac.authorization.k8s.io  | roles, rolebindings, clusterroles, clusterrolebindings | get, list, watch, create, update, patch, delete |
+| "" (core)                  | serviceaccounts, namespaces                            | get, list, watch, create, update, patch, delete |
 
 These permissions enable the broker to manage access control for just-in-time access.
 
