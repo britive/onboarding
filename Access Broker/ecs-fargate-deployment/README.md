@@ -48,10 +48,10 @@ Before deploying, ensure you have:
    apt install jq
    ```
 
-4. **Britive Broker Pool Token** from the Britive console
-   - Navigate to: System Administration > Broker Pools
-   - Create a new pool or select an existing one
-   - Copy the broker pool token
+4. **Britive Tenant Subdomain** and **Broker Pool Token** from the Britive console
+   - **Tenant subdomain**: the part before `.britive-app.com` in your Britive URL
+     (e.g., `mycompany` for `mycompany.britive-app.com`) — find it under System Administration > Settings
+   - **Broker pool token**: navigate to System Administration > Broker Pools, create or select a pool, and copy the token
 
 5. **britive-broker-2.0.0.jar** file or later in this directory
 
@@ -61,8 +61,9 @@ Before deploying, ensure you have:
 
 ### Option 1: Using secrets.json (Recommended)
 
-With this option, `BRITIVE_TOKEN` in `deploy.sh` can be left as the placeholder — the token is read
-from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token check.
+Both `BRITIVE_TENANT` and `BRITIVE_TOKEN` are defined in `secrets.json`, stored in AWS Secrets Manager,
+and injected into the running task as environment variables. The values in `deploy.sh` can be left as
+placeholders when using this option.
 
 1. Copy the broker JAR file to this directory:
 
@@ -70,11 +71,17 @@ from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token
    cp /path/to/britive-broker-2.0.0.jar .
    ```
 
-2. Edit `secrets.json` and configure your secrets:
+2. Edit `secrets.json` and fill in your tenant subdomain and token:
 
    ```json
    {
      "secrets": {
+       "BRITIVE_TENANT": {
+         "description": "Britive tenant subdomain",
+         "value": "mycompany",
+         "required": true,
+         "inject_as": "env"
+       },
        "BRITIVE_TOKEN": {
          "description": "Britive broker pool authentication token",
          "value": "your-actual-token-here",
@@ -82,9 +89,7 @@ from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token
          "inject_as": "env"
        }
      },
-     "custom_secrets": {
-       "MY_API_KEY": "optional-api-key-value"
-     }
+     "custom_secrets": {}
    }
    ```
 
@@ -95,7 +100,7 @@ from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token
    ./deploy.sh
    ```
 
-### Option 2: Direct Token Configuration
+### Option 2: Direct Configuration (no secrets.json)
 
 1. Copy the broker JAR file:
 
@@ -103,12 +108,15 @@ from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token
    cp /path/to/britive-broker-2.0.0.jar .
    ```
 
-2. Edit `deploy.sh` and set your token directly:
+2. Edit `deploy.sh` and set both values directly:
 
    ```bash
-   BRITIVE_TOKEN="your-britive-token-here"
+   BRITIVE_TENANT="mycompany"                  # subdomain of your Britive URL
+   BRITIVE_TOKEN="your-britive-token-here"     # from Broker Pools console
    AWS_REGION="us-west-2"
    ```
+
+   Both values are stored in AWS Secrets Manager and injected into the task at runtime — same mechanism as Option 1.
 
 3. Run the deployment:
 
@@ -231,6 +239,7 @@ Secrets are available to the broker in two ways:
 
 | Variable | Description | Required | Source |
 | -------- | ----------- | -------- | ------ |
+| `BRITIVE_TENANT` | Britive tenant subdomain (e.g. `mycompany` for `mycompany.britive-app.com`) | Yes | Secrets Manager (via `secrets.json` or `deploy.sh`) |
 | `BRITIVE_TOKEN` | Broker pool authentication token | Yes | Secrets Manager |
 | `KUBECONFIG` | Path to kubeconfig | Auto | Container |
 | `KUBECONFIG_BASE64` | Base64-encoded kubeconfig (for external clusters) | No | Secrets Manager |

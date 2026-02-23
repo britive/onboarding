@@ -19,10 +19,16 @@ set -e
 #==============================================================================
 
 # Secrets Configuration
-# Option 1: Set BRITIVE_TOKEN directly here (for simple deployments)
-# Option 2: Use secrets.json file for multiple secrets (recommended)
+# Option 1 (recommended): Use secrets.json — set BRITIVE_TENANT and BRITIVE_TOKEN there.
+#   Both are stored in AWS Secrets Manager and auto-injected into the task at runtime.
+#   Leave the values below as placeholders when using Option 1.
 #
-# Get your Britive token from: Britive Console > System Administration > Broker Pools > Create/Select Pool > Token
+# Option 2 (direct): Set values here if not using secrets.json.
+#   BRITIVE_TENANT: subdomain of your Britive URL (e.g. "mycompany" for mycompany.britive-app.com)
+#     Find it in: Britive Console > System Administration > Settings
+#   BRITIVE_TOKEN:  broker pool token
+#     Find it in: Britive Console > System Administration > Broker Pools > Create/Select Pool > Token
+BRITIVE_TENANT="your-tenant-subdomain-here"
 BRITIVE_TOKEN="your-britive-token-here"
 
 # Secrets are stored in AWS Secrets Manager under this prefix
@@ -73,20 +79,26 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check for secrets.json first - it determines whether BRITIVE_TOKEN must be set here
-# (Option 1: secrets.json is the recommended path; Option 2: token set directly in this script)
+# Check for secrets.json first — it determines whether BRITIVE_TENANT and BRITIVE_TOKEN
+# must be set here (Option 2) or are read from the file (Option 1, recommended).
 USE_SECRETS_FILE=false
 if [ -f "secrets.json" ]; then
     log_success "Found secrets.json - will use for secrets configuration"
     USE_SECRETS_FILE=true
 fi
 
-# Check if token is configured (only required when NOT using secrets.json)
-if [ "$USE_SECRETS_FILE" = false ] && [ "$BRITIVE_TOKEN" == "your-britive-token-here" ]; then
-    log_error "Please set BRITIVE_TOKEN in this script, or create a secrets.json file (recommended)"
-    log_info "Get your token from: Britive Console > System Administration > Broker Pools"
-    log_info "See README.md Option 1 for the secrets.json approach"
-    exit 1
+# When not using secrets.json, both BRITIVE_TENANT and BRITIVE_TOKEN must be set directly above
+if [ "$USE_SECRETS_FILE" = false ]; then
+    if [ "$BRITIVE_TENANT" == "your-tenant-subdomain-here" ]; then
+        log_error "Please set BRITIVE_TENANT in this script, or add it to secrets.json (recommended)"
+        log_info "This is the subdomain of your Britive URL (e.g., 'mycompany' for mycompany.britive-app.com)"
+        exit 1
+    fi
+    if [ "$BRITIVE_TOKEN" == "your-britive-token-here" ]; then
+        log_error "Please set BRITIVE_TOKEN in this script, or add it to secrets.json (recommended)"
+        log_info "Get your token from: Britive Console > System Administration > Broker Pools"
+        exit 1
+    fi
 fi
 
 # Check for required files
@@ -411,7 +423,10 @@ if [ "$USE_SECRETS_FILE" = true ]; then
         fi
     done
 else
-    # Fallback: Use BRITIVE_TOKEN from script configuration
+    # Fallback: use values set directly in this script (Option 2)
+    if [ "$BRITIVE_TENANT" != "your-tenant-subdomain-here" ]; then
+        create_or_update_secret "BRITIVE_TENANT" "$BRITIVE_TENANT" "Britive tenant subdomain"
+    fi
     if [ "$BRITIVE_TOKEN" != "your-britive-token-here" ]; then
         create_or_update_secret "BRITIVE_TOKEN" "$BRITIVE_TOKEN" "Britive Access Broker token"
     fi
@@ -486,7 +501,9 @@ done
 
 SECRETS_JSON_ARRAY+="]"
 
-# Use jq to properly inject secrets array into task definition
+# Use jq to properly inject secrets array and runtime values into the task definition template.
+# BRITIVE_TENANT and BRITIVE_TOKEN arrive as environment variables via the secrets array
+# (injected from AWS Secrets Manager at task launch time) — no plain env var needed here.
 jq --argjson secrets "$SECRETS_JSON_ARRAY" \
    --arg image "$ECR_REPO_URI:latest" \
    --arg exec_role "$EXECUTION_ROLE_ARN" \

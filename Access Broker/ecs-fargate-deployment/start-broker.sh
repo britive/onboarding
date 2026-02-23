@@ -67,6 +67,31 @@ if [ ! -z "$EKS_CLUSTER_NAME" ] && [ ! -z "$AWS_REGION" ]; then
     echo "EKS kubeconfig configured"
 fi
 
+# Generate broker-config.yml
+# The broker requires this file to connect to the Britive platform.
+# BRITIVE_TENANT  = your tenant subdomain (e.g. "mycompany" for mycompany.britive-app.com)
+# BRITIVE_TOKEN   = broker pool authentication token (injected from Secrets Manager)
+# This is the ECS Fargate equivalent of the ConfigMap used in Kubernetes deployments.
+if [ -z "$BRITIVE_TENANT" ]; then
+    echo "ERROR: BRITIVE_TENANT is not set. Set it in deploy.sh before deploying."
+    exit 1
+fi
+if [ -z "$BRITIVE_TOKEN" ]; then
+    echo "ERROR: BRITIVE_TOKEN is not set. Check Secrets Manager configuration."
+    exit 1
+fi
+
+mkdir -p /root/broker/config
+cat > /root/broker/config/broker-config.yml << EOF
+config:
+  version: 2
+  bootstrap:
+    tenant_subdomain: ${BRITIVE_TENANT}
+    authentication_token: "${BRITIVE_TOKEN}"
+EOF
+chmod 600 /root/broker/config/broker-config.yml
+echo "Broker config generated for tenant: $BRITIVE_TENANT"
+
 echo "Starting Britive broker..."
 cd /root/broker
 # Note: broker stdout/stderr is written to /var/log/britive-broker.log (visible inside container).
