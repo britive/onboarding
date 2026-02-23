@@ -2,7 +2,10 @@
 # This Dockerfile creates a container image for running the Britive Access Broker
 # on AWS ECS Fargate (serverless container orchestration)
 
-FROM --platform=linux/amd64 ubuntu:24.04
+# TARGETPLATFORM defaults to linux/amd64 to match the X86_64 ECS task definition.
+# Override at build time if needed: docker build --build-arg TARGETPLATFORM=linux/arm64
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=$TARGETPLATFORM ubuntu:24.04
 
 # Avoid prompts from apt
 ENV DEBIAN_FRONTEND=noninteractive
@@ -40,7 +43,7 @@ RUN mkdir -p /root/broker/config \
     && chmod 700 /root/broker/secrets
 
 # Copy Britive broker JAR
-COPY britive-broker-1.0.0.jar /root/broker/
+COPY britive-broker-2.0.0.jar /root/broker/
 
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

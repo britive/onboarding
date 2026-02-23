@@ -53,7 +53,7 @@ Before deploying, ensure you have:
    - Create a new pool or select an existing one
    - Copy the broker pool token
 
-5. **britive-broker-1.0.0.jar** file in this directory
+5. **britive-broker-2.0.0.jar** file or later in this directory
 
 6. **VPC with subnets** (default VPC works, or specify custom VPC)
 
@@ -67,7 +67,7 @@ from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token
 1. Copy the broker JAR file to this directory:
 
    ```bash
-   cp /path/to/britive-broker-1.0.0.jar .
+   cp /path/to/britive-broker-2.0.0.jar .
    ```
 
 2. Edit `secrets.json` and configure your secrets:
@@ -100,7 +100,7 @@ from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token
 1. Copy the broker JAR file:
 
    ```bash
-   cp /path/to/britive-broker-1.0.0.jar .
+   cp /path/to/britive-broker-2.0.0.jar .
    ```
 
 2. Edit `deploy.sh` and set your token directly:

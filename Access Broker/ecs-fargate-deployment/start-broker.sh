@@ -71,7 +71,7 @@ echo "Starting Britive broker..."
 cd /root/broker
 # Note: broker stdout/stderr is written to /var/log/britive-broker.log (visible inside container).
 # Startup messages from this script are captured by supervisord → CloudWatch via awslogs driver.
-java -jar britive-broker-1.0.0.jar >> /var/log/britive-broker.log 2>&1 &
+java -jar britive-broker-2.0.0.jar >> /var/log/britive-broker.log 2>&1 &
 BROKER_PID=$!
 
 echo "Broker started with PID: $BROKER_PID"
