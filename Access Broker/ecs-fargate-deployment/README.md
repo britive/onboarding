@@ -1,6 +1,3 @@
-# DRAFT - Beta Deployment strategy
-
-
 # Britive Access Broker - AWS ECS Fargate Deployment
 
 This directory contains everything needed to deploy the Britive Access Broker on AWS ECS Fargate (serverless container orchestration).
@@ -63,6 +60,9 @@ Before deploying, ensure you have:
 ## Quick Start
 
 ### Option 1: Using secrets.json (Recommended)
+
+With this option, `BRITIVE_TOKEN` in `deploy.sh` can be left as the placeholder — the token is read
+from `secrets.json` instead. `deploy.sh` detects `secrets.json` before the token check.
 
 1. Copy the broker JAR file to this directory:
 
@@ -249,8 +249,8 @@ Secrets are available to the broker in two ways:
 ### Networking Requirements
 
 - **VPC**: Tasks run in your VPC
-- **Subnets**: Specify subnets with internet access (for Britive connectivity)
-- **Security Group**: Allow outbound HTTPS (443) for Britive API
+- **Subnets**: Specify subnets with internet access (for Britive connectivity). By default `deploy.sh` uses the first 2 subnets discovered; edit the `head -2` line in `deploy.sh` to use more AZs.
+- **Security Group**: Allow outbound HTTPS (443) for Britive API. No inbound rules are required.
 - **Public IP**: Enabled by default (or use NAT Gateway for private subnets)
 
 ## Files

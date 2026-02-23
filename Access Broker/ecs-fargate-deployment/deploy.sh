@@ -73,10 +73,19 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if token is configured
-if [ "$BRITIVE_TOKEN" == "your-britive-token-here" ]; then
-    log_error "Please set BRITIVE_TOKEN in this script before running"
+# Check for secrets.json first - it determines whether BRITIVE_TOKEN must be set here
+# (Option 1: secrets.json is the recommended path; Option 2: token set directly in this script)
+USE_SECRETS_FILE=false
+if [ -f "secrets.json" ]; then
+    log_success "Found secrets.json - will use for secrets configuration"
+    USE_SECRETS_FILE=true
+fi
+
+# Check if token is configured (only required when NOT using secrets.json)
+if [ "$USE_SECRETS_FILE" = false ] && [ "$BRITIVE_TOKEN" == "your-britive-token-here" ]; then
+    log_error "Please set BRITIVE_TOKEN in this script, or create a secrets.json file (recommended)"
     log_info "Get your token from: Britive Console > System Administration > Broker Pools"
+    log_info "See README.md Option 1 for the secrets.json approach"
     exit 1
 fi
 
@@ -90,13 +99,6 @@ for file in "${REQUIRED_FILES[@]}"; do
     fi
 done
 log_success "Required files found"
-
-# Check for secrets.json (optional but recommended)
-USE_SECRETS_FILE=false
-if [ -f "secrets.json" ]; then
-    log_success "Found secrets.json - will use for secrets configuration"
-    USE_SECRETS_FILE=true
-fi
 
 # Check AWS CLI
 log_info "Checking AWS CLI..."
@@ -115,6 +117,16 @@ fi
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 log_success "AWS CLI configured - Account: $AWS_ACCOUNT_ID, Region: $AWS_REGION"
+
+# Check jq
+log_info "Checking jq..."
+if ! command -v jq &> /dev/null; then
+    log_error "jq not found. Please install it:"
+    log_info "  macOS: brew install jq"
+    log_info "  Linux: apt install jq"
+    exit 1
+fi
+log_success "jq is available"
 
 # Check Docker
 log_info "Checking Docker..."
@@ -510,7 +522,8 @@ else
     log_success "ECS cluster exists"
 fi
 
-# Convert subnet IDs to JSON array
+# Convert subnet IDs to JSON array (limit to 2 subnets for the service network config;
+# for higher availability across more AZs, increase or remove the head -2 limit)
 SUBNET_ARRAY=$(echo "$SUBNET_IDS" | tr ',' '\n' | head -2 | jq -R . | jq -s .)
 
 # Create or update ECS service
