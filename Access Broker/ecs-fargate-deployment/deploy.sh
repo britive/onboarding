@@ -259,6 +259,12 @@ log_info "Setting up CloudWatch log group..."
 aws logs create-log-group --log-group-name "/ecs/britive-broker" --region "$AWS_REGION" 2>/dev/null || true
 log_success "CloudWatch log group ready"
 
+# Ensure the ECS service-linked role exists (required for CreateService; only needs to be
+# created once per AWS account and is otherwise a no-op)
+log_info "Ensuring ECS service-linked role exists..."
+aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com 2>/dev/null || true
+log_success "ECS service-linked role ready"
+
 # Create or get IAM roles
 log_info "Setting up IAM roles..."
 
