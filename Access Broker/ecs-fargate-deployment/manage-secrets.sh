@@ -271,11 +271,6 @@ export_secrets() {
         first=true
         for secret_name in $SECRETS; do
             short_name="${secret_name#${SECRETS_PREFIX}/}"
-            value=$(aws secretsmanager get-secret-value \
-                --secret-id "$secret_name" \
-                --query "SecretString" \
-                --output text \
-                --region "$AWS_REGION" 2>/dev/null || echo "")
 
             if [ "$first" = true ]; then
                 first=false
@@ -283,6 +278,7 @@ export_secrets() {
                 echo ","
             fi
 
+            # Values are intentionally not fetched here; use 'get <name>' to retrieve individual values
             echo -n "    \"${short_name}\": \"***HIDDEN***\""
         done
     fi
@@ -367,7 +363,8 @@ EOF
 
     rm -f /tmp/secrets-policy.json
 
-    log_success "IAM permissions updated for ${#SECRET_ARNS[@]} secrets"
+    SECRET_COUNT=$(echo "$SECRET_ARNS" | tr '\t' '\n' | grep -c . || echo 0)
+    log_success "IAM permissions updated for ${SECRET_COUNT} secrets"
 }
 
 show_help() {

@@ -11,12 +11,6 @@
       "name": "britive-broker",
       "image": "REPLACE_WITH_ECR_IMAGE",
       "essential": true,
-      "portMappings": [
-        {
-          "containerPort": 22,
-          "protocol": "tcp"
-        }
-      ],
       "environment": [
         {
           "name": "KUBECONFIG",
