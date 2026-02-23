@@ -6,7 +6,7 @@
 # Prerequisites:
 # 1. AWS CLI installed and configured
 # 2. Docker installed and running
-# 3. britive-broker-1.0.0.jar in current directory
+# 3. britive-broker-2.0.0.jar in current directory
 #
 # Usage:
 # 1. Set configuration variables below
@@ -91,7 +91,7 @@ fi
 
 # Check for required files
 log_info "Checking required files..."
-REQUIRED_FILES=("britive-broker-1.0.0.jar" "supervisord.conf" "start-broker.sh" "token-generator.sh" "task-definition.json")
+REQUIRED_FILES=("britive-broker-2.0.0.jar" "supervisord.conf" "start-broker.sh" "token-generator.sh" "task-definition.json")
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         log_error "$file not found in current directory"
