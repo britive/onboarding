@@ -52,6 +52,9 @@ SECURITY_GROUP_ID=""   # Security group for the tasks
 # Number of tasks (replicas)
 DESIRED_COUNT=2
 
+# CPU architecture — set to X86_64 or ARM64
+CPU_ARCH="X86_64"
+
 #==============================================================================
 # DO NOT MODIFY BELOW THIS LINE
 #==============================================================================
@@ -218,16 +221,25 @@ log_info "Authenticating Docker with ECR..."
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 log_success "Docker authenticated with ECR"
 
+# Map ECS CPU_ARCH to Docker platform and expected architecture label
+if [ "$CPU_ARCH" = "ARM64" ]; then
+    DOCKER_PLATFORM="linux/arm64"
+    EXPECTED_DOCKER_ARCH="arm64"
+else
+    DOCKER_PLATFORM="linux/amd64"
+    EXPECTED_DOCKER_ARCH="amd64"
+fi
+
 # Build Docker image
-log_info "Building Docker image (AMD64 architecture)..."
-docker build --platform linux/amd64 -t "$ECR_REPO_NAME:latest" .
+log_info "Building Docker image ($CPU_ARCH architecture)..."
+docker build --platform "$DOCKER_PLATFORM" -t "$ECR_REPO_NAME:latest" .
 
 # Verify architecture
 ARCH=$(docker inspect "$ECR_REPO_NAME:latest" --format '{{.Architecture}}')
 log_info "Image architecture: $ARCH"
 
-if [ "$ARCH" != "amd64" ]; then
-    log_error "Image architecture is not amd64. Fargate requires amd64 images."
+if [ "$ARCH" != "$EXPECTED_DOCKER_ARCH" ]; then
+    log_error "Image architecture is $ARCH but expected $EXPECTED_DOCKER_ARCH for CPU_ARCH=$CPU_ARCH."
     exit 1
 fi
 log_success "Image built successfully"
@@ -515,11 +527,13 @@ jq --argjson secrets "$SECRETS_JSON_ARRAY" \
    --arg exec_role "$EXECUTION_ROLE_ARN" \
    --arg task_role "$TASK_ROLE_ARN" \
    --arg region "$AWS_REGION" \
+   --arg cpu_arch "$CPU_ARCH" \
    '.executionRoleArn = $exec_role |
     .taskRoleArn = $task_role |
     .containerDefinitions[0].image = $image |
     .containerDefinitions[0].secrets = $secrets |
-    .containerDefinitions[0].logConfiguration.options["awslogs-region"] = $region' \
+    .containerDefinitions[0].logConfiguration.options["awslogs-region"] = $region |
+    .runtimePlatform.cpuArchitecture = $cpu_arch' \
    task-definition.json > task-definition-deploy.json
 
 log_success "Task definition prepared with $(echo "$ALL_SECRET_ARNS" | wc -l | tr -d ' ') secrets"

@@ -8,17 +8,24 @@
 # 2. Docker installed and running
 # 3. kubectl installed and configured for your AKS cluster
 # 4. AKS cluster running
-# 5. britive-broker-1.0.0.jar in current directory
+# 5. britive-broker-<VERSION>.jar in current directory
 #
 # Usage:
 # 1. Set BRITIVE_TOKEN below with your broker pool token from Britive console
-# 2. Run: ./deploy.sh
+# 2. Run: ./deploy.sh [--broker-version <version>]
+#
+# Options:
+#   --broker-version, -v    Broker JAR version to use (default: 2.0.0)
+#                           Example: ./deploy.sh --broker-version 1.5.0
 
 set -e
 
 #==============================================================================
 # CONFIGURATION - MODIFY THESE VALUES
 #==============================================================================
+
+# Broker version (can also be overridden via --broker-version flag)
+BROKER_VERSION="2.0.0"
 
 # Your Britive broker pool token (required)
 # Get this from: Britive Console > System Administration > Broker Pools > Create/Select Pool > Token
@@ -37,6 +44,26 @@ IMAGE_TAG="latest"
 #==============================================================================
 # DO NOT MODIFY BELOW THIS LINE
 #==============================================================================
+
+# Parse command-line arguments (override CONFIGURATION defaults)
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --broker-version|-v)
+            if [ -z "$2" ] || [[ "$2" == --* ]]; then
+                echo "ERROR: --broker-version requires a value (e.g. --broker-version 2.0.0)"
+                exit 1
+            fi
+            BROKER_VERSION="$2"
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: ./deploy.sh [--broker-version <version>]"
+            exit 1
+            ;;
+    esac
+    shift
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -70,8 +97,9 @@ fi
 
 # Check for required files
 log_info "Checking required files..."
-if [ ! -f "britive-broker-1.0.0.jar" ]; then
-    log_error "britive-broker-1.0.0.jar not found in current directory"
+log_info "Using broker version: $BROKER_VERSION"
+if [ ! -f "britive-broker-${BROKER_VERSION}.jar" ]; then
+    log_error "britive-broker-${BROKER_VERSION}.jar not found in current directory"
     log_info "Please copy the broker JAR file to this directory"
     exit 1
 fi
@@ -203,8 +231,8 @@ az acr login --name "$ACR_NAME"
 log_success "Docker authenticated with ACR"
 
 # Build Docker image
-log_info "Building Docker image (AMD64 architecture)..."
-docker build --platform linux/amd64 -t "$IMAGE_NAME:$IMAGE_TAG" .
+log_info "Building Docker image (AMD64 architecture, broker version: $BROKER_VERSION)..."
+docker build --platform linux/amd64 --build-arg BROKER_VERSION="$BROKER_VERSION" -t "$IMAGE_NAME:$IMAGE_TAG" .
 
 # Verify architecture
 ARCH=$(docker inspect "$IMAGE_NAME:$IMAGE_TAG" --format '{{.Architecture}}')

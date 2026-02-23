@@ -43,7 +43,7 @@
     }
   ],
   "runtimePlatform": {
-    "cpuArchitecture": "X86_64",
+    "cpuArchitecture": "REPLACE_WITH_CPU_ARCH",
     "operatingSystemFamily": "LINUX"
   }
 }

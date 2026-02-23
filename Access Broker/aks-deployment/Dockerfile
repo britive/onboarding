@@ -31,8 +31,11 @@ RUN mkdir -p /root/broker/config \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /var/run/sshd
 
+# Broker version (passed in via --build-arg BROKER_VERSION)
+ARG BROKER_VERSION=2.0.0
+
 # Copy Britive broker JAR
-COPY britive-broker-1.0.0.jar /root/broker/
+COPY britive-broker-${BROKER_VERSION}.jar /root/broker/
 
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
