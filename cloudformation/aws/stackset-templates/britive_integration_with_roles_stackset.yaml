@@ -1,20 +1,21 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: StackSet template to deploy Britive integration resources with sample JIT roles across multiple AWS accounts in an organization or folder. Includes ReadOnly, PowerUser, EC2 Admin, and S3 Admin roles for testing.
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: Britive Sourced Information
+          default: Britive Configuration
         Parameters:
           - TenantName
           - SamlMetadataDocumentXmlContent
           - DeployAwsInvalidationFeature
     ParameterLabels:
       SamlMetadataDocumentXmlContent:
-        default: The contents of the SAML metadata document downloaded from your Britive tenant.
+        default: SAML Metadata Document XML
       TenantName:
-        default: The name of the Britive tenant (if your tenant URL is example.britive-app.com then your tenant name is example).
+        default: Britive Tenant Name
       DeployAwsInvalidationFeature:
-        default: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
+        default: Enable AWS Invalidation Feature
 Parameters:
   SamlMetadataDocumentXmlContent:
     Description: The XML content of the SAML metadata document downloaded from the Britive tenant.

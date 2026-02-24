@@ -16,7 +16,7 @@ Metadata:
           default: Britive Sourced Information
         Parameters:
           - TenantName
-          - SamlMetadataDocumentXmlComent
+          - SamlMetadataDocumentXmlContent
           - DeployAwsInvalidationFeature
     ParameterLabels:
       RootOuId:
@@ -59,9 +59,9 @@ Parameters:
     Description: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
     Type: String
     AllowedValues:
-      - yes
-      - no
-    Default: yes
+      - true
+      - false
+    Default: true
 Resources:
   MasterAccountStack:
     Type: AWS::CloudFormation::Stack

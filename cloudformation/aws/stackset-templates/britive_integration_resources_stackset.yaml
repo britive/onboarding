@@ -1,45 +1,44 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-  Britive Integration Resources for Single AWS Account Deployment.
+  StackSet template to deploy Britive integration resources across multiple AWS accounts.
 
   This template creates the core resources required for Britive AWS integration:
   - SAML Identity Provider for federated authentication
   - Integration Role for Britive to discover and manage IAM roles
-  - Optional AWS Invalidation feature for credential revocation
 
-  Use this template for:
-  - Single account deployments
-  - Proof of concept (POC) testing
-  - Accounts not part of AWS Organizations
+  Deploy this template using CloudFormation StackSets to automatically provision
+  Britive integration across your AWS Organization or specific OUs.
 
-  For multi-account deployments, use the stackset-templates instead.
-  For templates with sample JIT roles, use britive_integration_with_roles.yaml.
+  For templates that include sample JIT roles, use britive_integration_with_roles_stackset.yaml.
 
 # =============================================================================
 # METADATA
 # =============================================================================
-# Console interface configuration for better UX when deploying via AWS Console.
+# Console interface configuration for better user experience in AWS Console.
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: Britive Sourced Information
+          default: Britive Configuration
         Parameters:
           - TenantName
           - SamlMetadataDocumentXmlContent
           - DeployAwsInvalidationFeature
     ParameterLabels:
       SamlMetadataDocumentXmlContent:
-        default: The contents of the SAML metadata document downloaded from your Britive tenant.
+        default: SAML Metadata Document XML
       TenantName:
-        default: The name of the Britive tenant (if your tenant URL is example.britive-app.com then your tenant name is example).
+        default: Britive Tenant Name
       DeployAwsInvalidationFeature:
-        default: A flag used to indicate whether additional IAM permissions should be added to the integration role in support of the Britive AWS Invalidation feature.
+        default: Enable AWS Invalidation Feature
 
 # =============================================================================
 # PARAMETERS
 # =============================================================================
+# TenantName: Your Britive tenant identifier (e.g., "mycompany" for mycompany.britive-app.com)
+# SamlMetadataDocumentXmlContent: SAML metadata XML downloaded from Britive tenant
+# DeployAwsInvalidationFeature: Enables credential invalidation capabilities
 
 Parameters:
   SamlMetadataDocumentXmlContent:
@@ -61,7 +60,7 @@ Parameters:
 # =============================================================================
 
 Conditions:
-  # Determines whether to add AWS Invalidation permissions to the integration role
+  # Controls whether AWS Invalidation feature permissions are added
   ShouldDeployAwsInvalidationFeature: !Equals [!Ref DeployAwsInvalidationFeature, true]
 
 # =============================================================================
@@ -72,9 +71,8 @@ Resources:
   # ---------------------------------------------------------------------------
   # SAML Identity Provider
   # ---------------------------------------------------------------------------
-  # Creates a SAML 2.0 identity provider that establishes trust between AWS
-  # and your Britive tenant. This enables federated authentication where users
-  # sign in through Britive and receive temporary AWS credentials.
+  # Establishes trust between AWS and Britive for federated authentication.
+  # Users authenticate through Britive, which issues SAML assertions to AWS.
   BritiveSamlProvider:
     Type: AWS::IAM::SAMLProvider
     Properties:
@@ -84,17 +82,14 @@ Resources:
   # ---------------------------------------------------------------------------
   # Integration Role
   # ---------------------------------------------------------------------------
-  # This role is assumed by Britive to discover and manage IAM roles.
+  # This role is used by Britive to:
+  # - Discover available IAM roles in the account (IAMReadOnlyAccess)
+  # - Query AWS Organizations structure (AWSOrganizationsReadOnlyAccess)
   #
-  # Permissions:
-  # - IAMReadOnlyAccess: Lists IAM roles, policies, and users
-  # - AWSOrganizationsReadOnlyAccess: Queries organizational structure
-  #
-  # Trust Policy Security:
-  # - Only accepts SAML assertions from the Britive identity provider
-  # - Validates the SAML audience claim (https://signin.aws.amazon.com/saml)
-  # - Supports SetSourceIdentity for CloudTrail attribution
-  # - Supports TagSession for session tagging
+  # Trust Policy:
+  # - Only allows SAML-authenticated sessions from the Britive IdP
+  # - Requires the AWS SAML audience claim for security
+  # - Supports SetSourceIdentity and TagSession for audit trails
   BritiveIntegrationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -119,16 +114,14 @@ Resources:
       RoleName: !Sub 'britive-${TenantName}-integration-role'
 
   # ---------------------------------------------------------------------------
-  # AWS Invalidation Feature Policy (Conditional)
+  # AWS Invalidation Feature Policy (Optional)
   # ---------------------------------------------------------------------------
-  # This optional inline policy enables the AWS Invalidation feature, which
-  # allows Britive to immediately revoke user access by attaching deny policies.
+  # When enabled, this policy allows Britive to manage deny policies for
+  # credential invalidation. This is used to immediately revoke access when
+  # a user's session is terminated in Britive.
   #
-  # When a session is terminated in Britive, it creates a deny policy that
-  # blocks the user's access until their credentials naturally expire.
-  #
-  # Security: Permissions are scoped to 'britive/managed/*' policy path only,
-  # preventing modification of any other IAM policies in the account.
+  # Permissions are restricted to policies under the 'britive/managed/*' path
+  # to ensure Britive cannot modify other IAM policies in the account.
   BritiveIntegrationRoleInlinePolicyForAwsInvalidation:
     Type: AWS::IAM::Policy
     Condition: ShouldDeployAwsInvalidationFeature
@@ -153,7 +146,7 @@ Resources:
 # =============================================================================
 # OUTPUTS
 # =============================================================================
-# Use these values when configuring the AWS integration in your Britive tenant.
+# These values are needed to configure the Britive tenant integration.
 
 Outputs:
   BritiveSamlProviderArn:

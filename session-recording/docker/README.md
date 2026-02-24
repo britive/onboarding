@@ -17,49 +17,35 @@ By separating the frontend (web application) from the backend (`guacd`), Guacamo
 This example helps with setting up the Britive broker and Guacd service under one Docker package. The following steps would allow for a quick deployment of these service to create ephemeral user session for RDP and SSH and record the same with the help of the guacd service.
 
 1. Copy this directory on the desired server or virtual machine.
-2. Download and store the broker .jar install from the Britive admin interface.
-3. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
-4. Generate a JSON secret key (update the text as needed in the following command):  
+2. Update the broker-config.yml with the desired tenant subdomain and the token for the broker bootstrap.
+3. Generate a JSON secret key (update the text as needed in the following command):
 
-    On Linux:
+  ```sh
+  echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
+  ```
 
-      ```sh
-      echo -n "britiveallthethings" | md5 # `md5` on macos, `md5sum` on linux
-      ```
+  Update the docker-compose.yml file with the generated key.
 
-    On Windows:
+  ```yaml
+  guacamole:
+    environment:
+      JSON_SECRET_KEY: "<json secret key goes here>"
 
-    ```powershell
-    $input = "britiveallthethings"
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($input)
-    $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($bytes)
-    $md5 = [System.BitConverter]::ToString($hash) -replace "-", ""
-    $md5.ToLower()
-    ```
+  ```
 
-      Update the docker-compose.yml file with the generated key.
+4. While in the directory run Docker build process:
 
-      ```yaml
-      guacamole:
-        environment:
-          JSON_SECRET_KEY: "<json secret key goes here>"
+```sh
+docker build -t broker-docker .
+```
 
-      ```
+5. Once complete, run the broker compose to stand up the services:
 
-5. While in the directory run Docker build process:
-
-    ```sh
-    docker build -t broker-docker .
-    ```
-
-6. Once complete, run the broker compose to stand up the services:
-
-    ```sh
-    docker compose up
-    ```
+```sh
+docker compose up
+```
 
 This would complete the broker and guacamole install. The broker service would start automatically and you should see an instance of the broker running on britive admin portal.
 
-> Info
->
-> The synchronization option allow you to synchronize the recording to your AWS S3 bucket.
+Note:
+The synchronization option allow you to synchronize the recording to your AWS S3 bucket.
