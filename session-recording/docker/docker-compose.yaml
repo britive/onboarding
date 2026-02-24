@@ -3,9 +3,9 @@ services:
     image: broker-docker:latest
     environment:
 #      britive.broker.authentication.token: demo
-      BRITIVE_TOKEN: TOKEN HERE!
+      BRITIVE_TOKEN: BRITIVE_TOKEN
     ports:
-      - 2222:22
+      - "2222:22"
   guacd:
     image: guacamole/guacd
     hostname: guacd
@@ -15,7 +15,7 @@ services:
     ports:
       - "4822:4822"
     volumes:
-      - recordings:/home/guacd/recordings
+      - ./recordings:/home/guacd/recordings
   guacamole:
     image: guacamole/guacamole
     container_name: guacamole

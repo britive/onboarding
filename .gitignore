@@ -706,6 +706,9 @@ service_account_creds.json
 sample.py
 *britive/sample.py
 
+.claude/
+.claude/*
+
 .vscode/
 .vscode/*
 parameters.json

@@ -1,0 +1,6 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your values
+
+saml_metadata_document_xml_content = "<paste xml saml metadata content obtained from admin page in the britive ui>"
+tenant_name                        = "<name of your britive tenant - omit '.britive-app.com'>"
+deploy_aws_invalidation_feature    = true
