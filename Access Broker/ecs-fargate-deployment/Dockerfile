@@ -42,8 +42,10 @@ RUN mkdir -p /root/broker/config \
     && mkdir -p /var/run/sshd \
     && chmod 700 /root/broker/secrets
 
-# Copy Britive broker JAR
-COPY britive-broker-2.0.0.jar /root/broker/
+# Copy Britive broker JAR (version auto-detected by deploy.sh)
+ARG BROKER_JAR=britive-broker-2.0.1.jar
+COPY ${BROKER_JAR} /root/broker/
+RUN ln -s /root/broker/${BROKER_JAR} /root/broker/britive-broker.jar
 
 # Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
