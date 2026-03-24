@@ -53,7 +53,7 @@ Before deploying, ensure you have:
      (e.g., `mycompany` for `mycompany.britive-app.com`) — find it under System Administration > Settings
    - **Broker pool token**: navigate to System Administration > Broker Pools, create or select a pool, and copy the token
 
-5. **britive-broker-2.0.0.jar** file or later in this directory
+5. **britive-broker-*.jar** file in this directory (version is auto-detected at deploy time)
 
 6. **VPC with subnets** (default VPC works, or specify custom VPC)
 
@@ -68,7 +68,7 @@ placeholders when using this option.
 1. Copy the broker JAR file to this directory:
 
    ```bash
-   cp /path/to/britive-broker-2.0.0.jar .
+   cp /path/to/britive-broker-<version>.jar .
    ```
 
 2. Edit `secrets.json` and fill in your tenant subdomain and token:
@@ -97,7 +97,9 @@ placeholders when using this option.
 
    ```bash
    chmod +x deploy.sh manage-secrets.sh
+   
    ./deploy.sh
+   
    ```
 
 ### Option 2: Direct Configuration (no secrets.json)
@@ -105,7 +107,7 @@ placeholders when using this option.
 1. Copy the broker JAR file:
 
    ```bash
-   cp /path/to/britive-broker-2.0.0.jar .
+   cp /path/to/britive-broker-<version>.jar .
    ```
 
 2. Edit `deploy.sh` and set both values directly:
@@ -266,7 +268,8 @@ Secrets are available to the broker in two ways:
 
 | File | Description |
 | ---- | ----------- |
-| `deploy.sh` | Automated deployment script |
+| `deploy.sh` | Automated deployment script (auto-detects broker JAR version) |
+| `destroy.sh` | Automated teardown of all deployed resources |
 | `manage-secrets.sh` | Secrets management CLI |
 | `secrets.json` | Secrets configuration file |
 | `task-definition.json` | ECS task definition template |
@@ -456,49 +459,22 @@ aws application-autoscaling put-scaling-policy \
 
 ## Cleanup
 
-To remove the deployment:
+Use the `destroy.sh` script to tear down all resources created by `deploy.sh`:
 
 ```bash
-# Delete service (stops all tasks)
-aws ecs update-service \
-    --cluster britive-broker-cluster \
-    --service britive-broker-service \
-    --desired-count 0 \
-    --region us-west-2
+# Interactive mode — prompts for confirmation before deleting
+./destroy.sh
 
-aws ecs delete-service \
-    --cluster britive-broker-cluster \
-    --service britive-broker-service \
-    --region us-west-2
+# Skip confirmation (for CI/CD or scripted teardowns)
+./destroy.sh --force
 
-# Delete cluster
-aws ecs delete-cluster --cluster britive-broker-cluster --region us-west-2
-
-# Delete task definition (all revisions)
-TASK_DEFS=$(aws ecs list-task-definitions --family-prefix britive-broker --query "taskDefinitionArns" --output text --region us-west-2)
-for td in $TASK_DEFS; do
-    aws ecs deregister-task-definition --task-definition $td --region us-west-2
-done
-
-# Delete ECR repository
-aws ecr delete-repository --repository-name britive-broker --force --region us-west-2
-
-# Delete all secrets
-SECRETS=$(aws secretsmanager list-secrets --filter Key=name,Values="britive-broker/secrets" --query "SecretList[*].Name" --output text --region us-west-2)
-for secret in $SECRETS; do
-    aws secretsmanager delete-secret --secret-id $secret --force-delete-without-recovery --region us-west-2
-done
-
-# Delete log group
-aws logs delete-log-group --log-group-name /ecs/britive-broker --region us-west-2
-
-# Delete security group
-aws ec2 delete-security-group --group-name britive-broker-sg --region us-west-2
-
-# Delete IAM roles (if created by this deployment)
-aws iam delete-role-policy --role-name britive-broker-task-role --policy-name britive-broker-policy
-aws iam delete-role --role-name britive-broker-task-role
+# Destroy everything except Secrets Manager secrets (useful for redeployment)
+./destroy.sh --keep-secrets
 ```
+
+The script deletes resources in the correct order: ECS service (scaled to 0 first) → task definitions → cluster → ECR repository → secrets → IAM roles/policies → CloudWatch logs → security group.
+
+The shared `ecsTaskExecutionRole` is not deleted — only the `britive-secrets-access` inline policy added by `deploy.sh` is removed.
 
 ## Cost Optimization
 

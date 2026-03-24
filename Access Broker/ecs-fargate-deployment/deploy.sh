@@ -6,7 +6,7 @@
 # Prerequisites:
 # 1. AWS CLI installed and configured
 # 2. Docker installed and running
-# 3. britive-broker-2.0.0.jar in current directory
+# 3. britive-broker-*.jar in current directory (version auto-detected)
 #
 # Usage:
 # 1. Set configuration variables below
@@ -104,9 +104,19 @@ if [ "$USE_SECRETS_FILE" = false ]; then
     fi
 fi
 
+# Auto-detect broker JAR
+log_info "Detecting broker JAR..."
+BROKER_JAR=$(ls britive-broker-*.jar 2>/dev/null | sort -V | tail -1)
+if [ -z "$BROKER_JAR" ]; then
+    log_error "No britive-broker-*.jar found in current directory"
+    exit 1
+fi
+BROKER_VERSION=$(echo "$BROKER_JAR" | sed 's/britive-broker-\(.*\)\.jar/\1/')
+log_success "Using broker: $BROKER_JAR (version $BROKER_VERSION)"
+
 # Check for required files
 log_info "Checking required files..."
-REQUIRED_FILES=("britive-broker-2.0.0.jar" "supervisord.conf" "start-broker.sh" "token-generator.sh" "task-definition.json")
+REQUIRED_FILES=("$BROKER_JAR" "supervisord.conf" "start-broker.sh" "token-generator.sh" "task-definition.json")
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         log_error "$file not found in current directory"
@@ -232,7 +242,7 @@ fi
 
 # Build Docker image
 log_info "Building Docker image ($CPU_ARCH architecture)..."
-docker build --platform "$DOCKER_PLATFORM" -t "$ECR_REPO_NAME:latest" .
+docker build --platform "$DOCKER_PLATFORM" --build-arg BROKER_JAR="$BROKER_JAR" -t "$ECR_REPO_NAME:latest" .
 
 # Verify architecture
 ARCH=$(docker inspect "$ECR_REPO_NAME:latest" --format '{{.Architecture}}')
