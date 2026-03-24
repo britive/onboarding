@@ -97,19 +97,13 @@ EOF
 chmod 600 /root/broker/config/broker-config.yml
 echo "Broker config generated for tenant: $BRITIVE_TENANT"
 
-# Find the broker JAR — respects BROKER_VERSION if set; otherwise uses any available version
-BROKER_VERSION="${BROKER_VERSION:-2.0.0}"
-JAR_FILE="/root/broker/britive-broker-${BROKER_VERSION}.jar"
-
-if [ ! -f "$JAR_FILE" ]; then
-    echo "WARNING: Expected JAR not found at $JAR_FILE — searching for any broker JAR..."
-    JAR_FILE=$(find /root/broker -maxdepth 1 -name "britive-broker-*.jar" | head -1)
-    if [ -z "$JAR_FILE" ]; then
-        echo "ERROR: No britive-broker-*.jar found in /root/broker/"
-        exit 1
-    fi
-    echo "Using: $JAR_FILE"
+# Find the broker JAR — uses any available version in /root/broker/
+JAR_FILE=$(find /root/broker -maxdepth 1 -name "britive-broker-*.jar" | head -1)
+if [ -z "$JAR_FILE" ]; then
+    echo "ERROR: No britive-broker-*.jar found in /root/broker/"
+    exit 1
 fi
+echo "Using: $JAR_FILE"
 
 echo "Starting Britive broker: $JAR_FILE"
 cd /root/broker

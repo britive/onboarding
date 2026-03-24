@@ -2,7 +2,8 @@
 # Runs the Britive Access Broker alongside an SSH server so that Guacamole
 # can open SSH sessions through it and record them to the shared EFS volume.
 
-FROM --platform=linux/amd64 ubuntu:24.04
+# check-lint-ignore=RedundantTargetPlatform
+FROM ubuntu:24.04
 
 USER root:0
 
@@ -52,8 +53,8 @@ RUN echo 'root:root' | chpasswd \
 
 EXPOSE 22
 
-# Broker version — override at build time: docker build --build-arg BROKER_VERSION=x.y.z
-ARG BROKER_VERSION=2.0.0
+# Broker version — set at build time by deploy.sh (auto-detected from JAR filename)
+ARG BROKER_VERSION
 
 # Copy Britive broker JAR
 COPY britive-broker-${BROKER_VERSION}.jar /root/broker/

@@ -55,11 +55,13 @@ All components share an **EFS filesystem** mounted at `/recordings` for raw Guac
 4. **britive-broker-\<version\>.jar** placed in `broker/`
 
    ```bash
-   cp /path/to/britive-broker-2.0.0.jar broker/
+   cp /path/to/britive-broker-2.0.1.jar broker/
    ```
 
+   > The deploy script auto-detects the version from the JAR filename. No need to edit any config — just place the JAR and run.
+
 5. **Britive Broker Pool Token** from the Britive console:
-   - Navigate to: System Administration > Broker Pools
+   - Navigate to: System Administration > Broker & Broker Pools
    - Create or select a pool, then copy the token
 
 ## Quick Start
@@ -89,7 +91,7 @@ All components share an **EFS filesystem** mounted at `/recordings` for raw Guac
 3. Place the broker JAR in `broker/`:
 
    ```bash
-   cp /path/to/britive-broker-2.0.0.jar broker/
+   cp /path/to/britive-broker-2.0.1.jar broker/
    ```
 
 4. Run the deployment:
@@ -114,7 +116,7 @@ Then run `./deploy.sh`.
 
 ```bash
 ./deploy.sh \
-  --broker-version 2.0.0 \
+  --broker-version 2.0.1 \
   --region us-west-2 \
   --cluster-name my-recording-cluster \
   --acm-cert-arn arn:aws:acm:us-west-2:123456789:certificate/abc-123
@@ -143,8 +145,8 @@ The script will:
 | `BRITIVE_TENANT`  | (placeholder)                | Britive tenant subdomain                 |
 | `BRITIVE_TOKEN`   | (placeholder)                | Broker pool token                        |
 | `JSON_SECRET_KEY` | (auto-generated)             | Guacamole JSON auth secret key           |
-| `BROKER_VERSION`  | `2.0.0`                      | Broker JAR version                       |
-| `AWS_REGION`      | `us-east-1`                  | AWS region                               |
+| `BROKER_VERSION`  | (auto-detected)              | Broker JAR version (from filename)       |
+| `AWS_REGION`      | `us-west-2`                  | AWS region                               |
 | `CLUSTER_NAME`    | `britive-session-recording`  | ECS cluster name                         |
 | `ENABLE_GUACSYNC` | `false`                      | Enable recording conversion + S3 sync    |
 | `S3_BUCKET`       | (empty)                      | S3 bucket for GuacSync                   |
@@ -157,7 +159,7 @@ The script will:
 
 | Flag                     | Description                                      |
 |--------------------------|--------------------------------------------------|
-| `--broker-version <ver>` | Override broker JAR version (default: `2.0.0`)  |
+| `--broker-version <ver>` | Override auto-detected broker JAR version        |
 | `--region <region>`      | AWS region                                       |
 | `--cluster-name <name>`  | ECS cluster name                                 |
 | `--enable-guacsync`      | Enable GuacSync service                          |
@@ -195,7 +197,7 @@ Secrets are stored in AWS Secrets Manager under `britive/session-recording/` and
 
 | Variable               | Default                         |
 |------------------------|---------------------------------|
-| `AWS_REGION`           | `us-east-1`                     |
+| `AWS_REGION`           | `us-west-2`                     |
 | `ECS_CLUSTER_NAME`     | `britive-session-recording`     |
 | `ECS_BROKER_SERVICE`   | `britive-session-recording-broker-service`    |
 | `ECS_GUACD_SERVICE`    | `britive-session-recording-guacd-service`     |
@@ -238,13 +240,13 @@ Secrets are stored in AWS Secrets Manager under `britive/session-recording/` and
 
 ```bash
 # Broker logs
-aws logs tail /ecs/britive-session-recording/broker --follow --region us-east-1
+aws logs tail /ecs/britive-session-recording/broker --follow --region us-west-2
 
 # Guacamole logs
-aws logs tail /ecs/britive-session-recording/guacamole --follow --region us-east-1
+aws logs tail /ecs/britive-session-recording/guacamole --follow --region us-west-2
 
 # GuacD logs
-aws logs tail /ecs/britive-session-recording/guacd --follow --region us-east-1
+aws logs tail /ecs/britive-session-recording/guacd --follow --region us-west-2
 ```
 
 ### Check service status
@@ -255,7 +257,7 @@ aws ecs describe-services \
   --services britive-session-recording-broker-service \
              britive-session-recording-guacd-service \
              britive-session-recording-guacamole-service \
-  --region us-east-1
+  --region us-west-2
 ```
 
 ### List running tasks
@@ -264,7 +266,7 @@ aws ecs describe-services \
 aws ecs list-tasks \
   --cluster britive-session-recording \
   --service-name britive-session-recording-broker-service \
-  --region us-east-1
+  --region us-west-2
 ```
 
 ### Common issues
@@ -281,16 +283,16 @@ aws ecs list-tasks \
 
 ```bash
 # Remove ECS services
-aws ecs update-service --cluster britive-session-recording --service britive-session-recording-broker-service   --desired-count 0 --region us-east-1
-aws ecs update-service --cluster britive-session-recording --service britive-session-recording-guacd-service    --desired-count 0 --region us-east-1
-aws ecs update-service --cluster britive-session-recording --service britive-session-recording-guacamole-service --desired-count 0 --region us-east-1
+aws ecs update-service --cluster britive-session-recording --service britive-session-recording-broker-service   --desired-count 0 --region us-west-2
+aws ecs update-service --cluster britive-session-recording --service britive-session-recording-guacd-service    --desired-count 0 --region us-west-2
+aws ecs update-service --cluster britive-session-recording --service britive-session-recording-guacamole-service --desired-count 0 --region us-west-2
 
-aws ecs delete-service --cluster britive-session-recording --service britive-session-recording-broker-service    --region us-east-1
-aws ecs delete-service --cluster britive-session-recording --service britive-session-recording-guacd-service     --region us-east-1
-aws ecs delete-service --cluster britive-session-recording --service britive-session-recording-guacamole-service --region us-east-1
+aws ecs delete-service --cluster britive-session-recording --service britive-session-recording-broker-service    --region us-west-2
+aws ecs delete-service --cluster britive-session-recording --service britive-session-recording-guacd-service     --region us-west-2
+aws ecs delete-service --cluster britive-session-recording --service britive-session-recording-guacamole-service --region us-west-2
 
 # Delete ECS cluster
-aws ecs delete-cluster --cluster britive-session-recording --region us-east-1
+aws ecs delete-cluster --cluster britive-session-recording --region us-west-2
 
 # Delete secrets (use with caution)
 ./manage-secrets.sh delete BRITIVE_TOKEN
@@ -298,7 +300,7 @@ aws ecs delete-cluster --cluster britive-session-recording --region us-east-1
 ./manage-secrets.sh delete JSON_SECRET_KEY
 
 # Remove ECR images
-aws ecr delete-repository --repository-name britive-session-recording/broker --force --region us-east-1
+aws ecr delete-repository --repository-name britive-session-recording/broker --force --region us-west-2
 ```
 
 > **Note:** EFS filesystem and ALB are not deleted by these commands. Delete them manually via the AWS console or CLI if no longer needed.

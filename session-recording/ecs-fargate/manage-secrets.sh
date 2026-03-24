@@ -22,7 +22,7 @@ set -e
 # CONFIGURATION
 #==============================================================================
 
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-us-west-2}"
 SECRETS_PREFIX="britive/session-recording"
 ECS_CLUSTER_NAME="${ECS_CLUSTER_NAME:-britive-session-recording}"
 
@@ -385,7 +385,7 @@ show_help() {
     echo "  update-iam                  Update IAM permissions for all secrets"
     echo ""
     echo "Environment Variables:"
-    echo "  AWS_REGION              AWS region (default: us-east-1)"
+    echo "  AWS_REGION              AWS region (default: us-west-2)"
     echo "  ECS_CLUSTER_NAME        ECS cluster name (default: britive-session-recording)"
     echo "  ECS_BROKER_SERVICE      Broker service name (default: britive-sr-broker-service)"
     echo "  ECS_GUACD_SERVICE       GuacD service name (default: britive-sr-guacd-service)"
