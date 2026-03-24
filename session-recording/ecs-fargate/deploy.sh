@@ -14,8 +14,8 @@
 #   ./deploy.sh [options]
 #
 # Options:
-#   --broker-version <ver>    Broker JAR version to use (default: 2.0.0)
-#   --region <region>         AWS region (default: us-east-1)
+#   --broker-version <ver>    Broker JAR version to use (default: auto-detected from broker/)
+#   --region <region>         AWS region (default: us-west-2)
 #   --cluster-name <name>     ECS cluster name (default: britive-session-recording)
 #   --enable-guacsync         Enable GuacSync recording conversion and S3 sync
 #   --s3-bucket <bucket>      S3 bucket for GuacSync (required when --enable-guacsync is set)
@@ -43,14 +43,14 @@ BRITIVE_TENANT="your-tenant-subdomain-here"
 BRITIVE_TOKEN="your-britive-token-here"
 JSON_SECRET_KEY=""   # Leave empty to auto-generate a random 64-character hex key
 
-# Broker version — must match the JAR file in broker/ (broker/britive-broker-<VERSION>.jar)
-BROKER_VERSION="2.0.0"
+# Broker version — auto-detected from broker/ directory, or override with --broker-version
+BROKER_VERSION=""
 
 # Secrets are stored in AWS Secrets Manager under this prefix
 SECRETS_PREFIX="britive/session-recording"
 
 # AWS Configuration
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-us-west-2}"
 
 # ECS Configuration
 CLUSTER_NAME="britive-session-recording"
@@ -162,13 +162,29 @@ if [ "$ENABLE_GUACSYNC" = true ] && [ -z "$S3_BUCKET" ]; then
     exit 1
 fi
 
-# Check for required broker JAR
+# Check for required broker JAR — auto-detect version if not specified
 log_info "Checking required files..."
-log_info "Using broker version: $BROKER_VERSION"
-if [ ! -f "broker/britive-broker-${BROKER_VERSION}.jar" ]; then
-    log_error "broker/britive-broker-${BROKER_VERSION}.jar not found"
-    log_info "Place the broker JAR in the broker/ directory and try again"
-    exit 1
+if [ -z "$BROKER_VERSION" ]; then
+    DETECTED_JARS=(broker/britive-broker-*.jar)
+    if [ ! -e "${DETECTED_JARS[0]}" ]; then
+        log_error "No britive-broker-*.jar found in broker/ directory"
+        log_info "Place the broker JAR in the broker/ directory and try again"
+        exit 1
+    fi
+    if [ "${#DETECTED_JARS[@]}" -gt 1 ]; then
+        log_error "Multiple broker JARs found in broker/: ${DETECTED_JARS[*]}"
+        log_info "Keep only one JAR or specify --broker-version <ver>"
+        exit 1
+    fi
+    BROKER_VERSION=$(echo "${DETECTED_JARS[0]}" | sed 's|broker/britive-broker-||;s|\.jar$||')
+    log_info "Auto-detected broker version: $BROKER_VERSION"
+else
+    log_info "Using broker version: $BROKER_VERSION"
+    if [ ! -f "broker/britive-broker-${BROKER_VERSION}.jar" ]; then
+        log_error "broker/britive-broker-${BROKER_VERSION}.jar not found"
+        log_info "Place the broker JAR in the broker/ directory and try again"
+        exit 1
+    fi
 fi
 log_success "Broker JAR found: broker/britive-broker-${BROKER_VERSION}.jar"
 
@@ -272,12 +288,14 @@ ALB_SG_ID=$(create_sg_if_missing "britive-sr-alb-sg" "Britive session recording 
 GUACAMOLE_SG_ID=$(create_sg_if_missing "britive-sr-guacamole-sg" "Britive session recording Guacamole")
 GUACD_SG_ID=$(create_sg_if_missing "britive-sr-guacd-sg" "Britive session recording GuacD")
 BROKER_SG_ID=$(create_sg_if_missing "britive-sr-broker-sg" "Britive session recording Broker")
+EFS_SG_ID=$(create_sg_if_missing "britive-sr-efs-sg" "Britive session recording EFS")
 
 log_success "Security groups ready:"
 log_info "  ALB:       $ALB_SG_ID"
 log_info "  Guacamole: $GUACAMOLE_SG_ID"
 log_info "  GuacD:     $GUACD_SG_ID"
 log_info "  Broker:    $BROKER_SG_ID"
+log_info "  EFS:       $EFS_SG_ID"
 
 # Helper — adds an ingress rule only if it doesn't already exist
 add_ingress_if_missing() {
@@ -312,6 +330,11 @@ add_ingress_if_missing "$GUACD_SG_ID" tcp 4822 "$GUACAMOLE_SG_ID"
 
 # Broker: inbound SSH from Guacamole (for proxied SSH sessions)
 add_ingress_if_missing "$BROKER_SG_ID" tcp 22 "$GUACAMOLE_SG_ID"
+
+# EFS: allow NFS (2049) from all task security groups
+add_ingress_if_missing "$EFS_SG_ID" tcp 2049 "$GUACD_SG_ID"
+add_ingress_if_missing "$EFS_SG_ID" tcp 2049 "$GUACAMOLE_SG_ID"
+add_ingress_if_missing "$EFS_SG_ID" tcp 2049 "$BROKER_SG_ID"
 
 log_success "Security group rules configured"
 
@@ -352,6 +375,7 @@ log_info "Testing broker image locally..."
 docker run -d --name test-sr-broker \
     -e BRITIVE_TOKEN="test" \
     -e BRITIVE_TENANT="test" \
+    -e JSON_SECRET_KEY="test" \
     "britive-sr-broker:${IMAGE_TAG}"
 sleep 5
 if docker ps | grep -q test-sr-broker; then
@@ -430,14 +454,29 @@ else
     log_success "EFS access point exists: $EFS_AP_ID"
 fi
 
-# Create EFS mount targets in each subnet (idempotent)
+# Create EFS mount targets in ALL subnets (idempotent)
 log_info "Creating EFS mount targets in subnets..."
-for subnet in $(echo "$SUBNET_IDS" | tr ',' '\n' | head -2); do
+for subnet in $(echo "$SUBNET_IDS" | tr ',' '\n'); do
     aws efs create-mount-target \
         --file-system-id "$EFS_ID" \
         --subnet-id "$subnet" \
-        --security-groups "$GUACD_SG_ID" \
+        --security-groups "$EFS_SG_ID" \
         --region "$AWS_REGION" 2>/dev/null || true
+done
+
+# Wait for all mount targets to become available (DNS needs to propagate)
+log_info "Waiting for EFS mount targets to become available..."
+for i in {1..30}; do
+    MT_STATES=$(aws efs describe-mount-targets \
+        --file-system-id "$EFS_ID" \
+        --query "MountTargets[*].LifeCycleState" \
+        --output text \
+        --region "$AWS_REGION" 2>/dev/null || echo "")
+    if echo "$MT_STATES" | grep -q "creating"; then
+        sleep 10
+    else
+        break
+    fi
 done
 log_success "EFS mount targets ready"
 
@@ -692,14 +731,14 @@ create_sd_service_if_missing() {
     local existing
     existing=$(aws servicediscovery list-services \
         --filters "Name=NAMESPACE_ID,Values=${NAMESPACE_ID},Condition=EQ" \
-        --query "Services[?Name=='${name}'].Id | [0]" \
+        --query "Services[?Name=='${name}'].Arn | [0]" \
         --output text --region "$AWS_REGION" 2>/dev/null || echo "None")
     if [ "$existing" = "None" ] || [ -z "$existing" ]; then
         aws servicediscovery create-service \
             --name "$name" \
             --dns-config "NamespaceId=${NAMESPACE_ID},DnsRecords=[{Type=A,TTL=60}]" \
             --health-check-custom-config "FailureThreshold=1" \
-            --query "Service.Id" \
+            --query "Service.Arn" \
             --output text \
             --region "$AWS_REGION"
     else
@@ -748,7 +787,7 @@ ALB_DNS=$(aws elbv2 describe-load-balancers \
     --region "$AWS_REGION")
 
 # Target group for Guacamole
-TG_NAME="${CLUSTER_NAME}-guacamole-tg"
+TG_NAME="britive-sr-guacamole-tg"
 TG_ARN=$(aws elbv2 describe-target-groups \
     --names "$TG_NAME" \
     --query "TargetGroups[0].TargetGroupArn" \
@@ -914,9 +953,9 @@ GUACAMOLE_TASK_DEF=$(cat << EOF
     "portMappings": [{"containerPort": 8080, "protocol": "tcp"}],
     "mountPoints": [{"sourceVolume": "recordings", "containerPath": "/recordings"}],
     "environment": [
-      {"name": "GUACD_HOSTNAME", "value": "guacd.${NAMESPACE}"},
-      {"name": "GUACD_PORT",     "value": "4822"},
-      {"name": "GUACAMOLE_HOME", "value": "/etc/guacamole"}
+      {"name": "GUACD_HOSTNAME",      "value": "guacd.${NAMESPACE}"},
+      {"name": "GUACD_PORT",          "value": "4822"},
+      {"name": "EXTENSION_PRIORITY",  "value": "json, *"}
     ],
     "secrets": ${GUACAMOLE_SECRETS_ARRAY},
     "logConfiguration": {
@@ -1080,7 +1119,7 @@ deploy_service() {
             --task-definition "$task_arn" \
             --desired-count "$desired" \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=${SUBNET_ARRAY},securityGroups=[\"${sg_id}\"],assignPublicIp=ENABLED}" \
+            --network-configuration "awsvpcConfiguration={subnets=${SUBNET_ARRAY},securityGroups=[\"${sg_id}\",\"${EFS_SG_ID}\"],assignPublicIp=ENABLED}" \
             --region "$AWS_REGION" \
             $extra_args > /dev/null
     fi
@@ -1096,9 +1135,35 @@ deploy_service "$ECS_BROKER_SERVICE" "$BROKER_TASK_ARN" "$BROKER_SG_ID" "$DESIRE
     "--service-registries registryArn=${BROKER_SD_ID}"
 
 # guacamole — attached to ALB target group
-GUACAMOLE_LB_CONFIG="loadBalancers=[{targetGroupArn=${TG_ARN},containerName=guacamole,containerPort=8080}]"
-deploy_service "$ECS_GUACAMOLE_SERVICE" "$GUACAMOLE_TASK_ARN" "$GUACAMOLE_SG_ID" 1 \
-    "--load-balancers ${GUACAMOLE_LB_CONFIG}"
+GUACAMOLE_EXISTING=$(aws ecs describe-services \
+    --cluster "$CLUSTER_NAME" \
+    --services "$ECS_GUACAMOLE_SERVICE" \
+    --query "services[?status=='ACTIVE'].serviceName" \
+    --output text \
+    --region "$AWS_REGION" 2>/dev/null || echo "")
+
+if [ -n "$GUACAMOLE_EXISTING" ]; then
+    log_info "Updating service: $ECS_GUACAMOLE_SERVICE"
+    aws ecs update-service \
+        --cluster "$CLUSTER_NAME" \
+        --service "$ECS_GUACAMOLE_SERVICE" \
+        --task-definition "$GUACAMOLE_TASK_ARN" \
+        --desired-count 1 \
+        --force-new-deployment \
+        --region "$AWS_REGION" > /dev/null
+else
+    log_info "Creating service: $ECS_GUACAMOLE_SERVICE"
+    aws ecs create-service \
+        --cluster "$CLUSTER_NAME" \
+        --service-name "$ECS_GUACAMOLE_SERVICE" \
+        --task-definition "$GUACAMOLE_TASK_ARN" \
+        --desired-count 1 \
+        --launch-type FARGATE \
+        --network-configuration "awsvpcConfiguration={subnets=${SUBNET_ARRAY},securityGroups=[\"${GUACAMOLE_SG_ID}\",\"${EFS_SG_ID}\"],assignPublicIp=ENABLED}" \
+        --load-balancers "targetGroupArn=${TG_ARN},containerName=guacamole,containerPort=8080" \
+        --region "$AWS_REGION" > /dev/null
+fi
+log_success "Service deployed: $ECS_GUACAMOLE_SERVICE"
 
 # guacsync (optional)
 if [ "$ENABLE_GUACSYNC" = true ]; then
