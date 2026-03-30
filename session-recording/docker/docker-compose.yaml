@@ -1,15 +1,32 @@
 services:
+  postgres:
+    image: postgres:16
+    hostname: postgres
+    container_name: postgres
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole
+      POSTGRES_PASSWORD: guacamole
+    volumes:
+      - initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
   broker:
     image: broker-docker:latest
+    restart: always
+    container_name: britive-broker
     environment:
 #      britive.broker.authentication.token: demo
       BRITIVE_TOKEN: BRITIVE_TOKEN
     ports:
       - "2222:22"
+    volumes:
+      - ./broker-ssh:/root/.ssh:ro
   guacd:
     image: guacamole/guacd
     hostname: guacd
     container_name: guacd
+    user: "1000:1001"
     mem_limit: 512m
     restart: always
     ports:
@@ -21,16 +38,26 @@ services:
     container_name: guacamole
     mem_limit: 512m
     restart: always
+    user: "1000:1001"
     environment:
       GUACD_HOSTNAME: guacd
       GUACD_PORT: "4822"
       # https://guacamole.apache.org/doc/gug/json-auth.html#configuring-guacamole-to-accept-encrypted-json
       JSON_SECRET_KEY: "<json secret key goes here>"
       EXTENSION_PRIORITY: "json, *"
+      RECORDING_SEARCH_PATH: /home/guacamole/recordings
+      POSTGRESQL_HOSTNAME: postgres
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_USERNAME: guacamole
+      POSTGRESQL_PASSWORD: guacamole
     ports:
       - "8080:8080"
+    volumes:
+      - ./recordings:/home/guacamole/recordings
+      - initdb:/opt/guacamole/extensions/guacamole-auth-jdbc/postgresql/schema:ro
     depends_on:
       - guacd
+      - postgres
   guacenc:
     image: tancou/guacenc
     container_name: guacenc
@@ -43,6 +70,6 @@ services:
       - guacd
       - guacamole
     volumes:
-      - recordings:/record
+      - ./recordings:/record
 volumes:
-  recordings:
+  initdb:

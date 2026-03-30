@@ -181,7 +181,7 @@ Guac:
         JSON=$(echo -n $JSON_STRING | jq -r tostring)
         SECRET_KEY="4c0b569e4c96df157eee1b65dd0e4d41"
         TOKEN=$(sign | encrypt | tr -d "\n\r" | jq -Rr @uri)
-        echo -n '{"token": "'${TOKEN}'", "url": "http://localhost:1080/guacamole"}'
+        echo -n '{"token": "'${TOKEN}'", "url": "http://localhost:8080/guacamole"}'
         finish 0
       else
         rm -f "$SSH_PATH"/authorized_keys || finish 1
