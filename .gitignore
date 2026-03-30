@@ -715,6 +715,10 @@ sample.py
 parameters.json
 metadata.xml
 
+# Broker SSH keys (private key must never be committed)
+session-recording/docker/broker-ssh/id_rsa
+!session-recording/docker/broker-ssh/id_rsa.pub
+
 # Britve
 britive-broker-0.1.3.jar
 britive-broker-1.0.0.jar
