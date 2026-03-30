@@ -15,7 +15,7 @@ RUN dpkgArch=$(dpkg --print-architecture) && \
 RUN mkdir -p /root/broker/config/ /root/broker/bootstrap/ /root/broker/cache /var/log/supervisor /var/run/sshd
 
 # install what python needs
-RUN pip3 install jmespath britive>=4.1.3 pyjwt cryptography jinja2 pyyaml --break-system-packages
+RUN pip3 install jmespath britive>=4.1.3 pyjwt cryptography jinja2 pyyaml pywinrm --break-system-packages
 
 # broker jar
 COPY ./britive-broker-1.0.0.jar /root/broker/britive-broker-1.0.0.jar
