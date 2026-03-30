@@ -1,0 +1,49 @@
+{
+  "family": "britive-broker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "REPLACE_WITH_EXECUTION_ROLE_ARN",
+  "taskRoleArn": "REPLACE_WITH_TASK_ROLE_ARN",
+  "containerDefinitions": [
+    {
+      "name": "britive-broker",
+      "image": "REPLACE_WITH_ECR_IMAGE",
+      "essential": true,
+      "environment": [
+        {
+          "name": "KUBECONFIG",
+          "value": "/root/.kube/config"
+        },
+        {
+          "name": "SECRETS_DIR",
+          "value": "/root/broker/secrets"
+        }
+      ],
+      "secrets": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/britive-broker",
+          "awslogs-region": "REPLACE_WITH_REGION",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "pgrep -f java || exit 1"],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 90
+      },
+      "linuxParameters": {
+        "initProcessEnabled": true
+      }
+    }
+  ],
+  "runtimePlatform": {
+    "cpuArchitecture": "REPLACE_WITH_CPU_ARCH",
+    "operatingSystemFamily": "LINUX"
+  }
+}
