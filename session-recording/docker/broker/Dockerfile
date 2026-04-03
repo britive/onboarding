@@ -7,7 +7,7 @@ RUN dpkgArch=$(dpkg --print-architecture) && \
         sed -i 's|http://ports.ubuntu.com|http://archive.ubuntu.com|g' /etc/apt/sources.list; \
     fi && \
     apt update && \
-    apt install -y jq openjdk-21-jre-headless wget unzip python3 python3-pip supervisor openssh-server mysql-client && \
+    apt install -y jq curl openssl openjdk-21-jre-headless wget unzip python3 python3-pip supervisor openssh-server mysql-client && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -18,7 +18,7 @@ RUN mkdir -p /root/broker/config/ /root/broker/bootstrap/ /root/broker/cache /va
 RUN pip3 install jmespath britive>=4.1.3 pyjwt cryptography jinja2 pyyaml pywinrm --break-system-packages
 
 # broker jar
-COPY ./britive-broker-1.0.0.jar /root/broker/britive-broker-1.0.0.jar
+COPY ./britive-broker-2.0.1.jar /root/broker/britive-broker-2.0.1.jar
 
 # config and bootstrap
 COPY ./broker-config.yml /root/broker/config/broker-config.yml
