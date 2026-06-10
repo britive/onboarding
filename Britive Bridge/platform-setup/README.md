@@ -25,11 +25,17 @@ BRITIVE_BROKER_AUTH_TOKEN=<token>
 - Python 3.8+
 - An API token for your Britive tenant with permission to manage the Access
   Broker (pools, resources, response templates, profiles)
-- The Britive SDK:
+- The Britive SDK + `requests`:
 
   ```bash
-  pip install britive requests
+  pip install -r requirements.txt
+  # or: pip install britive requests
   ```
+
+  > VS Code showing "could not be resolved" on `import requests` / `import
+  > britive`? That's the editor pointing at an interpreter without these
+  > installed — run *Python: Select Interpreter* and pick the env where you ran
+  > the install above. It is not a code error.
 
 ## Usage
 
