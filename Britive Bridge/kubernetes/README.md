@@ -20,7 +20,8 @@ Manifests in [`manifests/`](manifests/):
 | `service.yaml` | ClusterIP service (443 → container 8080) |
 | `ingress.yaml` | ingress-nginx Ingress with HTTPS backend + WebSocket support |
 | `external-secret.example.yaml` | *(optional)* Source broker creds from an external store via the External Secrets Operator |
-| `ha-overlay.example.yaml` | *(optional)* Multi-replica HA: RWM PVC + rolling-update + anti-affinity |
+| `pvc-rwm.example.yaml` | *(optional, HA)* ReadWriteMany PVC — use **instead of** `pvc.yaml` |
+| `ha-deployment-patch.example.yaml` | *(optional, HA)* Patch: replicas + rolling-update + anti-affinity |
 
 Traffic path: `client → Ingress (TLS) → Service:443 → pod:8080 (HTTPS, self-signed)`.
 
@@ -130,12 +131,20 @@ Manager / Vault / GCP / Azure. See `manifests/external-secret.example.yaml`.
 ### High availability (multiple replicas)
 
 Bridge persists session state to `/data`, so running `replicas > 1` requires a
-**ReadWriteMany** volume shared across pods. See `manifests/ha-overlay.example.yaml`.
+**ReadWriteMany** (RWX) volume shared across pods. Choose HA **at install
+time** — PVC access modes are immutable, so switching later means deleting the
+RWO PVC and losing `/data`.
 
-1. Provision an RWM storage class (EFS CSI on AWS, Azure Files, Filestore on GCP).
-2. Apply the RWM PVC from the overlay **instead of** `pvc.yaml`.
-3. Bump `replicas` and switch the Deployment to `RollingUpdate` (the overlay
-   includes pod anti-affinity to spread replicas across nodes).
+1. Provision an RWX storage class (EFS CSI on AWS, Azure Files, Filestore on GCP).
+2. Apply `manifests/pvc-rwm.example.yaml` **instead of** `pvc.yaml` (step 3 of
+   the install), then apply the remaining manifests as usual.
+3. Patch the Deployment for replicas + rolling updates (includes pod
+   anti-affinity to spread replicas across nodes):
+
+   ```bash
+   kubectl -n britive-bridge patch deployment britive-bridge \
+     --type strategic --patch-file manifests/ha-deployment-patch.example.yaml
+   ```
 
 > Confirm with your Britive team that your Bridge version supports active-active
 > across replicas before relying on HA for production traffic.

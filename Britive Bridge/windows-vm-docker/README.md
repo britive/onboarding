@@ -15,8 +15,8 @@ using Docker, pulling the image from **Docker Hub** (`britive/bridge`).
 | Your VM | Recommended runtime |
 |---------|---------------------|
 | Windows 10/11 Pro/Enterprise | **Docker Desktop** with WSL 2 backend |
-| Windows Server 2022 / 2025 | **Docker Desktop** (supported on Server 2022+) with WSL 2, **or** Docker CE inside a WSL 2 distro |
-| Windows Server 2019 | No WSL 2 GA → run Docker CE in a Linux VM/WSL 1 is not supported. **Prefer a Linux VM** ([Linux guide](../linux-vm-docker/)) or upgrade to Server 2022+ |
+| Windows Server 2022 / 2025 | **Docker CE inside a WSL 2 distro** — follow the [Linux guide](../linux-vm-docker/) from that distro's shell. Docker does **not support Docker Desktop on any Windows Server edition** |
+| Windows Server 2019 | WSL 2 is not generally available, and WSL 1 cannot run Docker. **Use a Linux VM** ([Linux guide](../linux-vm-docker/)) or upgrade to Server 2022+ |
 
 If you end up running Docker **inside a WSL 2 Linux distro**, follow the
 [Linux VM guide](../linux-vm-docker/) from that distro's shell instead — it's
@@ -33,8 +33,13 @@ license) per the Linux guide.
 - Windows 10/11 (Pro/Enterprise) or Windows Server 2022+, 64-bit, with
   **virtualization enabled** in BIOS/hypervisor (required for WSL 2).
 - **WSL 2** installed: in an elevated PowerShell run `wsl --install` then reboot.
-- **Docker Desktop** installed and set to **Linux containers** (tray icon →
-  *Switch to Linux containers…* if currently on Windows containers).
+- A Linux-container runtime:
+  - Windows 10/11: **Docker Desktop** set to **Linux containers** (tray icon →
+    *Switch to Linux containers…* if currently on Windows containers).
+  - Windows Server 2022+: **Docker CE inside your WSL 2 distro** (Docker
+    Desktop is not supported on Windows Server) — in that case follow the
+    [Linux guide](../linux-vm-docker/) from the distro's shell instead of this
+    script.
 - **Outbound** internet to your Britive tenant (Broker/MQTT) and Docker Hub.
 - **Inbound** TCP on the Bridge port (default `8080`) — open the Windows Firewall
   **and** any cloud security group / network ACL.

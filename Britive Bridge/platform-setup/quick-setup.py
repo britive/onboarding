@@ -49,7 +49,7 @@ except ImportError:
 
 def prompt(label, default=None, secret=False, required=True):
     """Prompt the user for input with an optional default."""
-    suffix = f" [{default[:16] + '...' if secret else default}]" if default else ""
+    suffix = f" [{'****' if secret else default}]" if default else ""
     while True:
         value = getpass.getpass(f"  {label}{suffix}: ").strip() if secret else input(f"  {label}{suffix}: ").strip()
         if not value and default:
@@ -304,7 +304,13 @@ def collect_bridge_url(tenant_subdomain, auth_token):
         "It must be reachable from their browser.",
     )
 
-    return prompt("Bridge URL", default="https://localhost:8080").split("://", maxsplit=1)
+    # The scheme is stripped here because the resource's `url` param is stored
+    # scheme-less; the response template re-adds it as `<scheme>://{{url}}`.
+    while True:
+        url = prompt("Bridge URL", default="https://localhost:8080")
+        if "://" in url:
+            return url.split("://", maxsplit=1)
+        print("    (must include a scheme, e.g. https://bridge.example.com)")
 
 
 def create_bridge_resource_type(client):
@@ -358,6 +364,21 @@ def create_admin_permission(client, bridge_type_id, template_id):
 
     perms = client.access_broker.resources.permissions
 
+    # Re-run safety: reuse an existing 'admin' permission for this resource type.
+    try:
+        for existing in perms.list(bridge_type_id) or []:
+            if existing.get("name") == ADMIN_PROFILE["name"]:
+                perm_id = existing.get("permissionId")
+                success(f"Permission 'admin' already exists: {perm_id}")
+                info("Scripts/variables left as-is — edit them in the Britive UI if needed.")
+                return {
+                    "id": perm_id,
+                    "version": existing.get("version", ""),
+                    "resource_type_id": bridge_type_id,
+                }
+    except Exception:
+        pass
+
     # Step 1: Create permission as draft (SDK)
     info("Creating draft permission...")
     try:
@@ -401,15 +422,17 @@ def create_admin_permission(client, bridge_type_id, template_id):
         checkin_tmp.close()
 
         with open(checkout_tmp.name, "rb") as f:
-            requests.put(urls["checkoutURL"], data=f, timeout=30)
+            requests.put(urls["checkoutURL"], data=f, timeout=30).raise_for_status()
         success("Checkout script uploaded")
 
         info("Uploading checkin script...")
         with open(checkin_tmp.name, "rb") as f:
-            requests.put(urls["checkinURL"], data=f, timeout=30)
+            requests.put(urls["checkinURL"], data=f, timeout=30).raise_for_status()
         success("Checkin script uploaded")
     except Exception as exc:
         warn(f"Failed to upload scripts: {exc}")
+        warn("Permission left as a draft — re-run this script or upload scripts in the UI.")
+        return {"id": perm_id, "version": "", "resource_type_id": bridge_type_id}
     finally:
         os.unlink(checkout_tmp.name)
         os.unlink(checkin_tmp.name)
@@ -456,19 +479,50 @@ def create_bridge_resource(client, bridge_type_id, bridge_url, pool_id):
     header(6, "Create Bridge Resource")
     resource_name = prompt("Resource name", default="Admin")
 
-    info(f"Creating resource '{resource_name}'...")
+    # Re-run safety: reuse an existing resource and refresh its URL — this is
+    # the documented flow for deploying infra first and re-running with the
+    # real DNS name.
+    resource_id = None
     try:
-        resource = client.access_broker.resources.create(
-            name=resource_name,
-            resource_type_id=bridge_type_id,
-            description=f"Bridge deployment at {bridge_url}",
-            param_values={"protocol": "admin", "url": bridge_url},
-        )
-        resource_id = resource.get("resourceId")
-        success(f"Resource created: {resource_id}")
-    except Exception as exc:
-        error(f"Failed to create resource: {exc}")
-        sys.exit(1)
+        result = client.access_broker.resources.list(search_text=resource_name)
+        items = result.get("data", result) if isinstance(result, dict) else result
+        for res in items or []:
+            if res.get("name") == resource_name:
+                resource_id = res.get("resourceId")
+                break
+    except Exception:
+        pass
+
+    if resource_id:
+        success(f"Resource '{resource_name}' already exists: {resource_id}")
+        info(f"Updating its URL parameter to '{bridge_url}'...")
+        try:
+            client.put(
+                f"{client.base_url}/resource-manager/resources/{resource_id}",
+                json={
+                    "name": resource_name,
+                    "resourceType": {"id": bridge_type_id},
+                    "description": f"Bridge deployment at {bridge_url}",
+                    "paramValues": {"protocol": "admin", "url": bridge_url},
+                },
+            )
+            success("Resource URL updated")
+        except Exception as exc:
+            warn(f"Could not update the resource URL ({exc}) — update it in the Britive UI.")
+    else:
+        info(f"Creating resource '{resource_name}'...")
+        try:
+            resource = client.access_broker.resources.create(
+                name=resource_name,
+                resource_type_id=bridge_type_id,
+                description=f"Bridge deployment at {bridge_url}",
+                param_values={"protocol": "admin", "url": bridge_url},
+            )
+            resource_id = resource.get("resourceId")
+            success(f"Resource created: {resource_id}")
+        except Exception as exc:
+            error(f"Failed to create resource: {exc}")
+            sys.exit(1)
 
     info("Associating resource with broker pool...")
     for attempt in range(5):
@@ -487,6 +541,17 @@ def create_bridge_resource(client, bridge_type_id, bridge_url, pool_id):
 
 def create_response_template(client, schema):
     header(7, "Create Response Template")
+
+    # Re-run safety: reuse an existing template instead of duplicating it.
+    try:
+        for tmpl in client.access_broker.response_templates.list(search_text="Bridge") or []:
+            if tmpl.get("name") == "Bridge":
+                template_id = tmpl.get("templateId")
+                success(f"Response template 'Bridge' already exists: {template_id}")
+                return template_id
+    except Exception:
+        pass
+
     info("Creating response template for clickable session URLs...")
     try:
         template = client.access_broker.response_templates.create(
@@ -507,6 +572,17 @@ def create_admin_profile(client, admin_permission):
     header(8, "Create Admin Profile")
     profile_name = f"Bridge {ADMIN_PROFILE['display']}"
 
+    # Re-run safety: do not duplicate the profile.
+    try:
+        for prof in client.access_broker.profiles.list() or []:
+            if prof.get("name") == profile_name:
+                profile_id = prof.get("profileId") or prof.get("id")
+                success(f"Profile '{profile_name}' already exists: {profile_id}")
+                info("Association/permission left as-is — manage them in the Britive UI.")
+                return {"name": profile_name, "id": profile_id, "protocol": ADMIN_PROFILE["name"]}
+    except Exception:
+        pass
+
     info(f"Creating profile '{profile_name}'...")
     try:
         profile = client.access_broker.profiles.create(
@@ -514,7 +590,7 @@ def create_admin_profile(client, admin_permission):
             description=ADMIN_PROFILE["description"],
             expiration_duration=3600000,
         )
-        profile_id = profile.get("profileId") or profile.get("profileId")
+        profile_id = profile.get("profileId") or profile.get("id")
         success(f"  Profile created: {profile_id}")
     except Exception as exc:
         warn(f"  Failed to create profile: {exc}")

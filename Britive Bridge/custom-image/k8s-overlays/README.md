@@ -6,7 +6,7 @@ Ready-to-apply manifests that wire the [custom image](../) into the base
 | File | Purpose |
 |------|---------|
 | `serviceaccount-irsa.yaml` | IRSA service account → AWS Secrets Manager (Aurora MySQL) |
-| `deployment-patch.yaml` | Strategic-merge patch: custom image + SA + SSH-key mount |
+| `deployment-patch.yaml` | Strategic-merge patch: custom image + SA + SSH key (init container chowns it to `bridge`, mode 0600, in-memory volume) |
 
 ## Apply order
 
@@ -22,9 +22,12 @@ kubectl -n britive-bridge create secret generic bridge-ssh-key \
 #    Skip if you used `eksctl create iamserviceaccount` (it makes this SA for you).
 kubectl apply -f serviceaccount-irsa.yaml
 
-# 3. Patch the running Deployment: set your image, SA, and SSH mount
+# 3. Patch the running Deployment: set your image, SA, and SSH mount.
+#    Must be --type strategic: a plain merge patch would replace the
+#    containers/volumes lists and wipe the base ports, envFrom, probes, and
+#    PVC mount.
 kubectl -n britive-bridge patch deployment britive-bridge \
-  --type merge --patch-file deployment-patch.yaml
+  --type strategic --patch-file deployment-patch.yaml
 ```
 
 ## Before applying — edit these placeholders

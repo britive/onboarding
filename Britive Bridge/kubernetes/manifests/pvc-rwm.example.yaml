@@ -1,0 +1,29 @@
+# Optional: high-availability storage. Use INSTEAD of pvc.yaml — choose HA at
+# install time. PVC accessModes are immutable: if the RWO pvc.yaml is already
+# applied, you must delete that PVC first (DATA LOSS — back up /data) before
+# applying this one.
+#
+# Requires a ReadWriteMany (RWX) storage class so all replicas share /data:
+#   - AWS  : EFS CSI driver  (storageClassName: efs-sc)
+#   - Azure: Azure Files     (storageClassName: azurefile-csi)
+#   - GCP  : Filestore       (storageClassName: filestore-csi / standard-rwx)
+#
+# HA install order:
+#   1. kubectl apply -f namespace.yaml
+#   2. create the bridge-broker secret (secret.example.yaml or ESO)
+#   3. kubectl apply -f pvc-rwm.example.yaml     # instead of pvc.yaml
+#   4. kubectl apply -f deployment.yaml -f service.yaml -f ingress.yaml
+#   5. patch the Deployment for replicas + rolling updates
+#      (see ha-deployment-patch.example.yaml)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bridge-data
+  namespace: britive-bridge
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: efs-sc          # set to your RWX storage class

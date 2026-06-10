@@ -74,6 +74,12 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub ${StackNamePrefix}-cluster
+  BrokerAuthTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/broker/auth-token
+      Description: Britive broker pool authentication token for the bridge ECS task
+      SecretString: !Ref BrokerAuthToken
   BridgeExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -87,6 +93,15 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadBrokerSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref BrokerAuthTokenSecret
   BridgeTaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -98,6 +113,27 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+  # NLB: enforces IngressCidr at the load balancer. Tightening IngressCidr is
+  # safe here — NLB health checks reach the tasks via the NLB security group
+  # reference below, not via this CIDR rule.
+  BridgeNlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge NLB security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref IngressCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-nlb-sg
+  # ECS task: only accepts traffic (forwarded client traffic AND NLB health
+  # checks) from the NLB security group on port 8080.
   BridgeTaskSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -107,7 +143,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          CidrIp: !Ref IngressCidr
+          SourceSecurityGroupId: !Ref BridgeNlbSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -173,6 +209,8 @@ Resources:
       Scheme: internet-facing
       Type: network
       Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref BridgeNlbSecurityGroup
   BridgeApiTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -224,8 +262,11 @@ Resources:
           Environment:
             - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
               Value: !Ref BrokerTenantSubdomain
+          Secrets:
+            # Injected by the ECS agent at task start; kept out of the task
+            # definition so ecs:DescribeTaskDefinition does not expose it.
             - Name: BRITIVE_BROKER_AUTH_TOKEN
-              Value: !Ref BrokerAuthToken
+              ValueFrom: !Ref BrokerAuthTokenSecret
           MountPoints:
             - SourceVolume: bridge-data
               ContainerPath: /data

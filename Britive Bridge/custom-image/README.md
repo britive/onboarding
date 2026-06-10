@@ -132,9 +132,10 @@ kubectl -n britive-bridge create secret generic bridge-ssh-key \
 # 2. IRSA service account (Aurora MySQL example) — edit the role ARN first
 kubectl apply -f k8s-overlays/serviceaccount-irsa.yaml
 
-# 3. Patch the Deployment: your image + SA + SSH mount
+# 3. Patch the Deployment: your image + SA + SSH mount (strategic merge —
+#    do not use --type merge, it wipes list fields from the base Deployment)
 kubectl -n britive-bridge patch deployment britive-bridge \
-  --type merge --patch-file k8s-overlays/deployment-patch.yaml
+  --type strategic --patch-file k8s-overlays/deployment-patch.yaml
 ```
 
 Edit the placeholders first (`image:` → your build,
