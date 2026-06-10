@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: britive-bridge
+  namespace: britive-bridge
+  labels:
+    app.kubernetes.io/name: britive-bridge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: britive-bridge
+  strategy:
+    type: Recreate            # single RWO volume — avoid two pods mounting at once
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: britive-bridge
+    spec:
+      securityContext:
+        fsGroup: 0
+      containers:
+        - name: bridge
+          image: britive/bridge:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: https
+              containerPort: 8080   # HTTPS API + WebSocket + browser protocols
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: bridge-broker
+          volumeMounts:
+            - name: bridge-data
+              mountPath: /data
+          # Container serves HTTPS with a self-signed cert, so probes use the
+          # HTTPS scheme. The kubelet does not verify the cert for probes.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+      volumes:
+        - name: bridge-data
+          persistentVolumeClaim:
+            claimName: bridge-data

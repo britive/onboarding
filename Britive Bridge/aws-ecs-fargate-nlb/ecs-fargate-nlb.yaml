@@ -1,0 +1,272 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Britive Bridge ECS Fargate deployment
+Parameters:
+  StackNamePrefix:
+    Type: String
+    Default: britive-bridge
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,30}"
+    Description: Prefix used for named AWS resources.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where Bridge will run.
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Two public subnets for the internet-facing NLB, Fargate task, and EFS mount targets.
+  IngressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to reach Bridge HTTPS.
+  ImageUri:
+    Type: String
+    Default: britive/bridge:latest
+    Description: Container image URI. Use a multi-arch image or one that matches CpuArchitecture.
+  CpuArchitecture:
+    Type: String
+    Default: ARM64
+    AllowedValues:
+      - ARM64
+      - X86_64
+    Description: ECS task CPU architecture.
+  TaskCpu:
+    Type: String
+    Default: "1024"
+    AllowedValues:
+      - "512"
+      - "1024"
+      - "2048"
+      - "4096"
+    Description: Fargate task CPU units.
+  TaskMemory:
+    Type: String
+    Default: "2048"
+    AllowedValues:
+      - "1024"
+      - "2048"
+      - "3072"
+      - "4096"
+      - "5120"
+      - "6144"
+      - "7168"
+      - "8192"
+      - "16384"
+      - "30720"
+    Description: Fargate task memory in MiB.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 4
+    Description: Number of Bridge tasks to run.
+  BrokerTenantSubdomain:
+    Type: String
+    Description: Britive broker tenant subdomain, for example acme.
+  BrokerAuthToken:
+    Type: String
+    NoEcho: true
+    Description: Britive broker pool authentication token.
+Resources:
+  BridgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${StackNamePrefix}
+      RetentionInDays: 30
+  BridgeCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${StackNamePrefix}-cluster
+  BridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${StackNamePrefix}-exec-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  BridgeTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${StackNamePrefix}-task-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+  BridgeTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge task security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref IngressCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-task-sg
+  BridgeEfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge EFS security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref BridgeTaskSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-efs-sg
+  BridgeFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: elastic
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-data
+  BridgeAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      PosixUser:
+        Uid: "0"
+        Gid: "0"
+      RootDirectory:
+        Path: /bridge-data
+        CreationInfo:
+          OwnerUid: "0"
+          OwnerGid: "0"
+          Permissions: "0755"
+  BridgeMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      SubnetId: !Select [0, !Ref PublicSubnetIds]
+      SecurityGroups:
+        - !Ref BridgeEfsSecurityGroup
+  BridgeMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      SubnetId: !Select [1, !Ref PublicSubnetIds]
+      SecurityGroups:
+        - !Ref BridgeEfsSecurityGroup
+  BridgeLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${StackNamePrefix}-nlb
+      Scheme: internet-facing
+      Type: network
+      Subnets: !Ref PublicSubnetIds
+  BridgeApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-api
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: 8080
+      TargetType: ip
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "8080"
+  BridgeApiListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeLoadBalancer
+      Port: 443
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgeApiTargetGroup
+  BridgeTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${StackNamePrefix}-task
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+        CpuArchitecture: !Ref CpuArchitecture
+      ExecutionRoleArn: !GetAtt BridgeExecutionRole.Arn
+      TaskRoleArn: !GetAtt BridgeTaskRole.Arn
+      Volumes:
+        - Name: bridge-data
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref BridgeFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref BridgeAccessPoint
+              IAM: DISABLED
+      ContainerDefinitions:
+        - Name: bridge
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
+              Value: !Ref BrokerTenantSubdomain
+            - Name: BRITIVE_BROKER_AUTH_TOKEN
+              Value: !Ref BrokerAuthToken
+          MountPoints:
+            - SourceVolume: bridge-data
+              ContainerPath: /data
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BridgeLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: bridge
+  BridgeService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - BridgeApiListener
+      - BridgeMountTargetA
+    Properties:
+      ServiceName: !Sub ${StackNamePrefix}-service
+      Cluster: !Ref BridgeCluster
+      TaskDefinition: !Ref BridgeTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      HealthCheckGracePeriodSeconds: 60
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref BridgeTaskSecurityGroup
+          Subnets: !Ref PublicSubnetIds
+      LoadBalancers:
+        - ContainerName: bridge
+          ContainerPort: 8080
+          TargetGroupArn: !Ref BridgeApiTargetGroup
+Outputs:
+  ClusterName:
+    Value: !Ref BridgeCluster
+  ServiceName:
+    Value: !Ref BridgeService
+  LoadBalancerDnsName:
+    Value: !GetAtt BridgeLoadBalancer.DNSName
+  BridgeUrl:
+    Description: External URL for Britive BRIDGE_URL script parameter.
+    Value: !Sub https://${BridgeLoadBalancer.DNSName}
+  DataFileSystemId:
+    Value: !Ref BridgeFileSystem

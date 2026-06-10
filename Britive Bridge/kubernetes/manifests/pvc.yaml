@@ -1,0 +1,19 @@
+# Persistent storage for Bridge state (mounted at /data).
+# Bridge keeps active session/checkout state here — persistence lets the pod
+# survive restarts and rescheduling without losing live sessions.
+#
+# For multi-replica (HA) deployments you need ReadWriteMany. On AWS that means
+# the EFS CSI driver; on Azure, Azure Files; on GCP, Filestore. For a single
+# replica, ReadWriteOnce on any default block storage class is fine.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bridge-data
+  namespace: britive-bridge
+spec:
+  accessModes:
+    - ReadWriteOnce          # use ReadWriteMany for replicas > 1
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: gp3    # uncomment and set to your cluster's storage class
