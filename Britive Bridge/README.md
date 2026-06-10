@@ -92,6 +92,7 @@ Britive Bridge/
 ├── README.md                       # you are here
 ├── platform-setup/                 # run FIRST — creates Britive platform objects
 │   ├── quick-setup.py
+│   ├── requirements.txt
 │   └── README.md
 ├── custom-image/                   # extend britive/bridge with extra utilities
 │   ├── Dockerfile                  # base-distro & arch agnostic
