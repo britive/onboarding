@@ -57,7 +57,9 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Die "Docker not found. Install Docker Desktop (WSL 2 backend) first — see README."
 }
-try { docker info *> $null } catch {
+# Native commands don't throw on failure in PowerShell — check the exit code.
+docker info *> $null
+if ($LASTEXITCODE -ne 0) {
   Die "Docker daemon not reachable. Start Docker Desktop and wait for it to be running."
 }
 
@@ -93,8 +95,11 @@ Write-Warn "Also open inbound TCP $Port in any CLOUD security group / network AC
 # ── 6. Pull the image and (re)create the container ──────────────────────────
 Write-Step "Pulling $Image ..."
 docker pull $Image
+if ($LASTEXITCODE -ne 0) {
+  Die "docker pull failed. Check internet access to Docker Hub and the image name '$Image'."
+}
 
-$exists = docker ps -a --format '{{.Names}}' | Select-String -SimpleMatch $ContainerName
+$exists = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq $ContainerName }
 if ($exists) {
   Write-Step "Removing existing container '$ContainerName'..."
   docker rm -f $ContainerName | Out-Null
@@ -111,6 +116,9 @@ docker run -d `
   --env-file $EnvFile `
   -v "$($DataVolume):/data" `
   $Image | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  Die "docker run failed. Check the output above and your $EnvFile contents."
+}
 
 # ── 7. Health check ─────────────────────────────────────────────────────────
 Write-Step "Waiting for Bridge to report healthy..."

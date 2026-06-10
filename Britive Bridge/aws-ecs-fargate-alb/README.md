@@ -87,3 +87,7 @@ aws cloudformation describe-stacks --stack-name britive-bridge \
 ```bash
 aws cloudformation delete-stack --stack-name britive-bridge
 ```
+
+> The broker-token secret is retained with a recovery window after stack
+> deletion. To redeploy the same stack name immediately, force-delete it first:
+> `aws secretsmanager delete-secret --secret-id britive-bridge/broker/auth-token --force-delete-without-recovery`

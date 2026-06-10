@@ -12,8 +12,9 @@ private key to authenticate.
 
 CloudFormation template `ecs-fargate-alb-ssh.yaml` adds:
 
-- A **Secrets Manager secret** holding the PEM-encoded private key
-- Execution-role permission to **read that secret** at task start
+- A **Secrets Manager secret** holding the PEM-encoded private key (alongside
+  the broker auth token secret that all variants create)
+- Execution-role permission to **read those secrets** at task start
 - A container `Secrets` mapping that injects the key as `SSH_PRIVATE_KEY`
 - A container entrypoint that writes the key to `/home/bridge/.ssh/id_ed25519`
   (mode `600`) before starting Bridge
@@ -38,17 +39,23 @@ Same parameters as the ALB option, **plus**:
 
 | Parameter | Notes |
 |-----------|-------|
-| `BrokerSSHPrivateKey` | PEM-encoded private key (ed25519 or RSA). Newlines as `\n`. **Highly sensitive.** |
+| `BrokerSSHPrivateKey` | PEM-encoded private key (ed25519 or RSA). **Highly sensitive.** |
 
 ### Filling in the private key safely
 
-Avoid pasting the key into a file by hand. Convert it to a single JSON-escaped
-line and write `params.json` programmatically, e.g.:
+Avoid pasting the key into a file by hand — JSON requires the newlines to be
+escaped, and doing that manually corrupts the key. Let `jq` do the escaping:
 
 ```bash
-KEY=$(awk '{printf "%s\\n", $0}' ~/.ssh/bridge_ed25519)   # escape newlines
-# then inject "$KEY" into params.json with jq, and delete params.json after deploy
+jq --arg key "$(cat ~/.ssh/bridge_ed25519)" \
+  'map(if .ParameterKey == "BrokerSSHPrivateKey" then .ParameterValue = $key else . end)' \
+  params.example.json > params.json
+# fill in the remaining placeholder values, then delete params.json after deploy
 ```
+
+Do **not** pre-escape the key (e.g. with `awk`/`sed`) before passing it to
+`jq` — it gets escaped twice and the container receives literal `\n` text
+instead of newlines, breaking SSH authentication.
 
 > **Never commit `params.json`** with a real key. Delete it locally once the
 > stack is up — the key lives in Secrets Manager from then on. To rotate, update
@@ -94,5 +101,10 @@ aws ecs execute-command --cluster <ClusterName> --task <task-id> \
 aws cloudformation delete-stack --stack-name britive-bridge
 ```
 
-> The Secrets Manager secret may be retained with a recovery window depending on
-> account settings — delete it explicitly if you need immediate removal.
+> The Secrets Manager secrets are retained with a recovery window after stack
+> deletion. To redeploy the same stack name immediately, force-delete them first:
+>
+> ```bash
+> aws secretsmanager delete-secret --secret-id britive-bridge/broker/ssh-private-key --force-delete-without-recovery
+> aws secretsmanager delete-secret --secret-id britive-bridge/broker/auth-token --force-delete-without-recovery
+> ```

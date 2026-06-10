@@ -89,6 +89,14 @@ Resources:
     Properties:
       ClusterName: !Sub ${StackNamePrefix}-cluster
 
+  # ── Secrets Manager ───────────────────────────────────────────────────────
+  BrokerAuthTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/broker/auth-token
+      Description: Britive broker pool authentication token for the bridge ECS task
+      SecretString: !Ref BrokerAuthToken
+
   # ── IAM Roles ─────────────────────────────────────────────────────────────
   BridgeExecutionRole:
     Type: AWS::IAM::Role
@@ -103,6 +111,15 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadBrokerSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref BrokerAuthTokenSecret
 
   BridgeTaskRole:
     Type: AWS::IAM::Role
@@ -310,10 +327,13 @@ Resources:
           Environment:
             - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
               Value: !Ref BrokerTenantSubdomain
-            - Name: BRITIVE_BROKER_AUTH_TOKEN
-              Value: !Ref BrokerAuthToken
             # No TLS_CERT_FILE / TLS_KEY_FILE set → container uses its
             # auto-generated self-signed cert. ALB accepts it regardless.
+          Secrets:
+            # Injected by the ECS agent at task start; kept out of the task
+            # definition so ecs:DescribeTaskDefinition does not expose it.
+            - Name: BRITIVE_BROKER_AUTH_TOKEN
+              ValueFrom: !Ref BrokerAuthTokenSecret
           MountPoints:
             - SourceVolume: bridge-data
               ContainerPath: /data

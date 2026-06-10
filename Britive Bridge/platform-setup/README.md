@@ -22,7 +22,7 @@ BRITIVE_BROKER_AUTH_TOKEN=<token>
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.10+ (required by the `britive` SDK)
 - An API token for your Britive tenant with permission to manage the Access
   Broker (pools, resources, response templates, profiles)
 - The Britive SDK + `requests`:
@@ -54,8 +54,13 @@ You'll be prompted for:
    grab the DNS name, then re-run or update the resource.
 4. **Resource name** — defaults to `Admin`.
 
-The script is **idempotent on names**: if a pool / resource type already exists
-it reuses it rather than creating a duplicate.
+The script is **idempotent on names**: if a pool, resource type, response
+template, permission, resource, or profile with the expected name already
+exists, it is reused rather than duplicated. Re-running after infrastructure
+deploy also **updates the existing resource's URL** to the one you enter — the
+intended flow for replacing a placeholder URL with the real DNS name. Two
+caveats: an existing pool's token is never reprinted (get it from the Britive
+UI), and an existing permission's scripts/variables are left untouched.
 
 ## After it finishes
 

@@ -105,6 +105,13 @@ Resources:
       Description: Private key used by the broker ECS task to SSH into EC2 instances
       SecretString: !Ref BrokerSSHPrivateKey
 
+  BrokerAuthTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/broker/auth-token
+      Description: Britive broker pool authentication token for the bridge ECS task
+      SecretString: !Ref BrokerAuthToken
+
   # ── IAM Roles ─────────────────────────────────────────────────────────────
   BridgeExecutionRole:
     Type: AWS::IAM::Role
@@ -120,14 +127,16 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Policies:
-        - PolicyName: ReadBrokerSSHKey
+        - PolicyName: ReadBrokerSecrets
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Ref BrokerSSHKeySecret
+                Resource:
+                  - !Ref BrokerSSHKeySecret
+                  - !Ref BrokerAuthTokenSecret
 
   BridgeTaskRole:
     Type: AWS::IAM::Role
@@ -158,18 +167,9 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !GetAtt BridgeLogGroup.Arn
-        - PolicyName: SecretsManagerReadOnly
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                  - secretsmanager:DescribeSecret
-                  - secretsmanager:GetRandomPassword
-                  - secretsmanager:ListSecrets
-                  - secretsmanager:ListSecretVersionIds
-                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
+        # If your checkout/checkin scripts read additional Secrets Manager
+        # secrets (e.g. database credentials), grant the task role
+        # secretsmanager:GetSecretValue scoped to those specific secret ARNs.
 
   # ── Security Groups ───────────────────────────────────────────────────────
 
@@ -362,9 +362,14 @@ Resources:
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
-          # Write SSH key to /root/.ssh before starting the bridge process.
-          # SSH_PRIVATE_KEY is injected from Secrets Manager by the ECS agent
-          # before this command runs, so it is available as an env var.
+          # Write SSH key to /home/bridge/.ssh before starting the bridge
+          # process. SSH_PRIVATE_KEY is injected from Secrets Manager by the
+          # ECS agent before this command runs, so it is available as an env
+          # var. The stock britive/bridge image config is:
+          #   Entrypoint=["/entrypoint.sh"], Cmd=none, User=bridge
+          # so exec'ing /entrypoint.sh reproduces the default startup. If you
+          # use a custom ImageUri, confirm its entrypoint matches:
+          #   docker inspect <image> --format '{{json .Config.Entrypoint}}'
           EntryPoint:
             - "/bin/sh"
             - "-c"
@@ -373,9 +378,11 @@ Resources:
           Environment:
             - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
               Value: !Ref BrokerTenantSubdomain
-            - Name: BRITIVE_BROKER_AUTH_TOKEN
-              Value: !Ref BrokerAuthToken
           Secrets:
+            # Injected by the ECS agent at task start; kept out of the task
+            # definition so ecs:DescribeTaskDefinition does not expose them.
+            - Name: BRITIVE_BROKER_AUTH_TOKEN
+              ValueFrom: !Ref BrokerAuthTokenSecret
             - Name: SSH_PRIVATE_KEY
               ValueFrom: !Ref BrokerSSHKeySecret
           MountPoints:

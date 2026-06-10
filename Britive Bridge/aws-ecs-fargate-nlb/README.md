@@ -16,7 +16,9 @@ CloudFormation template `ecs-fargate-nlb.yaml` creates:
 - ECS **cluster**, **task definition**, and **service** (Fargate, ARM64 by default)
 - An internet-facing **NLB** with a TCP:443 listener → target group TCP:8080
 - **EFS** file system + access point + mount targets, mounted at `/data` (encrypted, transit encryption on)
-- **Security groups** (task allows 8080 from your `IngressCidr`; EFS allows 2049 from the task)
+- **Security groups** (NLB allows 443 from your `IngressCidr`; task allows 8080
+  only from the NLB security group — covers forwarded traffic and NLB health
+  checks; EFS allows 2049 from the task)
 - **IAM** execution + task roles
 - A **CloudWatch** log group (30-day retention)
 - ECS Exec enabled for debugging
@@ -105,3 +107,7 @@ curl -sfk https://<LoadBalancerDnsName>/api/health
 ```bash
 aws cloudformation delete-stack --stack-name britive-bridge
 ```
+
+> The broker-token secret is retained with a recovery window after stack
+> deletion. To redeploy the same stack name immediately, force-delete it first:
+> `aws secretsmanager delete-secret --secret-id britive-bridge/broker/auth-token --force-delete-without-recovery`

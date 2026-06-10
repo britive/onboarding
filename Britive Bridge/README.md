@@ -1,5 +1,9 @@
 # Britive Bridge — Deployment Options
 
+> **Note:** This directory targets **Britive Bridge v1.x**. The deployment
+> scripts, templates, and examples here are in **BETA** — validate them in a
+> non-production environment first, and expect changes between releases.
+
 Britive Bridge is a self-hosted container that connects to the Britive platform
 through the Britive Broker and brokers clientless, browser-based sessions to
 your internal resources. This directory collects **ready-to-use deployment
@@ -132,7 +136,8 @@ Britive Bridge/
     │   ├── service.yaml
     │   ├── ingress.yaml
     │   ├── external-secret.example.yaml   # optional: External Secrets Operator
-    │   └── ha-overlay.example.yaml         # optional: multi-replica HA (RWM)
+    │   ├── pvc-rwm.example.yaml           # optional HA: RWX PVC (instead of pvc.yaml)
+    │   └── ha-deployment-patch.example.yaml  # optional HA: replicas + rolling update
     └── README.md                   # includes the public Helm chart roadmap
 ```
 
