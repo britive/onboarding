@@ -1,0 +1,13 @@
+[
+  { "ParameterKey": "StackNamePrefix",       "ParameterValue": "britive-bridge" },
+  { "ParameterKey": "VpcId",                 "ParameterValue": "vpc-EXAMPLE0000000000" },
+  { "ParameterKey": "PublicSubnetIds",       "ParameterValue": "subnet-EXAMPLEAAAA0000,subnet-EXAMPLEBBBB0000" },
+  { "ParameterKey": "IngressCidr",           "ParameterValue": "0.0.0.0/0" },
+  { "ParameterKey": "ImageUri",              "ParameterValue": "britive/bridge:latest" },
+  { "ParameterKey": "CpuArchitecture",       "ParameterValue": "ARM64" },
+  { "ParameterKey": "TaskCpu",               "ParameterValue": "1024" },
+  { "ParameterKey": "TaskMemory",            "ParameterValue": "2048" },
+  { "ParameterKey": "DesiredCount",          "ParameterValue": "1" },
+  { "ParameterKey": "BrokerTenantSubdomain", "ParameterValue": "<your-tenant-subdomain>" },
+  { "ParameterKey": "BrokerAuthToken",       "ParameterValue": "<your-broker-auth-token>" }
+]

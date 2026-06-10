@@ -1,0 +1,47 @@
+# Strategic-merge patch over the base Deployment
+# (../../kubernetes/manifests/deployment.yaml).
+#
+# Applies three changes for the custom image + the two examples:
+#   1. Swap the image to your custom build.
+#   2. Bind the IRSA service account (Aurora MySQL → Secrets Manager).
+#   3. Mount the broker's SSH provisioning key (Linux SSH example) at
+#      /home/bridge/.ssh from a Secret, read-only, mode 0600.
+#
+# Lists merge by key: containers by `name`, volumes/volumeMounts by `name`, so
+# only these fields are touched — everything else in the base Deployment stays.
+#
+# Create the SSH key Secret first (private key the broker uses to reach targets):
+#   kubectl -n britive-bridge create secret generic bridge-ssh-key \
+#     --from-file=id_ed25519=./bridge_ed25519
+#
+# Apply:
+#   kubectl -n britive-bridge patch deployment britive-bridge \
+#     --type merge --patch-file deployment-patch.yaml
+#
+# Or fold these fields directly into kubernetes/manifests/deployment.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: britive-bridge
+  namespace: britive-bridge
+spec:
+  template:
+    spec:
+      # IRSA: pod assumes the IAM role bound to this SA (see serviceaccount-irsa.yaml)
+      serviceAccountName: britive-bridge
+      containers:
+        - name: bridge
+          # Replace with YOUR pushed custom image (Docker Hub or ECR).
+          image: docker.io/yourorg/britive-bridge-custom:latest
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /home/bridge/.ssh
+              readOnly: true
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: bridge-ssh-key
+            defaultMode: 0600          # ssh refuses world/group-readable keys
+            items:
+              - key: id_ed25519
+                path: id_ed25519

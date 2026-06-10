@@ -1,0 +1,432 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Britive Bridge ECS Fargate deployment.
+  ALB terminates TLS with an ACM certificate on port 443.
+  Backend target group uses HTTPS on port 8080 with certificate
+  verification disabled (container uses its own self-signed cert).
+  SSH private key injected from Secrets Manager for broker → EC2 access.
+
+Parameters:
+  StackNamePrefix:
+    Type: String
+    Default: britive-bridge
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,30}"
+    Description: Prefix used for named AWS resources.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where Bridge will run.
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Two public subnets for the internet-facing ALB, Fargate task, and EFS mount targets.
+  IngressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to reach Bridge HTTPS on the ALB.
+  ImageUri:
+    Type: String
+    Default: britive/bridge:latest
+    Description: Container image URI. Use a multi-arch image or one that matches CpuArchitecture.
+  CpuArchitecture:
+    Type: String
+    Default: ARM64
+    AllowedValues:
+      - ARM64
+      - X86_64
+    Description: ECS task CPU architecture.
+  TaskCpu:
+    Type: String
+    Default: "1024"
+    AllowedValues:
+      - "512"
+      - "1024"
+      - "2048"
+      - "4096"
+    Description: Fargate task CPU units.
+  TaskMemory:
+    Type: String
+    Default: "2048"
+    AllowedValues:
+      - "1024"
+      - "2048"
+      - "3072"
+      - "4096"
+      - "5120"
+      - "6144"
+      - "7168"
+      - "8192"
+      - "16384"
+      - "30720"
+    Description: Fargate task memory in MiB.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 4
+    Description: Number of Bridge tasks to run.
+  BrokerTenantSubdomain:
+    Type: String
+    Description: Britive broker tenant subdomain, for example acme.
+  BrokerAuthToken:
+    Type: String
+    NoEcho: true
+    Description: Britive broker pool authentication token.
+  BrokerSSHPrivateKey:
+    Type: String
+    NoEcho: true
+    Description: >
+      PEM-encoded private key (ed25519 or RSA) that the broker container uses
+      to SSH into EC2 instances. Stored in Secrets Manager and injected at
+      runtime — never baked into the container image.
+  AcmCertificateArn:
+    Type: String
+    Description: >
+      ARN of the ACM certificate for your domain (e.g. bridge.example.com
+      or the wildcard *.example.com). Must be in the same region as the ALB.
+
+Resources:
+  # ── Logging ───────────────────────────────────────────────────────────────
+  BridgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${StackNamePrefix}
+      RetentionInDays: 30
+
+  # ── ECS Cluster ───────────────────────────────────────────────────────────
+  BridgeCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${StackNamePrefix}-cluster
+
+  # ── Secrets Manager ───────────────────────────────────────────────────────
+  BrokerSSHKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/broker/ssh-private-key
+      Description: Private key used by the broker ECS task to SSH into EC2 instances
+      SecretString: !Ref BrokerSSHPrivateKey
+
+  # ── IAM Roles ─────────────────────────────────────────────────────────────
+  BridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${StackNamePrefix}-exec-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadBrokerSSHKey
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref BrokerSSHKeySecret
+
+  BridgeTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${StackNamePrefix}-task-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ECSExecSSM
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt BridgeLogGroup.Arn
+        - PolicyName: SecretsManagerReadOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetRandomPassword
+                  - secretsmanager:ListSecrets
+                  - secretsmanager:ListSecretVersionIds
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
+
+  # ── Security Groups ───────────────────────────────────────────────────────
+
+  # ALB: accepts HTTPS from the world, allows all outbound to ECS tasks
+  BridgeAlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge ALB security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref IngressCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-alb-sg
+
+  # ECS task: only accepts traffic from the ALB security group on port 8080
+  BridgeTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge task security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref BridgeAlbSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-task-sg
+
+  BridgeEfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge EFS security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref BridgeTaskSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-efs-sg
+
+  # ── EFS ───────────────────────────────────────────────────────────────────
+  BridgeFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: elastic
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-data
+
+  BridgeAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      PosixUser:
+        Uid: "0"
+        Gid: "0"
+      RootDirectory:
+        Path: /bridge-data
+        CreationInfo:
+          OwnerUid: "0"
+          OwnerGid: "0"
+          Permissions: "0755"
+
+  BridgeMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      SubnetId: !Select [0, !Ref PublicSubnetIds]
+      SecurityGroups:
+        - !Ref BridgeEfsSecurityGroup
+
+  BridgeMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      SubnetId: !Select [1, !Ref PublicSubnetIds]
+      SecurityGroups:
+        - !Ref BridgeEfsSecurityGroup
+
+  # ── ALB ───────────────────────────────────────────────────────────────────
+  BridgeLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+
+      Name: !Sub ${StackNamePrefix}-alb
+      Scheme: internet-facing
+      Type: application                     # ALB, not NLB
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref BridgeAlbSecurityGroup
+
+  # Target group uses HTTPS so traffic to the container stays encrypted.
+  # TargetGroupAttributes disables cert verification so the container's
+  # self-signed cert is accepted without issue.
+  BridgeApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-api-https
+      VpcId: !Ref VpcId
+      Protocol: HTTPS                       # encrypted ALB → container
+      Port: 8080
+      TargetType: ip
+      # Accept the container's self-signed cert — no CA verification
+      TargetGroupAttributes:
+        - Key: load_balancing.cross_zone.enabled
+          Value: "true"
+      HealthCheckProtocol: HTTPS
+      HealthCheckPort: "8080"
+      HealthCheckPath: /api/health          # bridge health endpoint
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+
+  # HTTPS:443 listener with ACM cert — terminates TLS at the ALB
+  BridgeApiListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgeApiTargetGroup
+
+  # Optional: redirect HTTP → HTTPS
+  BridgeHttpRedirectListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
+
+  # ── ECS Task Definition ───────────────────────────────────────────────────
+  BridgeTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${StackNamePrefix}-task
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+        CpuArchitecture: !Ref CpuArchitecture
+      ExecutionRoleArn: !GetAtt BridgeExecutionRole.Arn
+      TaskRoleArn: !GetAtt BridgeTaskRole.Arn
+      Volumes:
+        - Name: bridge-data
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref BridgeFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref BridgeAccessPoint
+              IAM: DISABLED
+      ContainerDefinitions:
+        - Name: bridge
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          # Write SSH key to /root/.ssh before starting the bridge process.
+          # SSH_PRIVATE_KEY is injected from Secrets Manager by the ECS agent
+          # before this command runs, so it is available as an env var.
+          EntryPoint:
+            - "/bin/sh"
+            - "-c"
+          Command:
+            - "mkdir -p /home/bridge/.ssh && echo \"$SSH_PRIVATE_KEY\" > /home/bridge/.ssh/id_ed25519 && chmod 700 /home/bridge/.ssh && chmod 600 /home/bridge/.ssh/id_ed25519 && exec /entrypoint.sh"
+          Environment:
+            - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
+              Value: !Ref BrokerTenantSubdomain
+            - Name: BRITIVE_BROKER_AUTH_TOKEN
+              Value: !Ref BrokerAuthToken
+          Secrets:
+            - Name: SSH_PRIVATE_KEY
+              ValueFrom: !Ref BrokerSSHKeySecret
+          MountPoints:
+            - SourceVolume: bridge-data
+              ContainerPath: /data
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BridgeLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: bridge
+
+  # ── ECS Service ───────────────────────────────────────────────────────────
+  BridgeService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - BridgeApiListener
+      - BridgeMountTargetA
+      - BridgeMountTargetB
+    Properties:
+      ServiceName: !Sub ${StackNamePrefix}-service
+      Cluster: !Ref BridgeCluster
+      TaskDefinition: !Ref BridgeTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      HealthCheckGracePeriodSeconds: 60
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref BridgeTaskSecurityGroup
+          Subnets: !Ref PublicSubnetIds
+      LoadBalancers:
+        - ContainerName: bridge
+          ContainerPort: 8080
+          TargetGroupArn: !Ref BridgeApiTargetGroup
+
+Outputs:
+  ClusterName:
+    Value: !Ref BridgeCluster
+  ServiceName:
+    Value: !Ref BridgeService
+  LoadBalancerDnsName:
+    Value: !GetAtt BridgeLoadBalancer.DNSName
+    Description: Point your Route 53 ALIAS record at this value.
+  BridgeUrl:
+    Description: External URL for Britive BRIDGE_URL script parameter.
+    Value: !Sub https://${BridgeLoadBalancer.DNSName}
+  DataFileSystemId:
+    Value: !Ref BridgeFileSystem
+  BrokerSSHKeySecretArn:
+    Description: Secrets Manager ARN for the broker SSH private key.
+    Value: !Ref BrokerSSHKeySecret

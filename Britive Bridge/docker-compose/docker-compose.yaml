@@ -1,0 +1,60 @@
+# Britive Bridge - Single-Container Deployment
+# ===================================================
+# Optional convenience file. Equivalent to:
+#   docker run -d --name bridge -p 8080:8080 \
+#     -e BRITIVE_BROKER_TENANT_SUBDOMAIN="..." \
+#     -e BRITIVE_BROKER_AUTH_TOKEN="..." \
+#     -v bridge-data:/data \
+#     britive/bridge:latest
+#
+# Start:  docker compose up -d --build
+# Stop:   docker compose down
+
+services:
+  bridge:
+    image: britive/bridge:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # HTTPS API + WebSocket + browser protocols
+    environment:
+      # BRIDGE_ADMIN_TOKEN: "${BRIDGE_ADMIN_TOKEN:-}"
+      # BRIDGE_JWT_SECRET: "${BRIDGE_JWT_SECRET:-}"
+
+      # Britive broker - connects to platform via MQTT
+      BRITIVE_BROKER_TENANT_SUBDOMAIN: "${BRITIVE_BROKER_TENANT_SUBDOMAIN:-}"
+      BRITIVE_BROKER_AUTH_TOKEN: "${BRITIVE_BROKER_AUTH_TOKEN:-}"
+
+      # Custom TLS certificate (optional - omit for auto-generated self-signed)
+      TLS_CERT_FILE: "${TLS_CERT_FILE:-}"
+      TLS_KEY_FILE: "${TLS_KEY_FILE:-}"
+    volumes:
+      - bridge-data:/data
+      # Uncomment to bind-mount your own TLS certificate:
+      # - ./certs/cert.pem:/custom-certs/cert.pem:ro
+      # - ./certs/key.pem:/custom-certs/key.pem:ro
+      #
+      # Uncomment to bind-mount a custom broker config
+      # - ./broker-config.yml:/opt/britive-broker/config/broker-config.yml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sfk", "https://127.0.0.1:8080/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  bridge-data:
+  # EXAMPLES:
+  # - local
+  # bridge-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     o: bind
+  #     device: /srv/britive-bridge/data
+  # - nfs
+  # bridge-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: nfs
+  #     o: addr=10.0.0.20,nfsvers=4,rw
+  #     device: :/exports/britive-bridge
