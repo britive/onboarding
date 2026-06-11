@@ -48,3 +48,7 @@ kubectl -n britive-bridge patch deployment britive-bridge \
   3306 — allow it in your network policy / security group.
 - **Non-EKS clusters:** swap the IRSA SA for your platform's workload identity
   (GKE Workload Identity, AKS workload identity) or mount AWS creds via a Secret.
+- **Private registries:** a private Docker Hub repo (or ECR from a non-EKS
+  cluster) needs an image pull secret — `kubectl create secret docker-registry`
+  and reference it via `imagePullSecrets` in the patch. EKS nodes pull from ECR
+  via their node role without one.

@@ -10,15 +10,16 @@ self-signed cert and the ALB target group is configured to **not verify** it.
 
 ## What it deploys
 
-CloudFormation template `ecs-fargate-alb.yaml` creates everything the
-[NLB option](../aws-ecs-fargate-nlb/) does, plus:
+CloudFormation template `ecs-fargate-alb.yaml` creates the same core stack as
+the [NLB option](../aws-ecs-fargate-nlb/) (ECS cluster/task/service, EFS, IAM,
+CloudWatch logs, broker-token secret), with an **ALB instead of an NLB**:
 
 - An **ALB** with:
   - HTTPS:443 listener using your **ACM certificate** (TLS 1.2/1.3 policy)
   - HTTP:80 listener that **redirects to 443**
   - An HTTPS target group on 8080 with health checks on `/api/health`
-- A dedicated **ALB security group** (443 from your `IngressCidr`); the task SG
-  only accepts 8080 **from the ALB SG**
+- A dedicated **ALB security group** (443 + 80 from your `IngressCidr`); the
+  task SG only accepts 8080 **from the ALB SG**
 
 Traffic path: `client → ALB:443 (ACM TLS) → task:8080 (HTTPS, cert not verified)`.
 

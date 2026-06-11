@@ -1,5 +1,7 @@
-# Optional: high-availability storage. Use INSTEAD of pvc.yaml — choose HA at
-# install time. PVC accessModes are immutable: if the RWO pvc.yaml is already
+# Optional: high-availability storage. NOT OFFICIALLY SUPPORTED yet — multiple
+# replicas sharing /data work on Bridge v1.x but are not covered by support;
+# run a single replica for production.
+# Use INSTEAD of pvc.yaml — choose HA at install time. PVC accessModes are immutable: if the RWO pvc.yaml is already
 # applied, you must delete that PVC first (DATA LOSS — back up /data) before
 # applying this one.
 #

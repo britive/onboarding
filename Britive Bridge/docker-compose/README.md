@@ -54,6 +54,7 @@ ideal for local trials, POCs, and single-VM deployments.
 
 ```bash
 docker run -d --name bridge -p 8080:8080 \
+  --restart unless-stopped \
   -e BRITIVE_BROKER_TENANT_SUBDOMAIN="<your-tenant-subdomain>" \
   -e BRITIVE_BROKER_AUTH_TOKEN="<your-broker-auth-token>" \
   -v bridge-data:/data \

@@ -1,5 +1,6 @@
 # Strategic-merge patch over the base Deployment for HA: more replicas and
-# rolling updates instead of Recreate. Only safe once /data is on a
+# rolling updates instead of Recreate. NOT OFFICIALLY SUPPORTED yet — works on
+# Bridge v1.x but is not covered by support; single replica for production. Only safe once /data is on a
 # ReadWriteMany volume — see pvc-rwm.example.yaml for the full install order.
 #
 # This is a PATCH, not a full manifest — do not `kubectl apply` it.

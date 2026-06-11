@@ -19,8 +19,17 @@
 .PARAMETER Image
   Docker Hub image. Default: britive/bridge:latest
 
+.PARAMETER ContainerName
+  Name for the container. Default: bridge
+
 .PARAMETER Port
   Host port published for HTTPS. Default: 8080
+
+.PARAMETER DataVolume
+  Docker named volume mounted at /data. Default: bridge-data
+
+.PARAMETER EnvFile
+  Env file with the broker credentials. Default: bridge.env
 
 .EXAMPLE
   Copy-Item bridge.env.example bridge.env   # then edit bridge.env
@@ -76,9 +85,17 @@ Then re-run this script.
 "@
 }
 
-# ── 4. Env file must exist ──────────────────────────────────────────────────
+# ── 4. Env file must exist, be edited, and be BOM-free ──────────────────────
 if (-not (Test-Path $EnvFile)) {
   Die "Missing $EnvFile. Run: Copy-Item bridge.env.example bridge.env  then edit it."
+}
+if (Select-String -Path $EnvFile -Pattern '<your-' -SimpleMatch -Quiet) {
+  Die "$EnvFile still contains placeholder values (<your-...>). Edit it with your real tenant subdomain and broker token."
+}
+# A UTF-8 BOM corrupts the first variable name when docker parses --env-file.
+$firstBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $EnvFile))[0..2]
+if ($firstBytes.Count -ge 3 -and $firstBytes[0] -eq 0xEF -and $firstBytes[1] -eq 0xBB -and $firstBytes[2] -eq 0xBF) {
+  Die "$EnvFile starts with a UTF-8 BOM, which breaks docker --env-file. Re-save it as UTF-8 WITHOUT BOM (in VS Code: 'Save with Encoding' > 'UTF-8')."
 }
 
 # ── 5. Open the Windows Firewall for the port ───────────────────────────────

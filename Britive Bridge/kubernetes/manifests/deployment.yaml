@@ -18,7 +18,9 @@ spec:
         app.kubernetes.io/name: britive-bridge
     spec:
       securityContext:
-        fsGroup: 0
+        fsGroup: 0    # volumes group-owned by GID 0 — the stock image's
+                      # non-root `bridge` user is in group 0, so it can
+                      # write /data
       containers:
         - name: bridge
           image: britive/bridge:latest
@@ -56,13 +58,15 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          # Recommended baseline for v1.x: 2 vCPU / 4 GiB (matches the VM and
+          # ECS guidance).
           resources:
             requests:
-              cpu: "500m"
-              memory: "1Gi"
+              cpu: "2"
+              memory: "4Gi"
             limits:
-              cpu: "1"
-              memory: "2Gi"
+              cpu: "2"
+              memory: "4Gi"
       volumes:
         - name: bridge-data
           persistentVolumeClaim:

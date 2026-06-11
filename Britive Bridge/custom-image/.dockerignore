@@ -2,3 +2,4 @@ README.md
 build-and-push.sh
 .dockerignore
 **/*.md
+k8s-overlays/

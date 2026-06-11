@@ -2,12 +2,13 @@
 # ===================================================
 # Optional convenience file. Equivalent to:
 #   docker run -d --name bridge -p 8080:8080 \
+#     --restart unless-stopped \
 #     -e BRITIVE_BROKER_TENANT_SUBDOMAIN="..." \
 #     -e BRITIVE_BROKER_AUTH_TOKEN="..." \
 #     -v bridge-data:/data \
 #     britive/bridge:latest
 #
-# Start:  docker compose up -d --build
+# Start:  docker compose up -d
 # Stop:   docker compose down
 
 services:
@@ -37,12 +38,15 @@ services:
       test: ["CMD", "curl", "-sfk", "https://127.0.0.1:8080/api/health"]
       interval: 15s
       timeout: 5s
-      retries: 20
+      retries: 5
+      start_period: 30s   # startup failures don't count against retries
 
 volumes:
   bridge-data:
   # EXAMPLES:
-  # - local
+  # - local bind mount: create the directory FIRST (the none/bind driver does
+  #   not create it) — mkdir -p /srv/britive-bridge/data. On SELinux-enforcing
+  #   hosts (RHEL family), label it: chcon -Rt svirt_sandbox_file_t <dir>
   # bridge-data:
   #   driver: local
   #   driver_opts:

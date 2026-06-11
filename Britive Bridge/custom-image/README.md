@@ -90,7 +90,7 @@ Local single-arch build (no push) for testing:
 ```bash
 docker build -t britive-bridge-custom:latest .
 docker run --rm britive-bridge-custom:latest \
-  sh -c 'for c in ssh ssh-keygen mysql aws jq python3; do command -v $c; done'
+  sh -c 'for c in ssh ssh-keygen mysql aws jq python3; do command -v $c || exit 1; done'
 ```
 
 ---

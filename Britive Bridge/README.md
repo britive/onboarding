@@ -141,7 +141,7 @@ Britive Bridge/
     │   ├── external-secret.example.yaml   # optional: External Secrets Operator
     │   ├── pvc-rwm.example.yaml           # optional HA: RWX PVC (instead of pvc.yaml)
     │   └── ha-deployment-patch.example.yaml  # optional HA: replicas + rolling update
-    └── README.md                   # includes the public Helm chart roadmap
+    └── README.md
 ```
 
 ---

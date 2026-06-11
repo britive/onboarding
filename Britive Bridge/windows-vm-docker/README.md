@@ -32,6 +32,8 @@ license) per the Linux guide.
 
 - Windows 10/11 (Pro/Enterprise) or Windows Server 2022+, 64-bit, with
   **virtualization enabled** in BIOS/hypervisor (required for WSL 2).
+- Sizing: start with **2 vCPU / 4 GiB RAM** for the Bridge container (plus
+  headroom for Windows + WSL 2 itself).
 - **WSL 2** installed: in an elevated PowerShell run `wsl --install` then reboot.
 - A Linux-container runtime:
   - Windows 10/11: **Docker Desktop** set to **Linux containers** (tray icon →
@@ -202,9 +204,10 @@ that URL.
 ```powershell
 docker logs -f bridge                       # follow logs
 docker restart bridge                       # restart
-docker pull britive/bridge:latest; docker rm -f bridge; .\install.ps1   # update
+.\install.ps1                               # update: re-pulls image, recreates container
 docker rm -f bridge                         # stop + remove (keeps volume)
 docker volume rm bridge-data                # delete persisted state (destructive)
+Remove-NetFirewallRule -DisplayName "Britive Bridge 8080"   # close the port on uninstall
 ```
 
 ---
