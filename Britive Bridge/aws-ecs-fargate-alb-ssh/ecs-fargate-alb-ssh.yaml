@@ -20,10 +20,14 @@ Parameters:
     Description: VPC where Bridge will run.
   PublicSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: Two public subnets for the internet-facing ALB, Fargate task, and EFS mount targets.
+    Description: >
+      Exactly two public subnets in different AZs for the internet-facing ALB,
+      Fargate task, and EFS mount targets (the template creates mount targets
+      for the first two subnets only).
   IngressCidr:
     Type: String
     Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3}\.){3}\d{1,3}/(\d|[12]\d|3[0-2])'
     Description: CIDR allowed to reach Bridge HTTPS on the ALB.
   ImageUri:
     Type: String
@@ -38,7 +42,7 @@ Parameters:
     Description: ECS task CPU architecture.
   TaskCpu:
     Type: String
-    Default: "1024"
+    Default: "2048"
     AllowedValues:
       - "512"
       - "1024"
@@ -47,7 +51,7 @@ Parameters:
     Description: Fargate task CPU units.
   TaskMemory:
     Type: String
-    Default: "2048"
+    Default: "4096"
     AllowedValues:
       - "1024"
       - "2048"
@@ -59,7 +63,10 @@ Parameters:
       - "8192"
       - "16384"
       - "30720"
-    Description: Fargate task memory in MiB.
+    Description: >
+      Fargate task memory in MiB. Must be a valid combination for TaskCpu
+      (512 CPU: 1024-4096; 1024 CPU: 2048-8192; 2048 CPU: 4096-16384;
+      4096 CPU: 8192-30720).
   DesiredCount:
     Type: Number
     Default: 1
@@ -253,6 +260,8 @@ Resources:
     Type: AWS::EFS::AccessPoint
     Properties:
       FileSystemId: !Ref BridgeFileSystem
+      # The access point forces all NFS operations to uid/gid 0, so the
+      # container's non-root user can write /data without matching ownership.
       PosixUser:
         Uid: "0"
         Gid: "0"
@@ -283,7 +292,6 @@ Resources:
   BridgeLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-
       Name: !Sub ${StackNamePrefix}-alb
       Scheme: internet-facing
       Type: application                     # ALB, not NLB
@@ -385,7 +393,9 @@ Resources:
             - "/bin/sh"
             - "-c"
           Command:
-            - "mkdir -p /home/bridge/.ssh && echo \"$SSH_PRIVATE_KEY\" > /home/bridge/.ssh/id_ed25519 && chmod 700 /home/bridge/.ssh && chmod 600 /home/bridge/.ssh/id_ed25519 && exec /entrypoint.sh"
+            # unset drops the key from the bridge process env (it lives only
+            # in the key file from here on).
+            - "mkdir -p /home/bridge/.ssh && echo \"$SSH_PRIVATE_KEY\" > /home/bridge/.ssh/id_ed25519 && chmod 700 /home/bridge/.ssh && chmod 600 /home/bridge/.ssh/id_ed25519 && unset SSH_PRIVATE_KEY && exec /entrypoint.sh"
           Environment:
             - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
               Value: !Ref BrokerTenantSubdomain

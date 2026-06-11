@@ -88,9 +88,10 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plu
 **RHEL / Rocky / AlmaLinux / Fedora** (dnf, docker-ce repo):
 
 ```bash
-sudo dnf install -y dnf-plugins-core
-# CentOS repo works for RHEL/Rocky/Alma; use the fedora repo on Fedora:
-sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+# CentOS repo works for RHEL/Rocky/Alma; use the fedora repo on Fedora.
+# (Written directly — `dnf config-manager --add-repo` changed syntax in dnf5.)
+sudo curl -fsSL https://download.docker.com/linux/centos/docker-ce.repo \
+  -o /etc/yum.repos.d/docker-ce.repo
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 ```
 
@@ -229,6 +230,8 @@ docker restart bridge                 # restart
 sudo ./install.sh                     # update: re-pulls image, recreates container
 docker rm -f bridge                   # stop + remove (keeps data volume)
 docker volume rm bridge-data          # delete persisted state (destructive)
+sudo firewall-cmd --permanent --remove-port=8080/tcp && sudo firewall-cmd --reload
+                                      # close the port on uninstall (firewalld)
 ```
 
 **Auto-start on reboot** is handled by `--restart unless-stopped` plus

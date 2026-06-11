@@ -20,8 +20,8 @@ Manifests in [`manifests/`](manifests/):
 | `service.yaml` | ClusterIP service (443 → container 8080) |
 | `ingress.yaml` | ingress-nginx Ingress with HTTPS backend + WebSocket support |
 | `external-secret.example.yaml` | *(optional)* Source broker creds from an external store via the External Secrets Operator |
-| `pvc-rwm.example.yaml` | *(optional, HA)* ReadWriteMany PVC — use **instead of** `pvc.yaml` |
-| `ha-deployment-patch.example.yaml` | *(optional, HA)* Patch: replicas + rolling-update + anti-affinity |
+| `pvc-rwm.example.yaml` | *(optional, HA — not officially supported)* ReadWriteMany PVC — use **instead of** `pvc.yaml` |
+| `ha-deployment-patch.example.yaml` | *(optional, HA — not officially supported)* Patch: replicas + rolling-update + anti-affinity |
 
 Traffic path: `client → Ingress (TLS) → Service:443 → pod:8080 (HTTPS, self-signed)`.
 
@@ -29,7 +29,7 @@ Traffic path: `client → Ingress (TLS) → Service:443 → pod:8080 (HTTPS, sel
 
 - A Kubernetes cluster (1.25+) and `kubectl` context pointing at it
 - An **Ingress controller** (examples use [ingress-nginx](https://kubernetes.github.io/ingress-nginx/))
-- A **StorageClass** for the PVC (RWO is fine for a single replica; use RWM for HA)
+- A **StorageClass** for the PVC (RWO is fine for a single replica; use RWX for HA)
 - A way to get a TLS cert for your domain — e.g.
   [cert-manager](https://cert-manager.io/) — or bring your own cert
 - Completed [platform setup](../platform-setup/) — you need
@@ -155,8 +155,9 @@ RWO PVC and losing `/data`.
      --type strategic --patch-file manifests/ha-deployment-patch.example.yaml
    ```
 
-> Confirm with your Britive team that your Bridge version supports active-active
-> across replicas before relying on HA for production traffic.
+> **Not officially supported yet.** Multiple replicas sharing `/data` work on
+> Bridge v1.x, but the configuration is not covered by support — run a single
+> replica for production until Britive announces HA support.
 
 ## Teardown
 
@@ -171,92 +172,8 @@ kubectl delete -f manifests/namespace.yaml
 
 ---
 
-## Roadmap: public Helm chart
+## Helm chart
 
-A first-class Helm chart is planned so Bridge can be installed in one command
-and configured declaratively via `values.yaml`. The chart will be published as
-an **OCI artifact on Docker Hub**, alongside the `britive/bridge` container
-image — one registry, one set of credentials, one `britive/` namespace. No
-`helm repo add` needed. Target shape:
-
-```bash
-helm install bridge oci://registry-1.docker.io/britive/britive-bridge \
-  --namespace britive-bridge --create-namespace \
-  --set broker.tenantSubdomain=<your-tenant-subdomain> \
-  --set broker.existingSecret=bridge-broker \
-  --set ingress.host=bridge.example.com
-```
-
-> The chart lives at `britive/britive-bridge` — a **sibling** Docker Hub repo to
-> the `britive/bridge` image (OCI charts can't nest under an image repo). Pin a
-> version in production: append `--version X.Y.Z`.
-
-**Planned `values.yaml` surface (subject to change):**
-
-```yaml
-image:
-  repository: britive/bridge
-  tag: latest
-  pullPolicy: IfNotPresent
-
-replicaCount: 1
-
-broker:
-  tenantSubdomain: ""        # BRITIVE_BROKER_TENANT_SUBDOMAIN
-  authToken: ""              # inline (dev only) ...
-  existingSecret: ""         # ... or reference an existing Secret (preferred)
-
-persistence:
-  enabled: true
-  size: 5Gi
-  storageClass: ""
-  accessMode: ReadWriteOnce
-
-service:
-  type: ClusterIP
-  port: 443
-
-ingress:
-  enabled: true
-  className: nginx
-  host: bridge.example.com
-  tls:
-    enabled: true
-    secretName: bridge-tls
-  annotations: {}            # controller-specific (backend HTTPS, WebSocket, cert ARN)
-
-resources:
-  requests: { cpu: 500m, memory: 1Gi }
-  limits:   { cpu: "1",  memory: 2Gi }
-
-probes:
-  scheme: HTTPS
-  path: /api/health
-```
-
-**Planned delivery / milestones**
-
-1. Package the manifests in this directory as a chart (`Chart.yaml`,
-   `templates/`, `values.yaml`).
-2. Add chart-level docs, schema validation (`values.schema.json`), and a CI lint
-   + `helm template` test.
-3. Publish as a public **OCI chart artifact on Docker Hub**, alongside the
-   container image (see push flow below).
-4. Surface the existing **ESO** and **HA (RWM)** manifest options (already
-   shipped under `manifests/`) as `values.yaml` toggles in the chart.
-
-**Planned publish flow (Docker Hub OCI)**
-
-```bash
-helm package .                                   # -> britive-bridge-X.Y.Z.tgz
-echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io \
-  -u britive --password-stdin
-helm push britive-bridge-X.Y.Z.tgz oci://registry-1.docker.io/britive
-```
-
-Requires Helm 3.8+ (OCI support is GA). The chart appears as the
-`britive/britive-bridge` repository on Docker Hub with the
-`application/vnd.cncf.helm.*` media type.
-
-> Until the chart ships, the manifests above are the supported install path and
-> are kept in sync with the planned chart values so migration is mechanical.
+A public Helm chart (OCI artifact on Docker Hub) is planned. Until it ships,
+the manifests in this directory are the supported install path; they map 1:1
+to the planned chart values, so migrating later is mechanical.

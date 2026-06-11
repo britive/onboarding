@@ -5,8 +5,8 @@
   { "ParameterKey": "IngressCidr",           "ParameterValue": "0.0.0.0/0" },
   { "ParameterKey": "ImageUri",              "ParameterValue": "britive/bridge:latest" },
   { "ParameterKey": "CpuArchitecture",       "ParameterValue": "ARM64" },
-  { "ParameterKey": "TaskCpu",               "ParameterValue": "1024" },
-  { "ParameterKey": "TaskMemory",            "ParameterValue": "2048" },
+  { "ParameterKey": "TaskCpu",               "ParameterValue": "2048" },
+  { "ParameterKey": "TaskMemory",            "ParameterValue": "4096" },
   { "ParameterKey": "DesiredCount",          "ParameterValue": "1" },
   { "ParameterKey": "BrokerTenantSubdomain", "ParameterValue": "<your-tenant-subdomain>" },
   { "ParameterKey": "BrokerAuthToken",       "ParameterValue": "<your-broker-auth-token>" }

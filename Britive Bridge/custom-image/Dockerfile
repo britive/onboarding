@@ -60,7 +60,9 @@ RUN set -eu; \
         PKG=apk; \
     elif command -v microdnf >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then \
         DNF=$(command -v dnf || command -v microdnf); \
-        $DNF install -y \
+        # --allowerasing: ubi-minimal ships coreutils-single, which conflicts
+        # with the full coreutils package.
+        $DNF install -y --allowerasing \
             ca-certificates curl unzip bash coreutils \
             openssh-clients python3 jq \
             mariadb; \

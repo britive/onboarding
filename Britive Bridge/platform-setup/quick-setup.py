@@ -47,7 +47,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 
-def prompt(label, default=None, secret=False, required=True):
+def prompt(label, default=None, secret=False):
     """Prompt the user for input with an optional default."""
     suffix = f" [{'****' if secret else default}]" if default else ""
     while True:
@@ -56,19 +56,7 @@ def prompt(label, default=None, secret=False, required=True):
             return default
         if value:
             return value
-        if not required:
-            return ""
         print("    (required)")
-
-
-def confirm(message):
-    """Ask for y/n confirmation."""
-    while True:
-        answer = input(f"  {message} [y/n]: ").strip().lower()
-        if answer in ("y", "yes"):
-            return True
-        if answer in ("n", "no"):
-            return False
 
 
 def header(step, title):
@@ -95,6 +83,9 @@ def print_env_block(tenant_subdomain, auth_token):
     print(f"  BRITIVE_BROKER_TENANT_SUBDOMAIN={tenant_subdomain}")
     if auth_token:
         print(f"  BRITIVE_BROKER_AUTH_TOKEN={auth_token}")
+        print()
+        print("  The token is a secret: clear your terminal scrollback after")
+        print("  saving it, and avoid running this script where output is logged.")
     else:
         print("  BRITIVE_BROKER_AUTH_TOKEN=<check Britive UI for token value>")
     print()
@@ -201,7 +192,8 @@ set -eu
 
 TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 43)
 NOW_EPOCH=$(date +%s)
-EXPIRES_AT=$((NOW_EPOCH + EXPIRATION))
+# EXPIRATION (profile.timeout) is in milliseconds; expires_at is epoch seconds.
+EXPIRES_AT=$((NOW_EPOCH + EXPIRATION / 1000))
 cat <<EOF | /opt/britive-broker/scripts/bridge.sh checkout-create --stdin >/dev/null
 {
   "transaction_id": "${TRANSACTION_ID}",
@@ -351,7 +343,7 @@ def create_bridge_resource_type(client):
             client.put(
                 icon_url,
                 data=BRIDGE_ICON_SVG,
-                headers={"Content-Type": "text/xml"},
+                headers={"Content-Type": "image/svg+xml"},
             )
             success("Resource type icon set")
             break
@@ -376,11 +368,7 @@ def create_admin_permission(client, bridge_type_id, template_id):
                 perm_id = existing.get("permissionId")
                 success(f"Permission 'admin' already exists: {perm_id}")
                 info("Scripts/variables left as-is — edit them in the Britive UI if needed.")
-                return {
-                    "id": perm_id,
-                    "version": existing.get("version", ""),
-                    "resource_type_id": bridge_type_id,
-                }
+                return {"id": perm_id, "resource_type_id": bridge_type_id}
     except Exception as exc:
         warn(f"Could not check for an existing permission ({exc}); attempting to create one.")
 
@@ -401,7 +389,7 @@ def create_admin_permission(client, bridge_type_id, template_id):
     # Step 2: Get presigned upload URLs (SDK, with retry for propagation delay)
     info("Getting script upload URLs...")
     urls = None
-    for _attempt in range(5):
+    for attempt in range(5):
         try:
             urls = perms.get_urls(perm_id)
             if isinstance(urls, dict) and "checkinURL" in urls:
@@ -410,11 +398,12 @@ def create_admin_permission(client, bridge_type_id, template_id):
             urls = None
         except Exception:
             pass
-        time.sleep(2)
+        if attempt < 4:
+            time.sleep(2)
 
     if not urls:
         warn("Could not get script upload URLs.")
-        return {"id": perm_id, "version": "", "resource_type_id": bridge_type_id}
+        return {"id": perm_id, "resource_type_id": bridge_type_id}
 
     # Step 3: Upload scripts to presigned S3 URLs via temp files
     info("Uploading checkout script...")
@@ -437,7 +426,7 @@ def create_admin_permission(client, bridge_type_id, template_id):
     except Exception as exc:
         warn(f"Failed to upload scripts: {exc}")
         warn("Permission left as a draft — re-run this script or upload scripts in the UI.")
-        return {"id": perm_id, "version": "", "resource_type_id": bridge_type_id}
+        return {"id": perm_id, "resource_type_id": bridge_type_id}
     finally:
         os.unlink(checkout_tmp.name)
         os.unlink(checkin_tmp.name)
@@ -466,18 +455,12 @@ def create_admin_permission(client, bridge_type_id, template_id):
 
     try:
         perm_url = f"{client.base_url}/resource-manager/permissions/{perm_id}"
-        result = client.put(perm_url, json=finalize_body)
-        perm_version = (result or {}).get("version", "")
+        client.put(perm_url, json=finalize_body)
         success(f"Permission 'admin' finalized: {perm_id}")
     except Exception as exc:
         warn(f"Failed to finalize permission: {exc}")
-        perm_version = ""
 
-    return {
-        "id": perm_id,
-        "version": perm_version,
-        "resource_type_id": bridge_type_id,
-    }
+    return {"id": perm_id, "resource_type_id": bridge_type_id}
 
 
 def create_bridge_resource(client, bridge_type_id, bridge_url, pool_id):

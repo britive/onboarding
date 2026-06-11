@@ -35,13 +35,17 @@ die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "Run as root (sudo ./install.sh)."
 [ -f "$ENV_FILE" ]   || die "Missing ${ENV_FILE}. Run: cp ${SCRIPT_DIR}/bridge.env.example ${ENV_FILE}  then edit it."
+# Catch unedited template placeholders before the container crash-loops on them.
+if grep -q '<your-' "$ENV_FILE"; then
+  die "${ENV_FILE} still contains placeholder values (<your-...>). Edit it with your real tenant subdomain and broker token."
+fi
 
 # ── 1. Detect the distro ────────────────────────────────────────────────────
 # /etc/os-release is the portable source of truth across modern Linux.
 [ -r /etc/os-release ] || die "Cannot read /etc/os-release; unsupported OS."
 # shellcheck disable=SC1091
 . /etc/os-release
-log "Detected: ${PRETTY_NAME:-$ID $VERSION_ID} ($(uname -m))"
+log "Detected: ${PRETTY_NAME:-$ID ${VERSION_ID:-}} ($(uname -m))"
 
 # ── 2. Install Docker Engine (skip if already present) ──────────────────────
 install_docker_debian() {
@@ -58,7 +62,7 @@ install_docker_debian() {
 https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update -y
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 }
 
 install_docker_rhel() {
@@ -69,7 +73,7 @@ install_docker_rhel() {
   [ "$ID" = "fedora" ] && repo_distro="fedora"  # Fedora has its own repo path
   curl -fsSL "https://download.docker.com/linux/${repo_distro}/docker-ce.repo" \
     -o /etc/yum.repos.d/docker-ce.repo
-  dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 }
 
 install_docker_amazon() {
@@ -89,6 +93,7 @@ else
   log "Installing Docker Engine..."
   case "$ID" in
     ubuntu|debian)            install_docker_debian ;;
+    # centos = CentOS Stream 9+ (dnf); CentOS 7 (yum-only) is EOL/unsupported.
     rhel|rocky|almalinux|centos|fedora) install_docker_rhel ;;
     amzn)                     install_docker_amazon ;;
     *) die "Unsupported distro '$ID'. Install Docker manually, then re-run." ;;
@@ -110,8 +115,7 @@ elif command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; th
   log "ufw active — opening ${PORT}/tcp..."
   ufw allow "${PORT}/tcp"
 else
-  warn "No active host firewall detected. Ensure your CLOUD security group / "
-  warn "network ACL allows inbound TCP ${PORT} from your users."
+  warn "No active host firewall detected. Ensure your CLOUD security group / network ACL allows inbound TCP ${PORT} from your users."
 fi
 
 # ── 5. SELinux note (RHEL/Amazon family) ────────────────────────────────────
@@ -147,14 +151,28 @@ docker run -d \
 
 # ── 7. Health check ─────────────────────────────────────────────────────────
 log "Waiting for Bridge to report healthy..."
+# Probe with host curl if present, else with curl inside the container.
+health_probe() {
+  if command -v curl >/dev/null 2>&1; then
+    # -k: accept the self-signed cert. -s/-f: quiet + fail on non-2xx.
+    curl -sfk "https://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1
+  else
+    docker exec "$CONTAINER_NAME" curl -sfk "https://127.0.0.1:8080/api/health" >/dev/null 2>&1
+  fi
+}
+HEALTHY=0
 for i in $(seq 1 20); do
-  # -k: accept the self-signed cert. -s/-f: quiet + fail on non-2xx.
-  if curl -sfk "https://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+  if health_probe; then
+    HEALTHY=1
     log "Bridge is healthy at https://127.0.0.1:${PORT}/api/health"
     break
   fi
-  [ "$i" -eq 20 ] && warn "Health check did not pass yet. Check: docker logs ${CONTAINER_NAME}"
   sleep 3
 done
 
-log "Done. Logs: docker logs -f ${CONTAINER_NAME}"
+if [ "$HEALTHY" -eq 1 ]; then
+  log "Done. Logs: docker logs -f ${CONTAINER_NAME}"
+else
+  warn "Bridge did not report healthy within 60s. Inspect: docker logs ${CONTAINER_NAME}"
+  exit 1
+fi
