@@ -82,6 +82,9 @@ Confirm the broker can reach a target host by checking out an SSH session
 through Bridge, or inspect the running task with ECS Exec:
 
 ```bash
+# find the task ID first:
+aws ecs list-tasks --cluster <ClusterName> --service-name <ServiceName>
+
 aws ecs execute-command --cluster <ClusterName> --task <task-id> \
   --container bridge --interactive --command "/bin/sh"
 # inside: ls -l /home/bridge/.ssh/id_ed25519   (should be mode 600)
@@ -93,7 +96,15 @@ aws ecs execute-command --cluster <ClusterName> --task <task-id> \
   Secrets Manager; it is not written to CloudWatch.
 - Scope the target instances' `authorized_keys` to the minimum needed; prefer a
   dedicated, low-privilege broker user.
-- Rotate the key periodically by updating the secret and restarting the service.
+- Rotate the key periodically by updating the secret and restarting the service:
+
+  ```bash
+  aws secretsmanager put-secret-value \
+    --secret-id britive-bridge/broker/ssh-private-key \
+    --secret-string "$(cat ~/.ssh/new_bridge_ed25519)"
+  aws ecs update-service --cluster <ClusterName> --service <ServiceName> \
+    --force-new-deployment
+  ```
 
 ## Teardown
 

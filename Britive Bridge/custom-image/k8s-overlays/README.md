@@ -14,7 +14,9 @@ Ready-to-apply manifests that wire the [custom image](../) into the base
 # 0. Base manifests already applied (namespace, broker secret, pvc, deployment, service, ingress)
 #    from ../../kubernetes/manifests/  — see that README.
 
-# 1. SSH provisioning key (Linux SSH example) — the broker's private key
+# 1. SSH provisioning key (Linux SSH example) — the broker's private key.
+#    Generate it once with: ssh-keygen -t ed25519 -f ./bridge_ed25519 -N ''
+#    and install bridge_ed25519.pub on each target host's provisioning user.
 kubectl -n britive-bridge create secret generic bridge-ssh-key \
   --from-file=id_ed25519=./bridge_ed25519
 

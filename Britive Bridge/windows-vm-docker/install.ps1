@@ -123,13 +123,21 @@ if ($LASTEXITCODE -ne 0) {
 # ── 7. Health check ─────────────────────────────────────────────────────────
 Write-Step "Waiting for Bridge to report healthy..."
 $healthy = $false
+# -SkipCertificateCheck (accepts the self-signed cert) needs PS 6+. On
+# Windows PowerShell 5.1, probe from inside the container with curl instead.
+$useInvokeWebRequest = $PSVersionTable.PSVersion.Major -ge 6
 for ($i = 0; $i -lt 20; $i++) {
-  try {
-    # -SkipCertificateCheck accepts the container's self-signed cert (PS 6+).
-    $resp = Invoke-WebRequest -Uri "https://127.0.0.1:$Port/api/health" `
-      -SkipCertificateCheck -TimeoutSec 5 -UseBasicParsing
-    if ($resp.StatusCode -eq 200) { $healthy = $true; break }
-  } catch { Start-Sleep -Seconds 3 }
+  if ($useInvokeWebRequest) {
+    try {
+      $resp = Invoke-WebRequest -Uri "https://127.0.0.1:$Port/api/health" `
+        -SkipCertificateCheck -TimeoutSec 5 -UseBasicParsing
+      if ($resp.StatusCode -eq 200) { $healthy = $true; break }
+    } catch { }
+  } else {
+    docker exec $ContainerName curl -sfk "https://127.0.0.1:8080/api/health" *> $null
+    if ($LASTEXITCODE -eq 0) { $healthy = $true; break }
+  }
+  Start-Sleep -Seconds 3
 }
 if ($healthy) {
   Write-Step "Bridge is healthy at https://127.0.0.1:$Port/api/health"

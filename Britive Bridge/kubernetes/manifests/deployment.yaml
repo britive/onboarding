@@ -22,7 +22,10 @@ spec:
       containers:
         - name: bridge
           image: britive/bridge:latest
-          imagePullPolicy: IfNotPresent
+          # Always re-check the registry while on :latest, otherwise nodes run
+          # whatever they cached first. For production, pin a versioned tag
+          # and switch to IfNotPresent.
+          imagePullPolicy: Always
           ports:
             - name: https
               containerPort: 8080   # HTTPS API + WebSocket + browser protocols

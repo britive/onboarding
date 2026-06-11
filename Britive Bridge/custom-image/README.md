@@ -69,7 +69,7 @@ both Fargate ARM64 and mixed Kubernetes nodes.
 ## 1. Build & push
 
 ```bash
-# Docker Hub
+# Docker Hub (run `docker login` first)
 REGISTRY=docker.io/yourorg ./build-and-push.sh
 
 # Amazon ECR (script auto-creates the repo and logs in)
@@ -114,9 +114,10 @@ Secrets Manager to `/home/bridge/.ssh/id_ed25519` — use that template with you
 custom `ImageUri`.
 
 For the **MySQL example**, the broker calls AWS Secrets Manager and reaches
-Aurora. Grant the ECS **task role** `secretsmanager:GetSecretValue` on the DB
-secret, and make sure the task's security group can reach the Aurora endpoint
-(3306).
+Aurora. Grant the ECS **task role** (named `<StackNamePrefix>-task-role-<region>`
+by the templates) `secretsmanager:GetSecretValue` via an inline policy scoped
+to the DB secret's ARN, and make sure the task's security group can reach the
+Aurora endpoint (3306).
 
 ### Kubernetes
 
@@ -125,6 +126,10 @@ the base [Kubernetes deployment](../kubernetes/) with your custom image, the
 SSH-key mount, and the IRSA service account. After the base manifests are up:
 
 ```bash
+# 0. Generate the broker's provisioning keypair (once) and install the PUBLIC
+#    key in the provisioning user's authorized_keys on each target host:
+#    ssh-keygen -t ed25519 -f ./bridge_ed25519 -N ''
+
 # 1. Broker SSH provisioning key (Linux SSH example)
 kubectl -n britive-bridge create secret generic bridge-ssh-key \
   --from-file=id_ed25519=./bridge_ed25519

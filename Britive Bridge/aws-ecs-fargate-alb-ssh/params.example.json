@@ -11,5 +11,6 @@
   { "ParameterKey": "BrokerTenantSubdomain", "ParameterValue": "<your-tenant-subdomain>" },
   { "ParameterKey": "BrokerAuthToken",       "ParameterValue": "<your-broker-auth-token>" },
   { "ParameterKey": "AcmCertificateArn",     "ParameterValue": "arn:aws:acm:<region>:<account-id>:certificate/<certificate-id>" },
+  { "ParameterKey": "DomainName",            "ParameterValue": "bridge.example.com" },
   { "ParameterKey": "BrokerSSHPrivateKey",   "ParameterValue": "-----BEGIN OPENSSH PRIVATE KEY-----\n<your-pem-encoded-private-key>\n-----END OPENSSH PRIVATE KEY-----" }
 ]

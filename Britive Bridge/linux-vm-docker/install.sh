@@ -24,14 +24,17 @@ IMAGE="${IMAGE:-britive/bridge:latest}"   # Docker Hub image
 CONTAINER_NAME="${CONTAINER_NAME:-bridge}"
 PORT="${PORT:-8080}"                       # host:container port for HTTPS
 DATA_VOLUME="${DATA_VOLUME:-bridge-data}"  # named volume for /data persistence
-ENV_FILE="${ENV_FILE:-bridge.env}"
+# Default bridge.env to the script's own directory so the script works when
+# invoked from anywhere (docker --env-file resolves relative to the cwd).
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/bridge.env}"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "Run as root (sudo ./install.sh)."
-[ -f "$ENV_FILE" ]   || die "Missing $ENV_FILE. Run: cp bridge.env.example bridge.env  then edit it."
+[ -f "$ENV_FILE" ]   || die "Missing ${ENV_FILE}. Run: cp ${SCRIPT_DIR}/bridge.env.example ${ENV_FILE}  then edit it."
 
 # ── 1. Detect the distro ────────────────────────────────────────────────────
 # /etc/os-release is the portable source of truth across modern Linux.
@@ -47,8 +50,9 @@ install_docker_debian() {
   apt-get install -y ca-certificates curl gnupg
   install -m 0755 -d /etc/apt/keyrings
   # $ID is "ubuntu" or "debian" — the repo path differs by distro.
+  # --yes: overwrite a keyring left by a previous partial run (re-run safety)
   curl -fsSL "https://download.docker.com/linux/${ID}/gpg" \
-    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
@@ -59,13 +63,12 @@ https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
 
 install_docker_rhel() {
   # RHEL / Rocky / AlmaLinux / Fedora via dnf + docker-ce repo.
-  dnf install -y dnf-plugins-core
-  # Fedora has its own repo path; the rest use the centos repo.
-  if [ "$ID" = "fedora" ]; then
-    dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
-  else
-    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-  fi
+  # Write the repo file directly instead of `dnf config-manager --add-repo`:
+  # dnf5 (Fedora 41+) changed that command's syntax, this works on both.
+  local repo_distro="centos"
+  [ "$ID" = "fedora" ] && repo_distro="fedora"  # Fedora has its own repo path
+  curl -fsSL "https://download.docker.com/linux/${repo_distro}/docker-ce.repo" \
+    -o /etc/yum.repos.d/docker-ce.repo
   dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 

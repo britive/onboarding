@@ -4,8 +4,11 @@ Parameters:
   StackNamePrefix:
     Type: String
     Default: britive-bridge
-    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,30}"
-    Description: Prefix used for named AWS resources.
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,20}"
+    Description: >
+      Prefix used for named AWS resources. Max 21 characters so derived
+      load-balancer and target-group names stay within the 32-character
+      ELB limit. Must be unique per deployment in an account/region.
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: VPC where Bridge will run.
@@ -113,6 +116,19 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        # Required for ECS Exec (EnableExecuteCommand on the service).
+        - PolicyName: ECSExecSSM
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: "*"
   # NLB: enforces IngressCidr at the load balancer. Tightening IngressCidr is
   # safe here — NLB health checks reach the tasks via the NLB security group
   # reference below, not via this CIDR rule.
@@ -281,6 +297,7 @@ Resources:
     DependsOn:
       - BridgeApiListener
       - BridgeMountTargetA
+      - BridgeMountTargetB
     Properties:
       ServiceName: !Sub ${StackNamePrefix}-service
       Cluster: !Ref BridgeCluster

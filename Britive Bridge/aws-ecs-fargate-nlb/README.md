@@ -20,6 +20,8 @@ CloudFormation template `ecs-fargate-nlb.yaml` creates:
   only from the NLB security group — covers forwarded traffic and NLB health
   checks; EFS allows 2049 from the task)
 - **IAM** execution + task roles
+- A **Secrets Manager secret** for the broker token (`<prefix>/broker/auth-token`),
+  injected into the container at task start
 - A **CloudWatch** log group (30-day retention)
 - ECS Exec enabled for debugging
 
@@ -88,7 +90,9 @@ Key outputs:
 - `LoadBalancerDnsName`, `ClusterName`, `ServiceName`, `DataFileSystemId`
 
 Make sure the Bridge **resource** in Britive (from platform setup) uses this
-URL. Then verify:
+URL — re-run `platform-setup/quick-setup.py` with the new URL (it updates the
+resource in place), or edit the resource in the Britive UI. Then verify
+(`<LoadBalancerDnsName>` is the output from the table above):
 
 ```bash
 curl -sfk https://<LoadBalancerDnsName>/api/health

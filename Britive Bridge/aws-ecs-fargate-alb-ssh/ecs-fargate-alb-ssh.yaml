@@ -2,16 +2,19 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Britive Bridge ECS Fargate deployment.
   ALB terminates TLS with an ACM certificate on port 443.
-  Backend target group uses HTTPS on port 8080 with certificate
-  verification disabled (container uses its own self-signed cert).
+  Backend target group uses HTTPS on port 8080; ALBs do not validate
+  backend certificates, so the container's self-signed cert is accepted.
   SSH private key injected from Secrets Manager for broker → EC2 access.
 
 Parameters:
   StackNamePrefix:
     Type: String
     Default: britive-bridge
-    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,30}"
-    Description: Prefix used for named AWS resources.
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,20}"
+    Description: >
+      Prefix used for named AWS resources. Max 21 characters so derived
+      load-balancer and target-group names stay within the 32-character
+      ELB limit. Must be unique per deployment in an account/region.
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: VPC where Bridge will run.
@@ -82,6 +85,16 @@ Parameters:
     Description: >
       ARN of the ACM certificate for your domain (e.g. bridge.example.com
       or the wildcard *.example.com). Must be in the same region as the ALB.
+  DomainName:
+    Type: String
+    Default: ""
+    Description: >
+      DNS name users will reach Bridge on (e.g. bridge.example.com — the name
+      your ACM certificate covers). Used only for the BridgeUrl output; leave
+      empty to output the raw ALB DNS name instead.
+
+Conditions:
+  HasDomainName: !Not [!Equals [!Ref DomainName, ""]]
 
 Resources:
   # ── Logging ───────────────────────────────────────────────────────────────
@@ -161,12 +174,6 @@ Resources:
                   - ssmmessages:OpenControlChannel
                   - ssmmessages:OpenDataChannel
                 Resource: "*"
-              - Effect: Allow
-                Action:
-                  - logs:DescribeLogGroups
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !GetAtt BridgeLogGroup.Arn
         # If your checkout/checkin scripts read additional Secrets Manager
         # secrets (e.g. database credentials), grant the task role
         # secretsmanager:GetSecretValue scoped to those specific secret ARNs.
@@ -183,6 +190,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+          CidrIp: !Ref IngressCidr
+        # Port 80 only serves the HTTP → HTTPS redirect listener.
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: !Ref IngressCidr
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -280,8 +292,8 @@ Resources:
         - !Ref BridgeAlbSecurityGroup
 
   # Target group uses HTTPS so traffic to the container stays encrypted.
-  # TargetGroupAttributes disables cert verification so the container's
-  # self-signed cert is accepted without issue.
+  # ALBs never validate backend certificates, so the container's self-signed
+  # cert is accepted — no extra configuration needed for that.
   BridgeApiTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -290,7 +302,6 @@ Resources:
       Protocol: HTTPS                       # encrypted ALB → container
       Port: 8080
       TargetType: ip
-      # Accept the container's self-signed cert — no CA verification
       TargetGroupAttributes:
         - Key: load_balancing.cross_zone.enabled
           Value: "true"
@@ -430,8 +441,14 @@ Outputs:
     Value: !GetAtt BridgeLoadBalancer.DNSName
     Description: Point your Route 53 ALIAS record at this value.
   BridgeUrl:
-    Description: External URL for Britive BRIDGE_URL script parameter.
-    Value: !Sub https://${BridgeLoadBalancer.DNSName}
+    Description: >-
+      External URL for the Britive Bridge resource (BRIDGE_URL). If DomainName
+      was left empty this is the raw ALB DNS name, which does NOT match the
+      ACM certificate — point your DNS record at the ALB and use that name.
+    Value: !If
+      - HasDomainName
+      - !Sub https://${DomainName}
+      - !Sub https://${BridgeLoadBalancer.DNSName}
   DataFileSystemId:
     Value: !Ref BridgeFileSystem
   BrokerSSHKeySecretArn:
