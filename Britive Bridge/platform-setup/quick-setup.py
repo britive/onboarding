@@ -108,7 +108,12 @@ def success(message):
     print(f"  OK: {message}")
 
 
+WARNING_COUNT = 0
+
+
 def warn(message):
+    global WARNING_COUNT
+    WARNING_COUNT += 1
     print(f"  WARNING: {message}")
 
 
@@ -256,8 +261,8 @@ def create_broker_pool_and_token(client):
             if p.get("name") == pool_name:
                 pool_id = p.get("pool-id")
                 break
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"Could not check for an existing pool ({exc}); attempting to create one.")
 
     if pool_id:
         success(f"Broker pool '{pool_name}' already exists: {pool_id}")
@@ -314,7 +319,7 @@ def collect_bridge_url(tenant_subdomain, auth_token):
 
 
 def create_bridge_resource_type(client):
-    header(4, "Create Bridge Resource Type")
+    header(5, "Create Bridge Resource Type")
 
     # Check if it already exists
     try:
@@ -323,8 +328,8 @@ def create_bridge_resource_type(client):
                 bridge_type_id = rt.get("resourceTypeId")
                 success(f"Resource type 'Bridge' already exists: {bridge_type_id}")
                 return bridge_type_id
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"Could not check for an existing resource type ({exc}); attempting to create one.")
 
     info("Creating 'Bridge' resource type...")
     try:
@@ -360,7 +365,7 @@ def create_bridge_resource_type(client):
 
 
 def create_admin_permission(client, bridge_type_id, template_id):
-    header(5, "Create Admin Permission")
+    header(6, "Create Admin Permission")
 
     perms = client.access_broker.resources.permissions
 
@@ -376,8 +381,8 @@ def create_admin_permission(client, bridge_type_id, template_id):
                     "version": existing.get("version", ""),
                     "resource_type_id": bridge_type_id,
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"Could not check for an existing permission ({exc}); attempting to create one.")
 
     # Step 1: Create permission as draft (SDK)
     info("Creating draft permission...")
@@ -476,7 +481,7 @@ def create_admin_permission(client, bridge_type_id, template_id):
 
 
 def create_bridge_resource(client, bridge_type_id, bridge_url, pool_id):
-    header(6, "Create Bridge Resource")
+    header(7, "Create Bridge Resource")
     resource_name = prompt("Resource name", default="Admin")
 
     # Re-run safety: reuse an existing resource and refresh its URL — this is
@@ -490,8 +495,8 @@ def create_bridge_resource(client, bridge_type_id, bridge_url, pool_id):
             if res.get("name") == resource_name:
                 resource_id = res.get("resourceId")
                 break
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"Could not check for an existing resource ({exc}); attempting to create one.")
 
     if resource_id:
         success(f"Resource '{resource_name}' already exists: {resource_id}")
@@ -540,7 +545,7 @@ def create_bridge_resource(client, bridge_type_id, bridge_url, pool_id):
 
 
 def create_response_template(client, schema):
-    header(7, "Create Response Template")
+    header(4, "Create Response Template")
 
     # Re-run safety: reuse an existing template instead of duplicating it.
     try:
@@ -549,8 +554,8 @@ def create_response_template(client, schema):
                 template_id = tmpl.get("templateId")
                 success(f"Response template 'Bridge' already exists: {template_id}")
                 return template_id
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"Could not check for an existing template ({exc}); attempting to create one.")
 
     info("Creating response template for clickable session URLs...")
     try:
@@ -580,8 +585,8 @@ def create_admin_profile(client, admin_permission):
                 success(f"Profile '{profile_name}' already exists: {profile_id}")
                 info("Association/permission left as-is — manage them in the Britive UI.")
                 return {"name": profile_name, "id": profile_id, "protocol": ADMIN_PROFILE["name"]}
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"Could not check for an existing profile ({exc}); attempting to create one.")
 
     info(f"Creating profile '{profile_name}'...")
     try:
@@ -622,7 +627,7 @@ def create_admin_profile(client, admin_permission):
 
 
 def print_summary(state):
-    header(9, "Setup Complete")
+    header(9, "Summary")
 
     print("  Created objects:")
     print(f"    Broker pool:       {state['pool_name']} ({state['pool_id']})")
@@ -641,7 +646,12 @@ def print_summary(state):
     print("  1. Assign users or groups to the admin profile via")
     print("     policies so they can check out Bridge access.")
     print()
-    paragraph("Done! Users can now check out Bridge admin access at", state["bridge_url"])
+    if WARNING_COUNT:
+        print(f"  Setup finished with {WARNING_COUNT} warning(s) — review the output")
+        print("  above and resolve them before users check out Bridge access.")
+        print()
+    else:
+        paragraph("Done! Users can now check out Bridge admin access at", state["bridge_url"])
 
 
 # ---------------------------------------------------------------------------

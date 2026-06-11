@@ -10,5 +10,6 @@
   { "ParameterKey": "DesiredCount",          "ParameterValue": "1" },
   { "ParameterKey": "BrokerTenantSubdomain", "ParameterValue": "<your-tenant-subdomain>" },
   { "ParameterKey": "BrokerAuthToken",       "ParameterValue": "<your-broker-auth-token>" },
-  { "ParameterKey": "AcmCertificateArn",     "ParameterValue": "arn:aws:acm:<region>:<account-id>:certificate/<certificate-id>" }
+  { "ParameterKey": "AcmCertificateArn",     "ParameterValue": "arn:aws:acm:<region>:<account-id>:certificate/<certificate-id>" },
+  { "ParameterKey": "DomainName",            "ParameterValue": "bridge.example.com" }
 ]

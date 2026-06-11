@@ -30,6 +30,10 @@ long-lived Linux server.
 ## Quick start (scripted)
 
 ```bash
+# 0. Get these files onto the VM and cd into the directory, e.g.:
+#    git clone <this-repo> && cd "onboarding/Britive Bridge/linux-vm-docker"
+#    (or scp install.sh bridge.env.example user@vm:)
+
 # 1. Provide credentials
 cp bridge.env.example bridge.env
 chmod 600 bridge.env
@@ -53,6 +57,10 @@ Override defaults via env vars, e.g.:
 ```bash
 sudo IMAGE=britive/bridge:latest PORT=9443 CONTAINER_NAME=bridge ./install.sh
 ```
+
+> **Production:** pin a specific image tag (see Docker Hub `britive/bridge`
+> tags) instead of `latest`, so reinstalls don't pull an unplanned version:
+> `sudo IMAGE=britive/bridge:<version> ./install.sh`
 
 ---
 
@@ -218,9 +226,7 @@ uses that URL.
 ```bash
 docker logs -f bridge                 # follow logs
 docker restart bridge                 # restart
-docker pull britive/bridge:latest && \
-  docker rm -f bridge && \
-  ./... (re-run install.sh)           # update to a newer image
+sudo ./install.sh                     # update: re-pulls image, recreates container
 docker rm -f bridge                   # stop + remove (keeps data volume)
 docker volume rm bridge-data          # delete persisted state (destructive)
 ```

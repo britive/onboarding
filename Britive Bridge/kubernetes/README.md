@@ -64,7 +64,8 @@ Traffic path: `client → Ingress (TLS) → Service:443 → pod:8080 (HTTPS, sel
 
 4. **Ingress** — edit `manifests/ingress.yaml` first:
    - Replace `bridge.example.com` with your hostname (two places).
-   - Adjust `ingressClassName` / annotations for your controller.
+   - Adjust `ingressClassName` / annotations for your controller (see
+     "Controller-specific ingress hints" below).
    - For automatic certs, uncomment the `cert-manager.io/cluster-issuer`
      annotation and set your issuer.
 
@@ -84,11 +85,19 @@ kubectl -n britive-bridge exec deploy/britive-bridge -- \
 ```
 
 Then point a DNS record for your host at the ingress controller's external
-address, set `BRIDGE_URL` accordingly, and confirm the Bridge **resource** in
-Britive uses that URL.
+address and make the Bridge **resource** in Britive use that URL — re-run
+`platform-setup/quick-setup.py` with it (updates the resource in place), or
+edit the resource in the Britive UI. Finally verify from outside the cluster:
+
+```bash
+curl -sf https://bridge.example.com/api/health
+```
 
 ## Key configuration notes
 
+- **Image tag.** The manifest ships `britive/bridge:latest` with
+  `imagePullPolicy: Always` so rollouts pick up new images. For production,
+  pin a versioned tag and switch to `IfNotPresent`.
 - **HTTPS backend.** The container serves HTTPS with a self-signed cert on 8080.
   Probes and the Service/Ingress all use the HTTPS scheme; the ingress is
   configured with `backend-protocol: HTTPS` + `proxy-ssl-verify: off`.

@@ -43,6 +43,9 @@ pool, a token, a Bridge resource, and an admin profile. The
 that creates all of these for you and prints the env vars Bridge needs.
 
 Run it **first** — see [platform-setup/README.md](platform-setup/README.md).
+You'll typically run it **twice**: once before deploying (with a placeholder
+Bridge URL) and once after, to set the real URL — re-running updates the
+existing resource in place.
 
 ---
 

@@ -89,6 +89,9 @@ RUN set -eu; \
     for c in ssh ssh-keygen base64 python3 jq aws mysql bash; do \
         command -v "$c" >/dev/null 2>&1 || { echo "MISSING: $c" >&2; exit 1; }; \
     done; \
+    # The final USER directive below assumes the base image defines a 'bridge'
+    # user — fail the build here, not at container start, if it doesn't.
+    id bridge >/dev/null 2>&1 || { echo "MISSING: 'bridge' user in base image — adjust the USER directive" >&2; exit 1; }; \
     echo "All required utilities present."
 
 # ── Optional: bake the example scripts in for reference / local testing ──────

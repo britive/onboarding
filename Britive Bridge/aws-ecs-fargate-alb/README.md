@@ -42,6 +42,7 @@ Edit `params.json` — same parameters as the NLB option, **plus**:
 | Parameter | Notes |
 |-----------|-------|
 | `AcmCertificateArn` | ARN of your ACM cert, same region as the ALB: `arn:aws:acm:<region>:<account-id>:certificate/<id>` |
+| `DomainName` | DNS name users will use (e.g. `bridge.example.com`) — makes the `BridgeUrl` output ready to paste. Optional. |
 
 > Keep `params.json` out of source control (broker token + cert ARN).
 
@@ -65,7 +66,9 @@ aws cloudformation describe-stacks --stack-name britive-bridge \
 1. Take `LoadBalancerDnsName` from the outputs and create a **DNS ALIAS/CNAME**
    record for your domain (e.g. `bridge.example.com`) pointing at it.
 2. Use `https://bridge.example.com` as your `BRIDGE_URL` and make sure the
-   Britive Bridge **resource** uses that URL.
+   Britive Bridge **resource** uses that URL — re-run
+   `platform-setup/quick-setup.py` with it (updates the resource in place),
+   or edit the resource in the Britive UI.
 3. Verify:
 
    ```bash

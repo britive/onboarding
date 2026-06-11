@@ -24,7 +24,9 @@ BRITIVE_BROKER_AUTH_TOKEN=<token>
 
 - Python 3.10+ (required by the `britive` SDK)
 - An API token for your Britive tenant with permission to manage the Access
-  Broker (pools, resources, response templates, profiles)
+  Broker (pools, resources, response templates, profiles). Create one in the
+  Britive console under **your profile menu → My Settings → API Tokens** (or
+  ask a tenant admin for one with Access Broker admin rights).
 - The Britive SDK + `requests`:
 
   ```bash
@@ -50,8 +52,10 @@ You'll be prompted for:
 2. **API token** — entered hidden. Can also be supplied via `BRITIVE_API_TOKEN`.
 3. **Bridge external URL** — the URL users will hit (e.g.
    `https://bridge.example.com`). This is the load balancer / ingress address
-   from your chosen deployment option, so you may want to deploy infra first,
-   grab the DNS name, then re-run or update the resource.
+   from your chosen deployment option. **First run:** if the infra doesn't
+   exist yet, enter a placeholder (e.g. `https://bridge.example.com`); after
+   deploying, re-run the script with the real URL — it updates the existing
+   resource in place.
 4. **Resource name** — defaults to `Admin`.
 
 The script is **idempotent on names**: if a pool, resource type, response
@@ -66,8 +70,9 @@ UI), and an existing permission's scripts/variables are left untouched.
 
 1. Save the printed `BRITIVE_BROKER_TENANT_SUBDOMAIN` and
    `BRITIVE_BROKER_AUTH_TOKEN` — you'll plug them into your deployment.
-2. Assign users or groups to the **admin profile** via Britive policies so they
-   can check out Bridge access.
+2. Assign users or groups to the **admin profile** so they can check out
+   Bridge access: in the Britive console open **Resource Manager → Profiles →
+   Bridge Admin → Policies** and add a policy listing your users or tags.
 3. Deploy Bridge using one of the options in the parent directory.
 
 ## Notes

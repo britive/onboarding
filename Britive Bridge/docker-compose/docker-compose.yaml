@@ -17,16 +17,14 @@ services:
     ports:
       - "8080:8080" # HTTPS API + WebSocket + browser protocols
     environment:
-      # BRIDGE_ADMIN_TOKEN: "${BRIDGE_ADMIN_TOKEN:-}"
-      # BRIDGE_JWT_SECRET: "${BRIDGE_JWT_SECRET:-}"
-
       # Britive broker - connects to platform via MQTT
       BRITIVE_BROKER_TENANT_SUBDOMAIN: "${BRITIVE_BROKER_TENANT_SUBDOMAIN:-}"
       BRITIVE_BROKER_AUTH_TOKEN: "${BRITIVE_BROKER_AUTH_TOKEN:-}"
 
-      # Custom TLS certificate (optional - omit for auto-generated self-signed)
-      TLS_CERT_FILE: "${TLS_CERT_FILE:-}"
-      TLS_KEY_FILE: "${TLS_KEY_FILE:-}"
+      # Custom TLS certificate (optional). Keep commented for the default
+      # auto-generated self-signed cert — even an empty value counts as "set".
+      # TLS_CERT_FILE: "/custom-certs/cert.pem"
+      # TLS_KEY_FILE: "/custom-certs/key.pem"
     volumes:
       - bridge-data:/data
       # Uncomment to bind-mount your own TLS certificate:

@@ -43,8 +43,9 @@ license) per the Linux guide.
 - **Outbound** internet to your Britive tenant (Broker/MQTT) and Docker Hub.
 - **Inbound** TCP on the Bridge port (default `8080`) — open the Windows Firewall
   **and** any cloud security group / network ACL.
-- PowerShell 5.1+ (built in). PowerShell 7+ recommended for the scripted health
-  check (`-SkipCertificateCheck`).
+- PowerShell 5.1+ (built in). `install.ps1` works on both: on 7+ it probes
+  health with `Invoke-WebRequest -SkipCertificateCheck`, on 5.1 it falls back
+  to `docker exec ... curl` automatically.
 - Completed [platform setup](../platform-setup/) — you need
   `BRITIVE_BROKER_TENANT_SUBDOMAIN` and `BRITIVE_BROKER_AUTH_TOKEN`.
 
@@ -76,6 +77,9 @@ docker info --format '{{.OSType}}'   # must print: linux
 ## Quick start (scripted)
 
 ```powershell
+# 0. Get install.ps1 + bridge.env.example onto the VM (git clone this repo or
+#    copy the two files) and run from that folder.
+
 # 1. Provide credentials
 Copy-Item bridge.env.example bridge.env
 notepad bridge.env       # set tenant subdomain + broker token, save
@@ -85,6 +89,8 @@ notepad bridge.env       # set tenant subdomain + broker token, save
 
 # 3. Verify (PowerShell 7+)
 Invoke-WebRequest https://127.0.0.1:8080/api/health -SkipCertificateCheck
+# PowerShell 5.1 instead:
+#   docker exec bridge curl -sfk https://127.0.0.1:8080/api/health
 docker logs -f bridge
 ```
 
@@ -97,6 +103,10 @@ Override defaults:
 ```powershell
 .\install.ps1 -Port 9443 -ContainerName bridge -Image britive/bridge:latest
 ```
+
+> **Production:** pin a specific image tag (see Docker Hub `britive/bridge`
+> tags) instead of `latest`, so reinstalls don't pull an unplanned version:
+> `.\install.ps1 -Image britive/bridge:<version>`
 
 > **Execution policy:** if the script is blocked, run it for this session only:
 > `powershell -ExecutionPolicy Bypass -File .\install.ps1`

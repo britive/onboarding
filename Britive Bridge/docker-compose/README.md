@@ -27,11 +27,11 @@ ideal for local trials, POCs, and single-VM deployments.
    export BRITIVE_BROKER_AUTH_TOKEN="<your-broker-auth-token>"
    ```
 
-   …or create a `.env` file next to `docker-compose.yaml`:
+   …or copy the template and fill it in (compose reads `.env` automatically):
 
-   ```dotenv
-   BRITIVE_BROKER_TENANT_SUBDOMAIN=<your-tenant-subdomain>
-   BRITIVE_BROKER_AUTH_TOKEN=<your-broker-auth-token>
+   ```bash
+   cp .env.example .env
+   # then edit .env with your real values
    ```
 
    > Do not commit `.env` — add it to `.gitignore`.
@@ -88,11 +88,23 @@ URL you registered during platform setup (`BRIDGE_URL`). On a cloud VM, open the
 security group / firewall for `8080` (or front the host with your own reverse
 proxy / load balancer terminating TLS).
 
+Once you know the final external URL, make the Bridge **resource** in Britive
+use it — re-run `platform-setup/quick-setup.py` with that URL (updates the
+resource in place), or edit the resource in the Britive UI — then verify:
+
+```bash
+curl -sfk https://<external-url>/api/health
+```
+
 ## Lifecycle
 
 ```bash
-docker compose pull        # get a newer image (update the tag in the file first)
+docker compose pull        # get a newer image (on :latest this is all you need;
+                           # on a pinned tag, update the tag in the file first)
 docker compose up -d       # apply changes
 docker compose down        # stop and remove the container (keeps the volume)
 docker compose down -v     # also delete the data volume (destroys session state)
 ```
+
+> **Production:** pin a specific image tag in `docker-compose.yaml` (see Docker
+> Hub `britive/bridge` tags) instead of `latest`, so updates are deliberate.
