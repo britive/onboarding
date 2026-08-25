@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  ECR repository for the Britive Bridge deployment image. Deploy this once,
+  before building the image. Scan-on-push is enabled and tags are immutable, so
+  every configuration change requires a new tag - which is what makes an ECS
+  deployment reproducible and auditable.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: britive/bridge
+    Description: ECR repository name.
+  UntaggedImageExpiryDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    Description: >
+      Days before untagged images (superseded layers left by rebuilds) are
+      deleted. Tagged images are never expired by this policy.
+
+Resources:
+  BridgeRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      # IMMUTABLE means a tag can never be overwritten. Pushing a changed
+      # config to an existing tag fails loudly instead of silently changing
+      # what a running task would pull on its next restart.
+      ImageTagMutability: IMMUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${UntaggedImageExpiryDays}
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+Outputs:
+  RepositoryUri:
+    Description: Use as the base of the ImageUri parameter on the ECS stack.
+    Value: !GetAtt BridgeRepository.RepositoryUri
+  RepositoryArn:
+    Description: ECR repository ARN.
+    Value: !GetAtt BridgeRepository.Arn

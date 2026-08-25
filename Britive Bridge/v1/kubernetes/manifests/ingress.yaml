@@ -1,0 +1,38 @@
+# Ingress for Bridge. Bridge speaks HTTPS end-to-end and upgrades connections
+# to WebSocket, so the ingress controller must:
+#   1. Talk to the backend over HTTPS (the backend uses a self-signed cert).
+#   2. Pass through / support WebSocket upgrades.
+#
+# Annotations below are for the ingress-nginx controller. Adapt for your
+# controller (AWS ALB, Traefik, HAProxy, etc.) — see this option's README.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: britive-bridge
+  namespace: britive-bridge
+  annotations:
+    # Backend is HTTPS with a self-signed cert
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
+    # WebSocket / long-lived connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # TLS via cert-manager (optional — remove if you manage certs another way)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - bridge.example.com
+      secretName: bridge-tls
+  rules:
+    - host: bridge.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: britive-bridge
+                port:
+                  number: 443

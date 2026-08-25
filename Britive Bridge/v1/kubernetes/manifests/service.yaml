@@ -1,0 +1,19 @@
+# ClusterIP service fronting the Bridge pod(s).
+# External exposure is handled by the Ingress (see ingress.yaml). If you prefer
+# a cloud load balancer instead of an Ingress, change type to LoadBalancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: britive-bridge
+  namespace: britive-bridge
+  labels:
+    app.kubernetes.io/name: britive-bridge
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: britive-bridge
+  ports:
+    - name: https
+      port: 443
+      targetPort: https     # -> containerPort 8080
+      protocol: TCP

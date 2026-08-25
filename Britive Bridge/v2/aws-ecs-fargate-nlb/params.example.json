@@ -1,0 +1,70 @@
+[
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "<vpc-xxxxxxxx - VPC where the Bridge task and NLB will run>"
+  },
+  {
+    "ParameterKey": "PublicSubnetIds",
+    "ParameterValue": "<subnet-aaaa,subnet-bbbb - two PUBLIC subnets in different AZs>"
+  },
+  {
+    "ParameterKey": "NativeAccessCidr",
+    "ParameterValue": "<your VPC CIDR, e.g. 10.0.0.0/16>"
+  },
+  {
+    "ParameterKey": "NativeClientPrefixListId",
+    "ParameterValue": "<pl-xxxxxxxx - managed prefix list of PUBLIC client IPs allowed to reach the NLB>"
+  },
+  {
+    "ParameterKey": "ImageUri",
+    "ParameterValue": "<account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:v2.1.0-r1"
+  },
+  {
+    "ParameterKey": "CpuArchitecture",
+    "ParameterValue": "ARM64"
+  },
+  {
+    "ParameterKey": "AcmCertificateArn",
+    "ParameterValue": "<arn:aws:acm:<region>:<account>:certificate/xxxx - must be in the SAME region as the NLB>"
+  },
+  {
+    "ParameterKey": "DbHost",
+    "ParameterValue": "<postgres endpoint hostname>"
+  },
+  {
+    "ParameterKey": "DbPort",
+    "ParameterValue": "5432"
+  },
+  {
+    "ParameterKey": "DbSecretArn",
+    "ParameterValue": "<arn:aws:secretsmanager:<region>:<account>:secret:xxxx - JSON secret containing a 'password' key>"
+  },
+  {
+    "ParameterKey": "BrokerTenantSubdomain",
+    "ParameterValue": "<your britive tenant subdomain - omit '.britive-app.com'>"
+  },
+  {
+    "ParameterKey": "BrokerAuthToken",
+    "ParameterValue": "<broker pool token from Britive: Admin > Access Broker > Broker Pools>"
+  },
+  {
+    "ParameterKey": "EncryptionKeyB64",
+    "ParameterValue": "<output of: openssl rand -base64 32 - PERMANENT, never rotate after go-live>"
+  },
+  {
+    "ParameterKey": "BrokerSSHPrivateKey",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "StackNamePrefix",
+    "ParameterValue": "britive-bridge"
+  },
+  {
+    "ParameterKey": "TaskCpu",
+    "ParameterValue": "1024"
+  },
+  {
+    "ParameterKey": "TaskMemory",
+    "ParameterValue": "2048"
+  }
+]
