@@ -1,8 +1,11 @@
 # Britive Bridge — Deployment Options
 
-> **Note:** This directory targets **Britive Bridge v1.x**. The deployment
-> scripts, templates, and examples here are in **BETA** — validate them in a
-> non-production environment first, and expect changes between releases.
+> **Note:** Deployment options are split by Bridge major version:
+> [`v1/`](v1/) targets **Bridge v1.x**, [`v2/`](v2/) targets **Bridge v2.x**.
+> They are not interchangeable — v2 additionally requires a PostgreSQL
+> datastore, a permanent encryption key, and a configuration file baked into
+> the image. Everything here is in **BETA**: validate in a non-production
+> environment first, and expect changes between releases.
 
 Britive Bridge is a self-hosted container that connects to the Britive platform
 through the Britive Broker and brokers clientless, browser-based sessions to
@@ -51,18 +54,33 @@ existing resource in place.
 
 ## Choosing an option
 
+### Bridge v2.x — [`v2/`](v2/)
+
 | Option | Where it runs | TLS / external access | Persistence | Best for |
 |--------|---------------|-----------------------|-------------|----------|
-| [**Docker Compose**](docker-compose/) | Any Docker host / VM | Self-signed (8080) or mounted cert | Docker volume | Local trials, POCs, single-VM deployments |
-| [**Linux VM (Docker)**](linux-vm-docker/) | A Linux server / VM | Self-signed (8080) or mounted cert | Docker volume | Standalone Linux host; on-prem or cloud VM, fully scripted |
-| [**Windows VM (Docker)**](windows-vm-docker/) | A Windows server / VM (WSL 2) | Self-signed (8080) or mounted cert | Docker volume | Standalone Windows host (Linux container via WSL 2) |
-| [**AWS ECS Fargate + NLB**](aws-ecs-fargate-nlb/) | AWS ECS Fargate | TLS passthrough via NLB:443 → container self-signed cert | EFS | Serverless AWS, minimal moving parts, no ACM cert needed |
-| [**AWS ECS Fargate + ALB**](aws-ecs-fargate-alb/) | AWS ECS Fargate | ALB terminates TLS with an **ACM cert** on 443 | EFS | Production AWS with a real cert + custom domain |
-| [**AWS ECS Fargate + ALB + SSH**](aws-ecs-fargate-alb-ssh/) | AWS ECS Fargate | Same as ALB option | EFS | ALB option **plus** broker SSH access to EC2 via a key in Secrets Manager |
-| [**Kubernetes**](kubernetes/) | Any K8s cluster (EKS/AKS/GKE/on-prem) | Ingress (cert-manager / ALB) → backend HTTPS | PVC | Teams standardized on Kubernetes; Helm chart on the roadmap |
+| [**AWS ECS Fargate + NLB**](v2/aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an **ACM cert**; TCP listeners for native protocols | EFS + PostgreSQL | Current Bridge releases on AWS |
+
+v2 requires an existing **PostgreSQL** instance and a permanent
+**encryption key**, and its configuration is baked into the image — see that
+option's README.
+
+### Bridge v1.x — [`v1/`](v1/)
+
+| Option | Where it runs | TLS / external access | Persistence | Best for |
+|--------|---------------|-----------------------|-------------|----------|
+| [**Docker Compose**](v1/docker-compose/) | Any Docker host / VM | Self-signed (8080) or mounted cert | Docker volume | Local trials, POCs, single-VM deployments |
+| [**Linux VM (Docker)**](v1/linux-vm-docker/) | A Linux server / VM | Self-signed (8080) or mounted cert | Docker volume | Standalone Linux host; on-prem or cloud VM, fully scripted |
+| [**Windows VM (Docker)**](v1/windows-vm-docker/) | A Windows server / VM (WSL 2) | Self-signed (8080) or mounted cert | Docker volume | Standalone Windows host (Linux container via WSL 2) |
+| [**AWS ECS Fargate + NLB**](v1/aws-ecs-fargate-nlb/) | AWS ECS Fargate | TLS passthrough via NLB:443 → container self-signed cert | EFS | Serverless AWS, minimal moving parts, no ACM cert needed |
+| [**AWS ECS Fargate + ALB**](v1/aws-ecs-fargate-alb/) | AWS ECS Fargate | ALB terminates TLS with an **ACM cert** on 443 | EFS | Production AWS with a real cert + custom domain |
+| [**AWS ECS Fargate + ALB + SSH**](v1/aws-ecs-fargate-alb-ssh/) | AWS ECS Fargate | Same as ALB option | EFS | ALB option **plus** broker SSH access to EC2 via a key in Secrets Manager |
+| [**Kubernetes**](v1/kubernetes/) | Any K8s cluster (EKS/AKS/GKE/on-prem) | Ingress (cert-manager / ALB) → backend HTTPS | PVC | Teams standardized on Kubernetes; Helm chart on the roadmap |
 
 ### Quick guidance
 
+- **Running a current Bridge release (v2.x)?** → [v2 ECS Fargate + NLB](v2/aws-ecs-fargate-nlb/).
+  The v1 options below will not start a v2 image: it needs a datastore, an
+  encryption key and a baked config that those templates do not provide.
 - **Just trying it out?** → Docker Compose.
 - **A single Linux server (on-prem or cloud VM)?** → Linux VM (Docker) — scripted
   install with per-distro handling.
@@ -90,6 +108,20 @@ two worked examples (**Linux SSH** key provisioning and **Aurora MySQL**
 temporary users/roles). This is orthogonal to the deployment options above: pick
 a deployment, point its image at your custom build.
 
+For **Bridge v2** the same builder also bakes your configuration and trusts the
+AWS RDS certificate authorities:
+
+```bash
+docker build \
+  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BAKE_CONFIG=true \
+  --build-arg WITH_RDS_CA=true \
+  -t <account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:v2.1.0-r1 .
+```
+
+`BAKE_CONFIG` is required for v2 — every protocol is off by default and the
+Bridge refuses to start unless at least one is enabled.
+
 ---
 
 ## Directory layout
@@ -97,6 +129,8 @@ a deployment, point its image at your custom build.
 ```
 Britive Bridge/
 ├── README.md                       # you are here
+├── v1/                             # Bridge v1.x deployment options
+├── v2/                             # Bridge v2.x deployment options
 ├── platform-setup/                 # run FIRST — creates Britive platform objects
 │   ├── quick-setup.py
 │   ├── requirements.txt
@@ -107,30 +141,30 @@ Britive Bridge/
 │   ├── scripts/                    # worked examples: Linux SSH + Aurora MySQL
 │   ├── k8s-overlays/               # ready-to-apply: image + SSH key + IRSA SA
 │   └── README.md
-├── docker-compose/
+├── v1/docker-compose/
 │   ├── docker-compose.yaml
 │   └── README.md
-├── linux-vm-docker/                # standalone Linux VM via Docker
+├── v1/linux-vm-docker/                # standalone Linux VM via Docker
 │   ├── install.sh
 │   ├── bridge.env.example
 │   └── README.md
-├── windows-vm-docker/              # standalone Windows VM via Docker (WSL 2)
+├── v1/windows-vm-docker/              # standalone Windows VM via Docker (WSL 2)
 │   ├── install.ps1
 │   ├── bridge.env.example
 │   └── README.md
-├── aws-ecs-fargate-nlb/
+├── v1/aws-ecs-fargate-nlb/
 │   ├── ecs-fargate-nlb.yaml
 │   ├── params.example.json
 │   └── README.md
-├── aws-ecs-fargate-alb/
+├── v1/aws-ecs-fargate-alb/
 │   ├── ecs-fargate-alb.yaml
 │   ├── params.example.json
 │   └── README.md
-├── aws-ecs-fargate-alb-ssh/
+├── v1/aws-ecs-fargate-alb-ssh/
 │   ├── ecs-fargate-alb-ssh.yaml
 │   ├── params.example.json
 │   └── README.md
-└── kubernetes/
+└── v1/kubernetes/
     ├── manifests/
     │   ├── namespace.yaml
     │   ├── secret.example.yaml

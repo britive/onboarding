@@ -30,7 +30,7 @@ Traffic path: `client → ALB:443 (ACM TLS) → task:8080 (HTTPS, cert not verif
 - An **ACM certificate** in the **same region** as the ALB, covering your
   domain (e.g. `bridge.example.com` or `*.example.com`)
 - A DNS zone where you can create an ALIAS/CNAME to the ALB
-- Completed [platform setup](../platform-setup/)
+- Completed [platform setup](../../platform-setup/)
 
 ## Configure
 

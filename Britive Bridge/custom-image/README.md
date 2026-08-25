@@ -59,10 +59,10 @@ both Fargate ARM64 and mixed Kubernetes nodes.
 
 - Docker with **buildx** (for multi-arch builds) — `docker buildx version`
 - A container registry you can push to: **Docker Hub** (to keep images and the
-  planned Helm chart in one place — see the [k8s option](../kubernetes/)) or
+  planned Helm chart in one place — see the [k8s option](../v1/kubernetes/)) or
   **Amazon ECR**
 - Completed [platform setup](../platform-setup/) and a working Bridge deployment
-  pattern ([ECS](../aws-ecs-fargate-alb/) or [Kubernetes](../kubernetes/))
+  pattern ([ECS](../v1/aws-ecs-fargate-alb/) or [Kubernetes](../v1/kubernetes/))
 
 ---
 
@@ -109,7 +109,7 @@ CloudFormation templates, that's the `ImageUri` parameter:
 ```
 
 For the **SSH example**, the broker needs its provisioning private key. The
-[ALB + SSH template](../aws-ecs-fargate-alb-ssh/) already injects a key from
+[ALB + SSH template](../v1/aws-ecs-fargate-alb-ssh/) already injects a key from
 Secrets Manager to `/home/bridge/.ssh/id_ed25519` — use that template with your
 custom `ImageUri`.
 
@@ -122,7 +122,7 @@ Aurora endpoint (3306).
 ### Kubernetes
 
 Ready-to-apply overlays live in [`k8s-overlays/`](k8s-overlays/) — they patch
-the base [Kubernetes deployment](../kubernetes/) with your custom image, the
+the base [Kubernetes deployment](../v1/kubernetes/) with your custom image, the
 SSH-key mount, and the IRSA service account. After the base manifests are up:
 
 ```bash

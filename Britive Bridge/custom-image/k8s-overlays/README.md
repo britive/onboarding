@@ -1,7 +1,7 @@
 # Kubernetes overlays for the custom image
 
 Ready-to-apply manifests that wire the [custom image](../) into the base
-[Kubernetes deployment](../../kubernetes/) for the two examples.
+[Kubernetes deployment](../../v1/kubernetes/) for the two examples.
 
 | File | Purpose |
 |------|---------|
@@ -12,7 +12,7 @@ Ready-to-apply manifests that wire the [custom image](../) into the base
 
 ```bash
 # 0. Base manifests already applied (namespace, broker secret, pvc, deployment, service, ingress)
-#    from ../../kubernetes/manifests/  — see that README.
+#    from ../../v1/kubernetes/manifests/  — see that README.
 
 # 1. SSH provisioning key (Linux SSH example) — the broker's private key.
 #    Generate it once with: ssh-keygen -t ed25519 -f ./bridge_ed25519 -N ''

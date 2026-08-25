@@ -31,7 +31,7 @@ Traffic path: `client → NLB:443 (TCP passthrough) → task:8080 (container sel
 
 - AWS CLI v2 configured with credentials that can create ECS/EFS/ELB/IAM/Logs
 - A **VPC** and **two public subnets** in different AZs
-- Completed [platform setup](../platform-setup/) — you need
+- Completed [platform setup](../../platform-setup/) — you need
   `BrokerTenantSubdomain` and `BrokerAuthToken`
 - IAM permission to create the resources above (CAPABILITY_NAMED_IAM)
 

@@ -32,7 +32,7 @@ Traffic path: `client → Ingress (TLS) → Service:443 → pod:8080 (HTTPS, sel
 - A **StorageClass** for the PVC (RWO is fine for a single replica; use RWX for HA)
 - A way to get a TLS cert for your domain — e.g.
   [cert-manager](https://cert-manager.io/) — or bring your own cert
-- Completed [platform setup](../platform-setup/) — you need
+- Completed [platform setup](../../platform-setup/) — you need
   `BRITIVE_BROKER_TENANT_SUBDOMAIN` and `BRITIVE_BROKER_AUTH_TOKEN`
 
 ## Install
