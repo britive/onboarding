@@ -1,0 +1,40 @@
+# Strategic-merge patch over the base Deployment for HA: more replicas and
+# rolling updates instead of Recreate. NOT OFFICIALLY SUPPORTED yet — works on
+# Bridge v1.x but is not covered by support; single replica for production. Only safe once /data is on a
+# ReadWriteMany volume — see pvc-rwm.example.yaml for the full install order.
+#
+# This is a PATCH, not a full manifest — do not `kubectl apply` it.
+#
+# Preview the result first (optional):
+#   kubectl -n britive-bridge patch deployment britive-bridge \
+#     --type strategic --patch-file ha-deployment-patch.example.yaml \
+#     --dry-run=server -o yaml
+#
+# Apply:
+#   kubectl -n britive-bridge patch deployment britive-bridge \
+#     --type strategic --patch-file ha-deployment-patch.example.yaml
+#
+# Or fold these fields into deployment.yaml directly.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: britive-bridge
+  namespace: britive-bridge
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    spec:
+      affinity:
+        podAntiAffinity:            # spread replicas across nodes
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: britive-bridge

@@ -1,0 +1,195 @@
+# =============================================================================
+# Britive Bridge v2 — deployment configuration
+#
+# This file is BAKED INTO THE IMAGE at /etc/britive-bridge/config.yaml by the
+# Dockerfile beside it. Changing it therefore means building and pushing a new
+# image tag, then updating the ECS stack's ImageUri.
+#
+# Precedence: built-in defaults < this file < environment variables.
+# Full reference: https://learn.britive.com/bridge-files/bridge.reference.yaml
+#
+# NO SECRETS BELONG IN THIS FILE. The CloudFormation stack injects them from
+# Secrets Manager as environment variables at runtime:
+#   BRIDGE_ENCRYPTION_KEY_B64   (required, PERMANENT — never rotate after go-live)
+#   BRIDGE_DATASTORE_PASSWORD   (PostgreSQL password)
+#   BRIDGE_CLUSTER_TOKEN        (required whenever the broker is enabled)
+#   BRIDGE_HOST_KEY_SEED        (stable SSH host-key fingerprint across restarts)
+#   BRITIVE_BROKER_AUTH_TOKEN / BRITIVE_BROKER_TENANT_SUBDOMAIN
+#   BRITIVE_TENANT              (overrides server.auth.britive.tenant)
+# =============================================================================
+
+server:
+  # 8080, not 443. Fargate cannot bind privileged ports (<1024) without
+  # NET_BIND_SERVICE, and Fargate only allows adding SYS_PTRACE, so that
+  # capability is not grantable. The NLB's 443 TLS listener does the 443->8080
+  # translation.
+  listen: 8080
+  log_level: "info"
+
+  picker_enabled: true # authenticated checkout picker at /picker (default false -> 404)
+  landing_enabled: true # public landing page at "/" (default false -> redirect)
+
+  # Honour X-Forwarded-For from the NLB so session recordings capture real
+  # client IPs rather than load-balancer ENI addresses. Set to YOUR VPC CIDR.
+  trusted_proxies:
+    - "10.0.0.0/16"
+
+  tls:
+    # TLS terminates at the NLB using the ACM certificate; the container serves
+    # plain HTTP on 8080. Enabling TLS here as well makes the NLB's TCP health
+    # probes log "http: TLS handshake error EOF" on every check.
+    enabled: false
+
+  # PostgreSQL is MANDATORY in Bridge v2. Host, port and credentials are
+  # overridden per deployment by the BRIDGE_DATASTORE_* environment variables
+  # that the CloudFormation stack injects, so the values here are placeholders.
+  datastore:
+    host: "localhost"
+    port: 5432
+    user: "bridge"
+    name: "bridge"
+    sslmode: "require"
+
+  auth:
+    types:
+      - britive
+    britive:
+      # REQUIRED. Validated from this FILE before environment overrides apply,
+      # so BRITIVE_TENANT alone is not sufficient — the process crash-loops if
+      # this is left empty. Use your tenant subdomain, without
+      # ".britive-app.com".
+      tenant: "your-tenant"
+
+  recording:
+    output_dir: "/data/recordings" # EFS-backed, survives task replacement
+    redact_response_bodies: true
+
+  # --- Audit index and SIEM export (Bridge v2.1.0+) --------------------------
+  # Indexing sessions into Activity Search is ALWAYS ON and needs no config.
+  # The block below only streams those same events to an external SIEM.
+  #
+  # Uncomment and set an endpoint to enable. Export is best-effort: it never
+  # blocks a session, and an unreachable destination drops events. The startup
+  # log prints "audit export enabled" whether the endpoint is right, wrong or
+  # empty, so verify in the admin console's Configuration tab, which reports
+  # what was configured alongside what actually got wired.
+  #
+  # audit:
+  #   export:
+  #     enabled: true
+  #     type: "webhook"            # "webhook" (HTTPS POST) or "syslog"
+  #     endpoint: ""               # webhook URL, or "host:port" for syslog
+  #     token: ""                  # webhook only: sent as Authorization: Bearer
+  #     network: "udp"             # syslog only: "udp" or "tcp"
+
+# --- Protocols ---------------------------------------------------------------
+# Every protocol is OFF by default and the Bridge refuses to start unless at
+# least one is enabled.
+#
+# NATIVE mode opens a listening port so users connect with their own client
+# (ssh, mysql, Microsoft Remote Desktop). Each native listener needs a matching
+# NLB listener and target group, and ECS caps a service at 5 load-balancer
+# registrations — 1 is spent on the web tier, leaving 4. The four below are
+# exactly what the CloudFormation template wires.
+#
+# BROWSER mode needs no extra registration: it rides the existing 443 listener
+# to the web tier, so it is free to enable widely.
+
+ssh:
+  native:
+    enabled: true
+    listen: 2222 # not 22 — Fargate cannot bind privileged ports
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+rdp:
+  native:
+    enabled: true # TLS cert/key auto-generated under /data/certs
+    listen: 3389
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+mysql:
+  native:
+    enabled: true
+    listen: 3306
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+postgres:
+  native:
+    enabled: true
+    listen: 5432
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+# MSSQL is browser-only here. Native would need a 6th NLB registration, which
+# ECS does not allow. Enabling native below without adding an NLB listener
+# produces a connect command that looks valid and never works.
+mssql:
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+# --- Browser-only protocols --------------------------------------------------
+# None of these consume an NLB registration.
+
+k8s_exec: # Kubernetes exec — browser only by design, there is no native listener
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+vnc: # browser only by design
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+telnet:
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+winrm:
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+cassandra:
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+cockroachdb: # PostgreSQL-wire compatible
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+mongodb:
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+redis:
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+netconf: # NETCONF-over-SSH
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+restconf: # RESTCONF (HTTPS)
+  browser:
+    enabled: true
+  idle_timeout: "30m"
+
+# http_proxy has no browser mode — it is a TLS-terminating listener clients are
+# pointed at — and would need its own NLB registration. Left disabled.
+
+cluster:
+  role: "single" # overridable with BRIDGE_ROLE
