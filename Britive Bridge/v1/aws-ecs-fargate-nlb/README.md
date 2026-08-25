@@ -1,5 +1,13 @@
 # Britive Bridge — AWS ECS Fargate + NLB
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Run Bridge serverlessly on AWS ECS Fargate, fronted by an internet-facing
 **Network Load Balancer (NLB)** that passes TLS straight through to the
 container. **No ACM certificate required** — the container's own self-signed
@@ -51,7 +59,7 @@ Edit `params.json`:
 | `VpcId` | Your VPC ID |
 | `PublicSubnetIds` | **Two** public subnet IDs, comma-separated |
 | `IngressCidr` | CIDR allowed to reach Bridge (default `0.0.0.0/0` — tighten this) |
-| `ImageUri` | Container image (default `britive/bridge:latest`) |
+| `ImageUri` | Container image (default `britive/bridge:v1.0.2`) |
 | `CpuArchitecture` | `ARM64` (default) or `X86_64` — must match the image |
 | `TaskCpu` / `TaskMemory` | Fargate sizing |
 | `DesiredCount` | Number of tasks (1–4) |

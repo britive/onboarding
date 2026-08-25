@@ -17,7 +17,7 @@
   pulls the image, and runs the container.
 
 .PARAMETER Image
-  Docker Hub image. Default: britive/bridge:latest
+  Docker Hub image. Default: britive/bridge:v1.0.2
 
 .PARAMETER ContainerName
   Name for the container. Default: bridge
@@ -42,7 +42,7 @@
 
 [CmdletBinding()]
 param(
-  [string]$Image         = "britive/bridge:latest",
+  [string]$Image         = "britive/bridge:v1.0.2",
   [string]$ContainerName = "bridge",
   [int]   $Port          = 8080,
   [string]$DataVolume    = "bridge-data",

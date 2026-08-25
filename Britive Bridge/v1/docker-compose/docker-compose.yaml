@@ -6,14 +6,14 @@
 #     -e BRITIVE_BROKER_TENANT_SUBDOMAIN="..." \
 #     -e BRITIVE_BROKER_AUTH_TOKEN="..." \
 #     -v bridge-data:/data \
-#     britive/bridge:latest
+#     britive/bridge:v1.0.2
 #
 # Start:  docker compose up -d
 # Stop:   docker compose down
 
 services:
   bridge:
-    image: britive/bridge:latest
+    image: britive/bridge:v1.0.2
     restart: unless-stopped
     ports:
       - "8080:8080" # HTTPS API + WebSocket + browser protocols

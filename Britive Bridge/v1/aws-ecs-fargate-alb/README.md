@@ -1,5 +1,13 @@
 # Britive Bridge — AWS ECS Fargate + ALB (ACM TLS)
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Run Bridge on AWS ECS Fargate behind an internet-facing **Application Load
 Balancer (ALB)** that **terminates TLS with an ACM certificate** on port 443.
 This is the recommended production path on AWS when you have a custom domain and

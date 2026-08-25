@@ -1,12 +1,20 @@
 # Britive Bridge v1.x — Deployment Options
 
-Deployment templates and installers for **Bridge v1.x**. For current releases
-see [`../v2/`](../v2/).
+> ## Legacy — do not use for new deployments
+>
+> Bridge v1.x is **no longer the recommended line**. All new implementations
+> should use [**Bridge v2**](../v2/). What is here is kept so existing v1
+> deployments remain supportable and reproducible.
 
-> These templates predate the v2 datastore, encryption key and baked
-> configuration requirements. They will **not** start a Bridge v2 image: it
-> needs a PostgreSQL datastore and an encryption key that none of these
-> templates supply.
+These templates predate the v2 datastore, encryption key and baked
+configuration requirements. They will **not** start a Bridge v2 image: it needs
+a PostgreSQL datastore and an encryption key that none of these templates
+supply.
+
+**Every image reference here is pinned to `britive/bridge:v1.0.2`.** Do not
+substitute `britive/bridge:latest`: on Docker Hub that tag now resolves to
+v2.x, so a v1 template pointed at it pulls a v2 image and crash-loops on the
+missing datastore. `v1.0.2` is the only v1 tag published.
 
 ## Options
 

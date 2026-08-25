@@ -1,5 +1,13 @@
 # Britive Bridge — Linux VM (Docker)
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Run the Britive Bridge container (which hosts the broker process) on a single
 Linux VM using Docker, pulling the image straight from **Docker Hub**
 (`britive/bridge`). Good for on-prem hosts, a cloud EC2/Compute instance, or any
@@ -48,14 +56,14 @@ docker logs -f bridge
 ```
 
 `install.sh` detects the distro, installs Docker Engine, enables it on boot,
-opens the firewall, pulls `britive/bridge:latest`, and starts the container with
+opens the firewall, pulls `britive/bridge:v1.0.2`, and starts the container with
 a persistent data volume and `--restart unless-stopped`. Re-run it any time to
 update the image / recreate the container.
 
 Override defaults via env vars, e.g.:
 
 ```bash
-sudo IMAGE=britive/bridge:latest PORT=9443 CONTAINER_NAME=bridge ./install.sh
+sudo IMAGE=britive/bridge:v1.0.2 PORT=9443 CONTAINER_NAME=bridge ./install.sh
 ```
 
 > **Production:** pin a specific image tag (see Docker Hub `britive/bridge`
@@ -133,14 +141,14 @@ Plus: open inbound TCP 8080 in your **cloud security group / network ACL**.
 
 ```bash
 cp bridge.env.example bridge.env && chmod 600 bridge.env   # then edit it
-docker pull britive/bridge:latest
+docker pull britive/bridge:v1.0.2
 docker run -d \
   --name bridge \
   --restart unless-stopped \
   -p 8080:8080 \
   --env-file bridge.env \
   -v bridge-data:/data \
-  britive/bridge:latest
+  britive/bridge:v1.0.2
 ```
 
 ### 6. Verify
@@ -174,7 +182,7 @@ path, add the `:Z` (private) or `:z` (shared) label:
 docker run -d --name bridge --restart unless-stopped \
   -p 8080:8080 --env-file bridge.env \
   -v /srv/britive-bridge/data:/data:Z \
-  britive/bridge:latest
+  britive/bridge:v1.0.2
 ```
 
 ### Image architecture
@@ -206,7 +214,7 @@ docker run -d --name bridge --restart unless-stopped \
   -v /etc/ssl/bridge/key.pem:/custom-certs/key.pem:ro \
   -e TLS_CERT_FILE=/custom-certs/cert.pem \
   -e TLS_KEY_FILE=/custom-certs/key.pem \
-  britive/bridge:latest
+  britive/bridge:v1.0.2
 ```
 
 (On SELinux-enforcing hosts add `:Z` to those `-v` mounts, e.g. `...cert.pem:ro,Z`.)

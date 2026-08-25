@@ -230,6 +230,14 @@ The build fails if the tenant is still the `your-tenant` placeholder, and
 asserts that the RDS certificates actually landed in the trust store — so
 neither mistake reaches a running task.
 
+> **Pin `BASE_IMAGE` to a specific tag; do not use `britive/bridge:latest`.**
+> That tag tracks whatever was published most recently — it points at v2.1.0
+> today and will move on the next release, so two builds of the "same" image
+> can differ. Worse, `latest` is shared across major versions, so it will
+> eventually point at a v3 image that this template does not support. The
+> Dockerfile's own `BASE_IMAGE` default is `latest` for backwards
+> compatibility, which is why every command here passes it explicitly.
+
 > **`PLATFORM` must match the `CpuArchitecture` stack parameter.** Fargate will
 > not run an image built for the other architecture, and the failure shows up as
 > a task that starts and immediately stops — not as a stack error. The defaults

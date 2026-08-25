@@ -1,6 +1,11 @@
 # Britive Bridge v2.x — Deployment Options
 
-Deployment templates for **Bridge v2.x**. For v1.x see [`../v1/`](../v1/).
+Deployment templates for **Bridge v2.x** — the current release line. **Use
+these for all new deployments.** [`../v1/`](../v1/) is legacy and exists only
+for deployments already running v1.
+
+> Pin the image tag. `britive/bridge:latest` tracks the newest release across
+> major versions, so it is not safe to build against.
 
 ## What changed from v1
 

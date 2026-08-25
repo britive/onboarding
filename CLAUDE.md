@@ -23,9 +23,21 @@ more than brevity.
 Britive Bridge/
 ├── platform-setup/     shared — creates broker pool + token (run FIRST)
 ├── custom-image/       shared image builder for BOTH versions
-├── v1/                 Bridge v1.x deployment options
-└── v2/                 Bridge v2.x deployment options
+├── v1/                 Bridge v1.x - LEGACY, existing deployments only
+└── v2/                 Bridge v2.x - current, use for all new work
 ```
+
+**v1 is legacy.** Point anything new at `v2/`. `v1/` is kept so deployments
+already running v1 stay reproducible.
+
+**Never reference `britive/bridge:latest`.** That tag tracks the newest release
+across major versions - it resolves to v2.1.0 today. A v1 template pointed at
+it pulls a v2 image and crash-loops on the missing datastore, which is exactly
+what the v1 templates used to default to. Pin explicitly: `v1.0.2` is the only
+published v1 tag; v2 uses specific `v2.x` tags. The one remaining `latest` is
+`custom-image/Dockerfile`'s `BASE_IMAGE` default, kept for backwards
+compatibility, which is why every documented build passes `BASE_IMAGE`
+explicitly.
 
 **They are not interchangeable.** A v1 template cannot run a v2 image. Bridge
 v2 additionally requires:

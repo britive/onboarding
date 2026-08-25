@@ -1,11 +1,20 @@
 # Britive Bridge — Deployment Options
 
-> **Note:** Deployment options are split by Bridge major version:
-> [`v1/`](v1/) targets **Bridge v1.x**, [`v2/`](v2/) targets **Bridge v2.x**.
-> They are not interchangeable — v2 additionally requires a PostgreSQL
+> **Use [`v2/`](v2/) for anything new.** Deployment options are split by Bridge
+> major version: [`v2/`](v2/) is the current release line, and [`v1/`](v1/) is
+> **legacy** — kept so existing v1 deployments stay supportable, not for new
+> work.
+>
+> The two are not interchangeable. v2 additionally requires a PostgreSQL
 > datastore, a permanent encryption key, and a configuration file baked into
-> the image. Everything here is in **BETA**: validate in a non-production
-> environment first, and expect changes between releases.
+> the image.
+>
+> **Do not use the `britive/bridge:latest` tag.** It tracks the newest release
+> (v2.x today), so a v1 template pointed at it pulls a v2 image and fails to
+> start. Pin explicitly: `v1.0.2` for v1, a specific `v2.x` tag for v2.
+>
+> Everything here is in **BETA**: validate in a non-production environment
+> first, and expect changes between releases.
 
 Britive Bridge is a self-hosted container that connects to the Britive platform
 through the Britive Broker and brokers clientless, browser-based sessions to
@@ -54,7 +63,7 @@ existing resource in place.
 
 ## Choosing an option
 
-### Bridge v2.x — [`v2/`](v2/)
+### Bridge v2.x — [`v2/`](v2/) &nbsp;·&nbsp; **current — use this**
 
 | Option | Where it runs | TLS / external access | Persistence | Best for |
 |--------|---------------|-----------------------|-------------|----------|
@@ -64,7 +73,7 @@ v2 requires an existing **PostgreSQL** instance and a permanent
 **encryption key**, and its configuration is baked into the image — see that
 option's README.
 
-### Bridge v1.x — [`v1/`](v1/)
+### Bridge v1.x — [`v1/`](v1/) &nbsp;·&nbsp; **legacy, existing deployments only**
 
 | Option | Where it runs | TLS / external access | Persistence | Best for |
 |--------|---------------|-----------------------|-------------|----------|
