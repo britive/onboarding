@@ -7,7 +7,7 @@ ideal for local trials, POCs, and single-VM deployments.
 
 - Docker Engine 20.10+ with the Compose plugin (`docker compose`)
 - Outbound network access from the host to your Britive tenant (Broker/MQTT)
-- Completed [platform setup](../platform-setup/) — you need:
+- Completed [platform setup](../../platform-setup/) — you need:
   - `BRITIVE_BROKER_TENANT_SUBDOMAIN`
   - `BRITIVE_BROKER_AUTH_TOKEN`
 

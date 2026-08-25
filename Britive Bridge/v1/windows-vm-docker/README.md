@@ -48,7 +48,7 @@ license) per the Linux guide.
 - PowerShell 5.1+ (built in). `install.ps1` works on both: on 7+ it probes
   health with `Invoke-WebRequest -SkipCertificateCheck`, on 5.1 it falls back
   to `docker exec ... curl` automatically.
-- Completed [platform setup](../platform-setup/) — you need
+- Completed [platform setup](../../platform-setup/) — you need
   `BRITIVE_BROKER_TENANT_SUBDOMAIN` and `BRITIVE_BROKER_AUTH_TOKEN`.
 
 ---

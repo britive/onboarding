@@ -22,7 +22,7 @@ long-lived Linux server.
   open both the host firewall **and** any cloud security group / network ACL.
 - Sizing: start with **2 vCPU / 4 GiB RAM** and ~5 GiB free disk for the image +
   data volume. Scale up for heavier session loads.
-- Completed [platform setup](../platform-setup/) — you need
+- Completed [platform setup](../../platform-setup/) — you need
   `BRITIVE_BROKER_TENANT_SUBDOMAIN` and `BRITIVE_BROKER_AUTH_TOKEN`.
 
 ---

@@ -8,12 +8,11 @@ host in your own ECR registry.
 
 | File | Purpose |
 | ---- | ------- |
-| `ecr/ecr-repo.yaml` | ECR repository for your Bridge image (deploy once) |
-| `ecr/Dockerfile` | Builds your image: official Bridge + your config + broker runtime |
-| `ecr/bridge.yaml` | The Bridge configuration baked into that image |
-| `ecr/build-and-push.sh` | Builds and pushes the image to ECR |
-| `britive_bridge_ecs_fargate.yaml` | ECS Fargate service, NLB, EFS, security groups, IAM, secrets |
-| `parameters.json` | Parameter file for the ECS stack |
+| `ecr-repo.yaml` | ECR repository for your Bridge image (deploy once) |
+| [`../../custom-image/`](../../custom-image/) | Shared image builder — bakes your config and adds the broker runtime |
+| [`../../custom-image/bridge.yaml`](../../custom-image/bridge.yaml) | The Bridge configuration baked into that image |
+| `ecs-fargate-nlb.yaml` | ECS Fargate service, NLB, EFS, security groups, IAM, secrets |
+| `params.example.json` | Parameter file for the ECS stack |
 
 ## When to Use These Templates
 
@@ -26,8 +25,11 @@ host in your own ECR registry.
 **Do not use this when:**
 
 - You only need Britive's AWS SAML integration — see
-  [single-account-stack/](../single-account-stack/) instead. The Bridge is a
+  [cloudformation/aws/](../../../cloudformation/aws/) instead. The Bridge is a
   separate product from the AWS account integration.
+- You are running **Bridge v1.x** — use [../../v1/](../../v1/), whose templates
+  match that version. v1 has no datastore or encryption-key parameters, and this
+  template will not work with a v1 image.
 - You cannot expose an internet-facing load balancer. The Bridge needs to be
   reachable by the browsers and native clients of the people using it.
 
@@ -137,8 +139,6 @@ Tags are **immutable** in this repository by design: a given tag can never be
 overwritten, so what a task pulls on restart cannot silently change.
 
 ```bash
-cd ecr
-
 aws cloudformation create-stack \
   --stack-name britive-bridge-ecr \
   --template-body file://ecr-repo.yaml \
@@ -157,7 +157,8 @@ aws cloudformation describe-stacks \
 
 ## Step 2: Configure the Bridge
 
-Edit `ecr/bridge.yaml`. It is baked into the image, so this is where your
+Edit [`../../custom-image/bridge.yaml`](../../custom-image/bridge.yaml). It is baked
+into the image, so this is where your
 deployment is defined — **not** in the CloudFormation stack.
 
 **Required change:**
@@ -171,7 +172,7 @@ server:
 
 The Bridge validates this from the **file** before environment overrides are
 applied. Leaving it unset crash-loops the task at startup, so
-`build-and-push.sh` refuses to build until you change it.
+the image build refuses to proceed until you change it.
 
 **Recommended changes:**
 
@@ -197,16 +198,37 @@ Full option list:
 
 ## Step 3: Build and Push the Image
 
-```bash
-cd ecr
+The shared builder in [`../../custom-image/`](../../custom-image/) produces the
+image. `BAKE_CONFIG=true` is **required** for v2 — every protocol is off by
+default and the Bridge refuses to start unless at least one is enabled.
+`WITH_RDS_CA=true` trusts the AWS RDS certificate authorities so database
+checkouts using `target_tls=true` verify successfully.
 
-AWS_REGION=us-east-1 \
-IMAGE_TAG=v2.1.0-r1 \
-PLATFORM=linux/arm64 \
-./build-and-push.sh
+```bash
+cd ../../custom-image
+
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+REGION=us-east-1
+IMAGE_URI="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/britive/bridge:v2.1.0-r1"
+
+docker build \
+  --platform linux/arm64 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BAKE_CONFIG=true \
+  --build-arg WITH_RDS_CA=true \
+  -t "$IMAGE_URI" .
+
+aws ecr get-login-password --region "$REGION" \
+  | docker login --username AWS --password-stdin "${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
+
+docker push "$IMAGE_URI"
 ```
 
-The script prints the resulting `ImageUri` — you need it in Step 5.
+Use `$IMAGE_URI` as the `ImageUri` parameter in Step 5.
+
+The build fails if the tenant is still the `your-tenant` placeholder, and
+asserts that the RDS certificates actually landed in the trust store — so
+neither mistake reaches a running task.
 
 > **`PLATFORM` must match the `CpuArchitecture` stack parameter.** Fargate will
 > not run an image built for the other architecture, and the failure shows up as
@@ -216,7 +238,10 @@ The script prints the resulting `ImageUri` — you need it in Step 5.
 To build for Intel/AMD instead:
 
 ```bash
-PLATFORM=linux/amd64 IMAGE_TAG=v2.1.0-r1 ./build-and-push.sh
+docker build --platform linux/amd64 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BAKE_CONFIG=true --build-arg WITH_RDS_CA=true \
+  -t "$IMAGE_URI" .
 # and set CpuArchitecture=X86_64 on the ECS stack
 ```
 
@@ -287,13 +312,13 @@ stack update required.
 
 ### Via AWS CLI
 
-Fill in `parameters.json`, then:
+Copy `params.example.json`, fill it in, then:
 
 ```bash
 aws cloudformation create-stack \
   --stack-name britive-bridge \
-  --template-body file://britive_bridge_ecs_fargate.yaml \
-  --parameters file://parameters.json \
+  --template-body file://ecs-fargate-nlb.yaml \
+  --parameters file://params.example.json \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete --stack-name britive-bridge
@@ -311,7 +336,7 @@ aws cloudformation describe-stack-events \
 ### Via AWS Console
 
 1. **CloudFormation → Create stack → With new resources**
-2. **Upload a template file** → select `britive_bridge_ecs_fargate.yaml`
+2. **Upload a template file** → select `ecs-fargate-nlb.yaml`
 3. Enter a stack name and fill in the parameters
 4. Acknowledge **"may create IAM resources with custom names"**
 5. **Submit**
@@ -378,9 +403,13 @@ broker appears in the pool matching `BrokerAuthToken`.
 `bridge.yaml` lives inside the image, so a config change is an image change:
 
 ```bash
-cd ecr
-# edit bridge.yaml
-IMAGE_TAG=v2.1.0-r2 ./build-and-push.sh     # NEW tag - tags are immutable
+cd ../../custom-image
+# edit bridge.yaml, then rebuild with a NEW tag - tags are immutable
+docker build --platform linux/arm64 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BAKE_CONFIG=true --build-arg WITH_RDS_CA=true \
+  -t "<registry>/britive/bridge:v2.1.0-r2" .
+docker push "<registry>/britive/bridge:v2.1.0-r2"
 ```
 
 Then update **only** `ImageUri`:
@@ -411,7 +440,7 @@ aws cloudformation update-stack \
 ```
 
 > **Always pass `UsePreviousValue=true` for every parameter you are not
-> changing.** Re-submitting `parameters.json` sends whatever is in that file,
+> changing.** Re-submitting the parameter file sends whatever is in that file,
 > including empty strings for the `NoEcho` secrets — which replaces the stored
 > encryption key, broker token and SSH key with blanks. The encryption key in
 > particular cannot be recovered.
@@ -419,8 +448,11 @@ aws cloudformation update-stack \
 ### Upgrading the Bridge version
 
 ```bash
-cd ecr
-BRIDGE_VERSION=v2.1.1 IMAGE_TAG=v2.1.1-r1 ./build-and-push.sh
+cd ../../custom-image
+docker build --platform linux/arm64 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.1.1 \
+  --build-arg BAKE_CONFIG=true --build-arg WITH_RDS_CA=true \
+  -t "<registry>/britive/bridge:v2.1.1-r1" .
 ```
 
 Then update `ImageUri` as above. Check the
@@ -515,3 +547,5 @@ templates and are not removed.
 - [Deploying on AWS ECS](https://learn.britive.com/bridge/deploy/aws-ecs/)
 - [Configuration reference](https://learn.britive.com/bridge-files/bridge.reference.yaml)
 - [Access Broker examples](https://github.com/britive/access-broker-examples)
+- [Bridge v1.x deployment options](../../v1/) — for older Bridge releases
+- [Platform setup](../../platform-setup/) — run first; creates the broker pool and token
