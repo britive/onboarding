@@ -34,10 +34,10 @@ already running v1 stay reproducible.
 across major versions - it resolves to v2.1.0 today. A v1 template pointed at
 it pulls a v2 image and crash-loops on the missing datastore, which is exactly
 what the v1 templates used to default to. Pin explicitly: `v1.0.2` is the only
-published v1 tag; v2 uses specific `v2.x` tags. The one remaining `latest` is
-`custom-image/Dockerfile`'s `BASE_IMAGE` default, kept for backwards
-compatibility, which is why every documented build passes `BASE_IMAGE`
-explicitly.
+published v1 tag; v2 uses specific `v2.x` tags. `custom-image` now defaults
+`BASE_IMAGE` to `britive/bridge:v2.1.0` in both the Dockerfile and
+`build-and-push.sh`, so a v1 build **must** override it with
+`britive/bridge:v1.0.2`. No `latest` default remains anywhere.
 
 **They are not interchangeable.** A v1 template cannot run a v2 image. Bridge
 v2 additionally requires:
