@@ -76,20 +76,33 @@ REGISTRY=docker.io/yourorg ./build-and-push.sh
 REGISTRY=<account-id>.dkr.ecr.us-west-2.amazonaws.com ./build-and-push.sh
 ```
 
-Override the base, tag, or platforms as needed:
+### Pick the base image deliberately
+
+`BASE_IMAGE` defaults to `britive/bridge:v2.1.0`. **Never set it to
+`britive/bridge:latest`** — that tag tracks the newest release across major
+versions, so it moves on every release and a build is no longer reproducible.
 
 ```bash
-REGISTRY=docker.io/yourorg TAG=v1 \
-  BASE_IMAGE=britive/bridge:latest \
-  PLATFORMS=linux/amd64,linux/arm64 \
+# Bridge v2 (current) - bake the config and trust the RDS CAs
+REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com TAG=v2.1.0-r1 \
+  BASE_IMAGE=britive/bridge:v2.1.0 \
+  BAKE_CONFIG=true WITH_RDS_CA=true \
+  ./build-and-push.sh
+
+# Bridge v1 (legacy) - MUST override the default
+REGISTRY=docker.io/yourorg TAG=v1.0.2-r1 \
+  BASE_IMAGE=britive/bridge:v1.0.2 \
   ./build-and-push.sh
 ```
+
+A v1 template pointed at a v2 image crash-loops on the PostgreSQL datastore
+that v1 never required, so the override matters.
 
 Local single-arch build (no push) for testing:
 
 ```bash
-docker build -t britive-bridge-custom:latest .
-docker run --rm britive-bridge-custom:latest \
+docker build -t britive-bridge-custom:local .
+docker run --rm britive-bridge-custom:local \
   sh -c 'for c in ssh ssh-keygen mysql aws jq python3; do command -v $c || exit 1; done'
 ```
 

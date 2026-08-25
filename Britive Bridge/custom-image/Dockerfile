@@ -23,12 +23,18 @@
 #
 # Build (multi-arch recommended so it runs on Fargate ARM64 and x86 nodes):
 #   docker buildx build --platform linux/amd64,linux/arm64 \
-#     -t <your-registry>/britive-bridge-custom:latest --push .
+#     --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+#     -t <your-registry>/britive-bridge-custom:v2.1.0-r1 --push .
 #
 # Or single-arch for local use:
-#   docker build -t britive-bridge-custom:latest .
+#   docker build -t britive-bridge-custom:local .
 
-ARG BASE_IMAGE=britive/bridge:latest
+# Pinned, never :latest. That tag tracks the newest release across MAJOR
+# versions, so it moves on every release and will eventually point at a major
+# these templates do not support. A v1 deployment must override this with
+# britive/bridge:v1.0.2 -- pointing a v1 template at a v2 image crash-loops on
+# the datastore v1 never had.
+ARG BASE_IMAGE=britive/bridge:v2.1.0
 FROM ${BASE_IMAGE}
 
 # Root needed to install packages; the base image's own entrypoint/user is
