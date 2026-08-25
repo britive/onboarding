@@ -18,6 +18,7 @@ Britive is a Privileged Access Management (PAM) platform that provides Just-In-T
 | Multi-account via StackSets | [stackset-templates/](stackset-templates/) | Medium |
 | Entire organization (including management account) | [organization-stackset/](organization-stackset/) | High |
 | Demo/lab environment with sample resources | [full-lab-setup/](full-lab-setup/) | Medium |
+| Britive Bridge (recorded SSH/RDP/database sessions) | [bridge-ecs-fargate/](bridge-ecs-fargate/) | Medium |
 
 ## Directory Structure
 
@@ -39,9 +40,18 @@ aws/
 │   ├── britive_integration_resources.yaml
 │   ├── parameters.json
 │   └── README.md
-└── full-lab-setup/              # Complete demo environment
-    ├── britive_lab_resources.yaml
+├── full-lab-setup/              # Complete demo environment
+│   ├── britive_lab_resources.yaml
+│   ├── parameters.json
+│   └── README.md
+└── bridge-ecs-fargate/          # Britive Bridge on ECS Fargate
+    ├── britive_bridge_ecs_fargate.yaml
     ├── parameters.json
+    ├── ecr/                     # Build your own Bridge container image
+    │   ├── Dockerfile
+    │   ├── bridge.yaml
+    │   ├── build-and-push.sh
+    │   └── ecr-repo.yaml
     └── README.md
 ```
 
@@ -167,6 +177,59 @@ Creates a complete demo environment with VPC, EC2 instances (Linux/Windows), RDS
 
 ---
 
+### Option 5: Britive Bridge on ECS Fargate
+
+**Best for:** Recorded, brokered SSH / RDP / database / Kubernetes sessions
+
+Deploys the [Britive Bridge](https://learn.britive.com/bridge/) as an ECS
+Fargate service behind a Network Load Balancer, using a container image you
+build and host in your own ECR registry.
+
+Unlike Options 1-4, this does not configure SAML federation into AWS. The
+Bridge is a separate product: users connect through it with their own client or
+in the browser, and every session is proxied and recorded.
+
+**Templates:**
+
+- `ecr/ecr-repo.yaml` - ECR repository for your image
+- `ecr/Dockerfile` + `ecr/bridge.yaml` - your configuration, baked into the image
+- `britive_bridge_ecs_fargate.yaml` - ECS service, NLB, EFS, IAM, secrets
+
+**Key features:**
+
+- One hostname serves the web UI and every native protocol listener
+- Configuration versioned as immutable ECR image tags
+- Session recordings persisted on EFS across task replacement
+
+**Requires:** an existing PostgreSQL instance, an ACM certificate, and a
+managed prefix list of client IPs.
+
+**Quick deploy:**
+
+  ```bash
+  cd bridge-ecs-fargate/ecr
+  # 1. create the ECR repository
+  aws cloudformation create-stack \
+    --stack-name britive-bridge-ecr \
+    --template-body file://ecr-repo.yaml \
+    --capabilities CAPABILITY_NAMED_IAM
+
+  # 2. set your tenant in bridge.yaml, then build and push
+  IMAGE_TAG=v2.1.0-r1 ./build-and-push.sh
+
+  # 3. deploy the service
+  cd ..
+  aws cloudformation create-stack \
+    --stack-name britive-bridge \
+    --template-body file://britive_bridge_ecs_fargate.yaml \
+    --parameters file://parameters.json \
+    --capabilities CAPABILITY_NAMED_IAM
+  ```
+
+[Full documentation](bridge-ecs-fargate/README.md)
+
+---
+
 ## Prerequisites
 
 All deployment options require:
@@ -183,7 +246,8 @@ All deployment options require:
 
 ## Resources Created
 
-All templates create these core resources:
+The AWS integration templates (Options 1-4) create these core resources. Option
+5 deploys the Britive Bridge instead and creates none of them:
 
 | Resource | Name Pattern | Purpose |
 | ---------- | -------------- | --------- |
@@ -207,6 +271,11 @@ All templates create these core resources:
 | **Demo resources (EC2/RDS)** | No | No | No | Yes |
 | **Complexity** | Low | Medium | High | Medium |
 | **Production ready** | Yes | Yes | Yes | No |
+
+This matrix covers the AWS SAML integration only. The
+[Britive Bridge](bridge-ecs-fargate/) is a separate product that brokers and
+records live sessions; it is deployed independently and does not require any of
+the options above.
 
 ## Security Considerations
 
