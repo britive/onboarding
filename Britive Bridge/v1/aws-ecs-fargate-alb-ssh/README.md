@@ -1,5 +1,13 @@
 # Britive Bridge — AWS ECS Fargate + ALB + SSH key
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Everything in the [ALB option](../aws-ecs-fargate-alb/), **plus** an SSH private
 key delivered to the broker so it can SSH into your EC2 instances. The key is
 stored in **AWS Secrets Manager** and injected into the container at runtime —

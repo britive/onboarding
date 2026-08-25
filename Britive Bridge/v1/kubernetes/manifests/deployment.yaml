@@ -23,7 +23,7 @@ spec:
                       # write /data
       containers:
         - name: bridge
-          image: britive/bridge:latest
+          image: britive/bridge:v1.0.2
           # Always re-check the registry while on :latest, otherwise nodes run
           # whatever they cached first. For production, pin a versioned tag
           # and switch to IfNotPresent.

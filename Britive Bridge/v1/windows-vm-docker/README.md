@@ -1,5 +1,13 @@
 # Britive Bridge — Windows VM (Docker)
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Run the Britive Bridge container (which hosts the broker process) on a Windows VM
 using Docker, pulling the image from **Docker Hub** (`britive/bridge`).
 
@@ -97,13 +105,13 @@ docker logs -f bridge
 ```
 
 `install.ps1` verifies Docker is present and in **Linux** mode, opens the
-firewall, pulls `britive/bridge:latest`, and runs the container with a persistent
+firewall, pulls `britive/bridge:v1.0.2`, and runs the container with a persistent
 volume and `--restart unless-stopped`. Re-run it to update / recreate.
 
 Override defaults:
 
 ```powershell
-.\install.ps1 -Port 9443 -ContainerName bridge -Image britive/bridge:latest
+.\install.ps1 -Port 9443 -ContainerName bridge -Image britive/bridge:v1.0.2
 ```
 
 > **Production:** pin a specific image tag (see Docker Hub `britive/bridge`
@@ -129,14 +137,14 @@ New-NetFirewallRule -DisplayName "Britive Bridge 8080" -Direction Inbound `
 Copy-Item bridge.env.example bridge.env   # then edit bridge.env
 
 # 4. Pull + run.  Backtick (`) is the PowerShell line-continuation character.
-docker pull britive/bridge:latest
+docker pull britive/bridge:v1.0.2
 docker run -d `
   --name bridge `
   --restart unless-stopped `
   -p 8080:8080 `
   --env-file bridge.env `
   -v bridge-data:/data `
-  britive/bridge:latest
+  britive/bridge:v1.0.2
 
 # 5. Verify
 docker ps
@@ -182,7 +190,7 @@ docker run -d --name bridge --restart unless-stopped `
   -v C:\certs\key.pem:/custom-certs/key.pem:ro `
   -e TLS_CERT_FILE=/custom-certs/cert.pem `
   -e TLS_KEY_FILE=/custom-certs/key.pem `
-  britive/bridge:latest
+  britive/bridge:v1.0.2
 ```
 
 (Windows-path bind mounts are passed through WSL 2; ensure the drive is shared

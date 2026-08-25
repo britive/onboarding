@@ -31,7 +31,7 @@ Parameters:
     Description: CIDR allowed to reach Bridge HTTPS on the ALB.
   ImageUri:
     Type: String
-    Default: britive/bridge:latest
+    Default: britive/bridge:v1.0.2
     Description: Container image URI. Use a multi-arch image or one that matches CpuArchitecture.
   CpuArchitecture:
     Type: String

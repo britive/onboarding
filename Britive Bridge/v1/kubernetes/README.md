@@ -1,5 +1,13 @@
 # Britive Bridge — Kubernetes
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Run Bridge on any Kubernetes cluster (EKS, AKS, GKE, or on-prem) using plain
 manifests. Use this when your team is standardized on Kubernetes.
 
@@ -95,7 +103,7 @@ curl -sf https://bridge.example.com/api/health
 
 ## Key configuration notes
 
-- **Image tag.** The manifest ships `britive/bridge:latest` with
+- **Image tag.** The manifest ships `britive/bridge:v1.0.2` with
   `imagePullPolicy: Always` so rollouts pick up new images. For production,
   pin a versioned tag and switch to `IfNotPresent`.
 - **HTTPS backend.** The container serves HTTPS with a self-signed cert on 8080.

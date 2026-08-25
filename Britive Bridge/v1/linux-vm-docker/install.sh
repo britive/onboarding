@@ -20,7 +20,7 @@
 set -euo pipefail
 
 # ── Tunables (override via env: IMAGE=... PORT=... ./install.sh) ────────────
-IMAGE="${IMAGE:-britive/bridge:latest}"   # Docker Hub image
+IMAGE="${IMAGE:-britive/bridge:v1.0.2}"   # Docker Hub image
 CONTAINER_NAME="${CONTAINER_NAME:-bridge}"
 PORT="${PORT:-8080}"                       # host:container port for HTTPS
 DATA_VOLUME="${DATA_VOLUME:-bridge-data}"  # named volume for /data persistence

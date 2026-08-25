@@ -1,5 +1,13 @@
 # Britive Bridge — Docker Compose
 
+> **Legacy — Bridge v1.x.** Do not use this for new deployments. New
+> implementations should use [Bridge v2](../../v2/), which is the current
+> release line. This option remains for existing v1 deployments only.
+>
+> Images are pinned to `britive/bridge:v1.0.2`. Do **not** use
+> `britive/bridge:latest` — it now tracks v2.x, which cannot run on these
+> templates.
+
 Run Bridge as a single container on any Docker host or VM. Simplest option —
 ideal for local trials, POCs, and single-VM deployments.
 
@@ -58,7 +66,7 @@ docker run -d --name bridge -p 8080:8080 \
   -e BRITIVE_BROKER_TENANT_SUBDOMAIN="<your-tenant-subdomain>" \
   -e BRITIVE_BROKER_AUTH_TOKEN="<your-broker-auth-token>" \
   -v bridge-data:/data \
-  britive/bridge:latest
+  britive/bridge:v1.0.2
 ```
 
 ## TLS
