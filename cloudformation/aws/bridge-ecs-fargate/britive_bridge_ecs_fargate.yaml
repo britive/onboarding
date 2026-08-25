@@ -1,0 +1,752 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Britive Bridge v2 on ECS Fargate (single role), NLB-only. One internet-facing
+  Network Load Balancer fronts everything on a single hostname: a TLS listener
+  on 443 terminates public TLS with an ACM certificate to the web tier
+  (container port 8080, health check /readyz), and TCP listeners expose the
+  native protocols (SSH 2222, RDP 3389, MySQL 3306, PostgreSQL 5432). No ALB.
+  Ingress is gated by a managed prefix list plus the VPC CIDR. MSSQL has no
+  native listener (ECS caps a service at 5 load-balancer registrations: 1 web +
+  4 native) but stays reachable through the browser SQL client. PostgreSQL for
+  the Bridge datastore is NOT created here - supply an existing instance via
+  DbHost / DbPort / DbSecretArn. Secrets live in Secrets Manager and are
+  injected at runtime.
+
+Parameters:
+  StackNamePrefix:
+    Type: String
+    Default: britive-bridge-v2
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,30}"
+    Description: Prefix used for named AWS resources.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where Bridge will run.
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >
+      Two public subnets for the internet-facing NLB, Fargate task, and EFS
+      mount targets.
+  NativeAccessCidr:
+    Type: String
+    Default: 10.0.0.0/8
+    Description: >
+      IN-VPC CIDR allowed to reach the task ports (web 8080 and native SSH 2222,
+      RDP 3389, MySQL 3306, PostgreSQL 5432). NLB traffic and health checks
+      originate from NLB ENIs inside this range (client-IP preservation is off
+      for ip-type TCP/TLS targets). Set this to your VPC CIDR (for example
+      10.0.0.0/16, or 172.31.0.0/16 for a default VPC).
+  NativeClientPrefixListId:
+    Type: String
+    AllowedPattern: "^pl-[a-f0-9]+$"
+    Description: >
+      Managed prefix list (pl-xxxx) of PUBLIC client IPs allowed to reach the
+      NLB — this gates BOTH the web UI (443) and the native listeners. Manage
+      entries with `aws ec2 modify-managed-prefix-list` — no stack update
+      needed. Native protocols can carry cleartext credentials, and web login
+      is deliberately restricted to the same set: keep this list tight.
+  ImageUri:
+    Type: String
+    AllowedPattern: ".+"
+    Description: >
+      Container image URI in YOUR ECR registry, built with ecr/build-and-push.sh
+      - that image bakes /etc/britive-bridge/config.yaml and the broker script
+      dependencies in, which the upstream britive/bridge image does not carry.
+      Format: <account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:<tag>.
+      Must match CpuArchitecture.
+  CpuArchitecture:
+    Type: String
+    Default: ARM64
+    AllowedValues:
+      - ARM64
+      - X86_64
+    Description: ECS task CPU architecture.
+  TaskCpu:
+    Type: String
+    Default: "1024"
+    AllowedValues:
+      - "512"
+      - "1024"
+      - "2048"
+      - "4096"
+    Description: Fargate task CPU units.
+  TaskMemory:
+    Type: String
+    Default: "2048"
+    AllowedValues:
+      - "1024"
+      - "2048"
+      - "3072"
+      - "4096"
+      - "5120"
+      - "6144"
+      - "7168"
+      - "8192"
+      - "16384"
+      - "30720"
+    Description: Fargate task memory in MiB.
+  DbHost:
+    Type: String
+    Description: PostgreSQL host - endpoint of your existing PostgreSQL instance.
+  DbPort:
+    Type: String
+    Default: "5432"
+    Description: PostgreSQL port.
+  DbSecretArn:
+    Type: String
+    Description: >
+      Secrets Manager ARN of the PostgreSQL master credentials — the
+      Secrets Manager secret holding the datastore password. The secret must
+      contain a "password" key (JSON), which is injected as
+      BRIDGE_DATASTORE_PASSWORD.
+  BrokerTenantSubdomain:
+    Type: String
+    Description: Britive tenant subdomain, for example demo. Used for broker startup, web login, and automatic license retrieval.
+  BrokerAuthToken:
+    Type: String
+    NoEcho: true
+    Description: Britive broker pool authentication token.
+  EncryptionKeyB64:
+    Type: String
+    NoEcho: true
+    Description: >
+      REQUIRED. Base64-encoded 32-byte key that encrypts checkout payloads in
+      PostgreSQL. Generate once with: openssl rand -base64 32.
+      PERMANENT — never change it after go-live; stored credentials become
+      unreadable if it changes.
+  BrokerSSHPrivateKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: >
+      OPTIONAL. PEM-encoded private key (ed25519 or RSA) written to
+      /home/bridge/.ssh/id_ed25519 for broker/bridge SSH access to EC2
+      instances. Leave empty to skip.
+  AcmCertificateArn:
+    Type: String
+    Description: >
+      ARN of the ACM certificate for the hostname clients will use (for example
+      bridge.example.com, or a wildcard *.example.com). Must be in the same
+      region as the NLB.
+
+Conditions:
+  HasSshKey: !Not [!Equals [!Ref BrokerSSHPrivateKey, ""]]
+
+Resources:
+  # ── Logging ───────────────────────────────────────────────────────────────
+  BridgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${StackNamePrefix}
+      RetentionInDays: 30
+
+  # ── ECS Cluster ───────────────────────────────────────────────────────────
+  BridgeCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${StackNamePrefix}-cluster
+
+  # ── Secrets Manager ───────────────────────────────────────────────────────
+  EncryptionKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/bridge/encryption-key-b64
+      Description: Bridge checkout encryption key (BRIDGE_ENCRYPTION_KEY_B64). PERMANENT — never rotate.
+      SecretString: !Ref EncryptionKeyB64
+
+  ClusterTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/bridge/cluster-token
+      Description: Shared secret for bridge intra-cluster/admin API calls (BRIDGE_CLUSTER_TOKEN).
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+
+  HostKeySeedSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/bridge/host-key-seed
+      Description: Deterministic SSH host-key seed (BRIDGE_HOST_KEY_SEED).
+      GenerateSecretString:
+        PasswordLength: 32
+        ExcludePunctuation: true
+
+  BrokerSSHKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasSshKey
+    # Retain, because an empty BrokerSSHPrivateKey flips HasSshKey false and
+    # CloudFormation then DELETES this secret -- taking the only copy of the key
+    # with it. That is the one failure here that cannot be undone: the task
+    # definition losing its secret reference just breaks SSH checkouts until the
+    # next update, but a deleted key is gone. Retain keeps the secret (orphaned
+    # from the stack) so the mistake is recoverable.
+    # NOTE: to re-adopt an orphaned secret, import it or delete it by hand before
+    # the next update that would recreate the same name.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub ${StackNamePrefix}/broker/ssh-private-key
+      Description: Private key used by the bridge task to SSH into EC2 instances
+      SecretString: !Ref BrokerSSHPrivateKey
+
+  # ── IAM Roles ─────────────────────────────────────────────────────────────
+  BridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${StackNamePrefix}-exec-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadBridgeSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref EncryptionKeySecret
+                  - !Ref ClusterTokenSecret
+                  - !Ref HostKeySeedSecret
+                  - !Ref DbSecretArn
+                  - !If [HasSshKey, !Ref BrokerSSHKeySecret, !Ref AWS::NoValue]
+
+  BridgeTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${StackNamePrefix}-task-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ECSExecSSM
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt BridgeLogGroup.Arn
+        # Broker checkout/checkin/scan/rotate scripts (access-broker-examples)
+        # call the AWS API from inside the container: discover EC2/RDS targets,
+        # run SSM sessions, and write rotated credentials back to Secrets
+        # Manager. Without these, `aws ec2 describe-instances` / rotation calls
+        # fail with AccessDenied mid-checkout.
+        - PolicyName: BrokerTargetDiscoveryAndRotation
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeTags
+                  - ec2:DescribeSecurityGroups
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBClusters
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ssm:StartSession
+                  - ssm:TerminateSession
+                  - ssm:ResumeSession
+                  - ssm:DescribeInstanceInformation
+                  - ssm:DescribeSessions
+                  - ssm:SendCommand
+                  - ssm:GetCommandInvocation
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecret
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:ListSecrets
+                Resource: "*"
+
+  # ── Security Groups ───────────────────────────────────────────────────────
+
+  # ECS task: web tier (8080) and native protocol ports, all reachable only
+  # from the private NativeAccessCidr. The NLB has no client-IP preservation for
+  # ip-type targets, so the task only ever sees the NLB's private ENI IPs
+  # (inside NativeAccessCidr) — both forwarded client traffic and health checks.
+  BridgeTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge task security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref NativeAccessCidr
+        - IpProtocol: tcp
+          FromPort: 2222
+          ToPort: 2222
+          CidrIp: !Ref NativeAccessCidr
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: !Ref NativeAccessCidr
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: !Ref NativeAccessCidr
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref NativeAccessCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-task-sg
+
+  BridgeEfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge EFS security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref BridgeTaskSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-efs-sg
+
+  # ── NLB security group (gates the single public host) ─────────────────────
+  # One SG fronts the whole NLB. Web (443) AND native listeners
+  # (2222/3306/3389/5432) are gated by the SAME managed prefix list of public
+  # client IPs, plus the in-VPC NativeAccessCidr. A single port-RANGE rule
+  # (443-5432) is used instead of per-port rules: a prefix-list rule counts as
+  # the list's MaxEntries in rule-units against the 60-rules-per-SG quota, so
+  # one range rule keeps the cost to a single MaxEntries charge. The range is
+  # harmless — the NLB only listens on 443/2222/3306/3389/5432; other ports in
+  # the range route nowhere.
+  BridgeNlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge NLB - allowed public client IPs + VPC-internal (web + native)
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 5432
+          SourcePrefixListId: !Ref NativeClientPrefixListId
+        # In-VPC clients (EC2 demo hosts, broker-issued sessions) + LB health checks
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 5432
+          CidrIp: !Ref NativeAccessCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-nlb-sg
+
+  # ── EFS (persists /data: recordings, certs, host keys) ────────────────────
+  BridgeFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: elastic
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-data
+
+  BridgeAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      PosixUser:
+        Uid: "0"
+        Gid: "0"
+      RootDirectory:
+        Path: /bridge-data
+        CreationInfo:
+          OwnerUid: "0"
+          OwnerGid: "0"
+          Permissions: "0755"
+
+  BridgeMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      SubnetId: !Select [0, !Ref PublicSubnetIds]
+      SecurityGroups:
+        - !Ref BridgeEfsSecurityGroup
+
+  BridgeMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref BridgeFileSystem
+      SubnetId: !Select [1, !Ref PublicSubnetIds]
+      SecurityGroups:
+        - !Ref BridgeEfsSecurityGroup
+
+  # ── NLB (single internet-facing LB — web + native, prefix-list gated) ──────
+  BridgeNativeLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${StackNamePrefix}-nlb
+      Scheme: internet-facing
+      Type: network
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref BridgeNlbSecurityGroup
+      LoadBalancerAttributes:
+        - Key: load_balancing.cross_zone.enabled
+          Value: "true"
+
+  # ── Web tier (443 TLS at NLB -> plaintext HTTP to container 8080) ──────────
+  # The NLB TLS listener terminates public TLS with the ACM cert and forwards
+  # PLAINTEXT over TCP to the container on 8080 (BRIDGE_TLS_ENABLED=false). This
+  # is deliberate: when 8080 speaks TLS, the NLB's TCP health/liveness probes
+  # open sockets that never complete a TLS handshake, and the bridge's Go http
+  # server logs a "http: TLS handshake error ... EOF" for every probe — a
+  # constant flood. Plaintext 8080 removes that log class entirely. The LB->task
+  # hop stays inside the VPC (private subnets), so no cleartext leaves AWS.
+  # Protocol is TCP (not TLS) so the NLB does no re-encryption; health check is
+  # plain HTTP GET /readyz.
+  BridgeWebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-web-tcp
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: 8080
+      TargetType: ip
+      TargetGroupAttributes:
+        - Key: load_balancing.cross_zone.enabled
+          Value: "true"
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: "8080"
+      HealthCheckPath: /readyz            # v2 readiness endpoint
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+
+  BridgeWebListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeNativeLoadBalancer
+      Port: 443
+      Protocol: TLS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgeWebTargetGroup
+
+  # ── Native protocol listeners ──────────────────────────────────────────────
+  # SSH listens on 2222, not 22 — Fargate cannot bind privileged ports (<1024)
+  # without NET_BIND_SERVICE, which Fargate does not allow adding (only
+  # SYS_PTRACE is a permitted linuxParameters capability). Matches Britive's
+  # own reference ECS deployment (learn.britive.com/bridge/deploy/aws-ecs/).
+  BridgeSshTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-ssh
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: 2222
+      TargetType: ip
+      # Health check hits the app's own HTTP /readyz on 8080 instead of the
+      # native TCP port. A bare NLB TCP health check (connect+disconnect, no
+      # protocol bytes) makes the bridge log a "session error ... EOF" for
+      # every probe — harmless, but noisy. Checking 8080 avoids that; a
+      # single-role task with /readyz healthy implies its native listeners
+      # (registered at the same startup) are healthy too. 8080 is plain HTTP
+      # (BRIDGE_TLS_ENABLED=false) so these probes generate no TLS-handshake
+      # log noise either.
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: "8080"
+      HealthCheckPath: /readyz
+      Matcher:
+        HttpCode: "200"
+
+  BridgeSshListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeNativeLoadBalancer
+      Port: 2222
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgeSshTargetGroup
+
+  BridgeRdpTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-rdp
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: 3389
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: "8080"
+      HealthCheckPath: /readyz
+      Matcher:
+        HttpCode: "200"
+
+  BridgeRdpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeNativeLoadBalancer
+      Port: 3389
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgeRdpTargetGroup
+
+  BridgeMysqlTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-mysql
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: 3306
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: "8080"
+      HealthCheckPath: /readyz
+      Matcher:
+        HttpCode: "200"
+
+  BridgeMysqlListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeNativeLoadBalancer
+      Port: 3306
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgeMysqlTargetGroup
+
+  BridgePostgresTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${StackNamePrefix}-psql
+      VpcId: !Ref VpcId
+      Protocol: TCP
+      Port: 5432
+      TargetType: ip
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: "8080"
+      HealthCheckPath: /readyz
+      Matcher:
+        HttpCode: "200"
+
+  BridgePostgresListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BridgeNativeLoadBalancer
+      Port: 5432
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BridgePostgresTargetGroup
+
+  # NOTE: MSSQL has no dedicated NLB target group/listener — ECS caps a
+  # service at 5 load balancer registrations (1 web TG + ssh/rdp/mysql/postgres
+  # already use all 5). The container still listens on 1433 (bridge.yaml
+  # enables it) and remains reachable via the browser SQL client; it is just
+  # not fronted by a native TCP listener. See ../README.md and ../config/README.md.
+
+  # ── ECS Task Definition ───────────────────────────────────────────────────
+  BridgeTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${StackNamePrefix}-task
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        OperatingSystemFamily: LINUX
+        CpuArchitecture: !Ref CpuArchitecture
+      ExecutionRoleArn: !GetAtt BridgeExecutionRole.Arn
+      TaskRoleArn: !GetAtt BridgeTaskRole.Arn
+      Volumes:
+        - Name: bridge-data
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref BridgeFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref BridgeAccessPoint
+              IAM: DISABLED
+      ContainerDefinitions:
+        - Name: bridge
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+            - ContainerPort: 2222
+              Protocol: tcp
+            - ContainerPort: 3389
+              Protocol: tcp
+            - ContainerPort: 3306
+              Protocol: tcp
+            - ContainerPort: 5432
+              Protocol: tcp
+            - ContainerPort: 1433
+              Protocol: tcp
+          EntryPoint: !If
+            - HasSshKey
+            - ["/bin/sh", "-c"]
+            - !Ref AWS::NoValue
+          Command: !If
+            - HasSshKey
+            - - "mkdir -p /home/bridge/.ssh && echo \"$SSH_PRIVATE_KEY\" > /home/bridge/.ssh/id_ed25519 && chmod 700 /home/bridge/.ssh && chmod 600 /home/bridge/.ssh/id_ed25519 && exec /entrypoint.sh"
+            - !Ref AWS::NoValue
+          Environment:
+            - Name: BRIDGE_ROLE
+              Value: single
+            - Name: BRITIVE_TENANT
+              Value: !Ref BrokerTenantSubdomain
+            - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
+              Value: !Ref BrokerTenantSubdomain
+            - Name: BRITIVE_BROKER_AUTH_TOKEN
+              Value: !Ref BrokerAuthToken
+            # 8080 serves plain HTTP — TLS is terminated at the NLB, not the
+            # container (avoids NLB-probe "TLS handshake error EOF" log flood).
+            - Name: BRIDGE_TLS_ENABLED
+              Value: "false"
+            - Name: BRIDGE_API_URL
+              Value: http://localhost:8080
+            - Name: BRIDGE_DATASTORE_HOST
+              Value: !Ref DbHost
+            - Name: BRIDGE_DATASTORE_PORT
+              Value: !Ref DbPort
+            - Name: BRIDGE_DATASTORE_USER
+              Value: bridge
+            - Name: BRIDGE_DATASTORE_NAME
+              Value: bridge
+            - Name: BRIDGE_DATASTORE_SSLMODE
+              Value: require
+          Secrets:
+            - Name: BRIDGE_ENCRYPTION_KEY_B64
+              ValueFrom: !Ref EncryptionKeySecret
+            - Name: BRIDGE_CLUSTER_TOKEN
+              ValueFrom: !Ref ClusterTokenSecret
+            - Name: BRIDGE_HOST_KEY_SEED
+              ValueFrom: !Ref HostKeySeedSecret
+            - Name: BRIDGE_DATASTORE_PASSWORD
+              ValueFrom: !Sub "${DbSecretArn}:password::"
+            - !If
+              - HasSshKey
+              - Name: SSH_PRIVATE_KEY
+                ValueFrom: !Ref BrokerSSHKeySecret
+              - !Ref AWS::NoValue
+          MountPoints:
+            - SourceVolume: bridge-data
+              ContainerPath: /data
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BridgeLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: bridge
+
+  # ── ECS Service ───────────────────────────────────────────────────────────
+  # DesiredCount is fixed at 1: the single role runs every protocol plus the
+  # web tier in one process. For horizontal scale, use v2 cluster mode
+  # (orchestrator/proxy/session roles) per learn.britive.com/bridge/deploy/aws-ecs/.
+  BridgeService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - BridgeWebListener
+      - BridgeSshListener
+      - BridgeRdpListener
+      - BridgeMysqlListener
+      - BridgePostgresListener
+      - BridgeMountTargetA
+      - BridgeMountTargetB
+    Properties:
+      ServiceName: !Sub ${StackNamePrefix}-service
+      Cluster: !Ref BridgeCluster
+      TaskDefinition: !Ref BridgeTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      HealthCheckGracePeriodSeconds: 120
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref BridgeTaskSecurityGroup
+          Subnets: !Ref PublicSubnetIds
+      LoadBalancers:
+        - ContainerName: bridge
+          ContainerPort: 8080
+          TargetGroupArn: !Ref BridgeWebTargetGroup
+        - ContainerName: bridge
+          ContainerPort: 2222
+          TargetGroupArn: !Ref BridgeSshTargetGroup
+        - ContainerName: bridge
+          ContainerPort: 3389
+          TargetGroupArn: !Ref BridgeRdpTargetGroup
+        - ContainerName: bridge
+          ContainerPort: 3306
+          TargetGroupArn: !Ref BridgeMysqlTargetGroup
+        - ContainerName: bridge
+          ContainerPort: 5432
+          TargetGroupArn: !Ref BridgePostgresTargetGroup
+
+Outputs:
+  ClusterName:
+    Value: !Ref BridgeCluster
+  ServiceName:
+    Value: !Ref BridgeService
+  LoadBalancerDnsName:
+    Value: !GetAtt BridgeNativeLoadBalancer.DNSName
+    Description: >
+      Single host for EVERYTHING. Point your Route 53 ALIAS (e.g.
+      bridge.example.com) at this value — it serves the web UI (443) and
+      all native protocols (ssh 2222, rdp 3389, mysql 3306, postgres 5432).
+  BridgeUrl:
+    Description: External URL for the Bridge web UI / BRIDGE_URL script parameter.
+    Value: !Sub https://${BridgeNativeLoadBalancer.DNSName}
+  DataFileSystemId:
+    Value: !Ref BridgeFileSystem
+  EncryptionKeySecretArn:
+    Description: Secrets Manager ARN for BRIDGE_ENCRYPTION_KEY_B64. PERMANENT — never rotate.
+    Value: !Ref EncryptionKeySecret
+  BrokerSSHKeySecretArn:
+    Condition: HasSshKey
+    Description: Secrets Manager ARN for the broker SSH private key.
+    Value: !Ref BrokerSSHKeySecret
