@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  ECR repository for the Britive Access Broker image. Deploy once, before
+  building the image. Scan-on-push is enabled and tags are immutable, so every
+  rebuild needs a new tag and a running task can never silently pull a
+  different image on restart.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: britive-broker
+    Description: ECR repository name. Matches IMAGE_NAME in ../image/build-and-push.sh.
+  UntaggedImageExpiryDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    Description: Days before untagged images (layers superseded by rebuilds) are deleted. Tagged images are never expired.
+
+Resources:
+  BrokerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${UntaggedImageExpiryDays}
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+Outputs:
+  RepositoryUri:
+    Description: Base of the ImageUri parameter for ecs-fargate.yaml.
+    Value: !GetAtt BrokerRepository.RepositoryUri
+  RepositoryArn:
+    Value: !GetAtt BrokerRepository.Arn

@@ -1,193 +1,112 @@
-# Britive Access Broker - Deployment Options
+# Britive Access Broker — Deployment Options
 
-The Britive Access Broker is a lightweight Java service that runs inside your infrastructure and enables
-the Britive platform to manage just-in-time access to your Kubernetes clusters and other resources. The
-broker establishes an outbound connection to Britive — no inbound firewall rules or public endpoints
-are required.
+The Access Broker is a small service that runs inside your network and lets
+the Britive platform create and remove just-in-time access on the systems
+behind it: servers, databases, Kubernetes clusters, network devices, internal
+applications. It connects **outbound only** — no inbound firewall rule, no
+public endpoint — and runs the checkout and checkin scripts you define for
+each resource type.
 
-## How It Works
+Everything here targets **Broker 3.x**, a single static binary per platform
+with no Java runtime. Broker 2.0 and below are deprecated by Britive and are
+not supported by these templates.
 
-```
-  Your Infrastructure                    Britive Platform
-  ─────────────────                      ────────────────
-  ┌─────────────────────┐   outbound     ┌──────────────────┐
-  │  Access Broker      │ ────HTTPS───▶  │  Britive SaaS    │
-  │  (this repo)        │                │  (your-tenant    │
-  │                     │                │  .britive-app    │
-  │  Manages:           │                │  .com)           │
-  │  • Kubernetes RBAC  │                └──────────────────┘
-  │  • Role bindings    │
-  │  • Service accounts │
-  └─────────────────────┘
-```
+Product documentation: <https://docs.britive.com/v1/docs/brokers> (concepts,
+`broker-config.yml` reference) and
+<https://docs.britive.com/v1/docs/broker-3-0-1> (platforms, downloads).
+Checkout/checkin script examples for dozens of resource types:
+<https://github.com/britive/access-broker-examples>.
 
-The broker reads its configuration from `broker-config.yml` at startup:
+## How it works
 
-```yaml
-config:
-  bootstrap:
-    tenant_subdomain: mycompany          # your Britive tenant
-    authentication_token: "<token>"      # broker pool token from Britive console
-```
-
----
-
-## Prerequisites (All Deployment Options)
-
-Before deploying, you need two values from the Britive console:
-
-| What | Where to Find It |
-|------|-----------------|
-| **Tenant subdomain** | The part before `.britive-app.com` in your Britive URL (e.g. `mycompany`). Find it under System Administration > Settings. |
-| **Broker pool token** | System Administration > Broker Pools > Create or select a pool > copy the token. |
-
-You also need the **`britive-broker-2.0.0.jar`** file placed in the deployment directory before running any deployment script.
-
----
-
-## Deployment Options
-
-| Option | Platform | Kubernetes Required | Secret Storage | Best For |
-|--------|----------|-------------------|----------------|----------|
-| [ECS Fargate](#ecs-fargate-aws-recommended) | AWS | No | AWS Secrets Manager | AWS-native, serverless |
-| [EKS](#eks-aws-kubernetes) | AWS | Yes (EKS) | Kubernetes Secrets | Existing EKS clusters |
-| [AKS](#aks-azure-kubernetes) | Azure | Yes (AKS) | Kubernetes Secrets | Existing AKS clusters |
-| [GKE](#gke-google-kubernetes) | Google Cloud | Yes (GKE) | Kubernetes Secrets | Existing GKE clusters |
-
----
-
-### ECS Fargate (AWS) — Recommended
-
-**Directory:** [`ecs-fargate-deployment/`](ecs-fargate-deployment/)
-
-Runs the broker as a serverless container on AWS ECS Fargate. No Kubernetes cluster needed.
-Secrets are stored in AWS Secrets Manager and injected into the task at runtime.
-
-**Additional prerequisites:** AWS CLI, Docker, jq
-
-**Highlights:**
-- Fully automated single-script deployment (`deploy.sh`)
-- Secrets managed via `secrets.json` → AWS Secrets Manager
-- `manage-secrets.sh` CLI for day-2 secret operations (add, rotate, sync)
-- Auto-generates `broker-config.yml` at container startup from secrets
-- CloudWatch logging, health checks, and auto-restart included
-
-**Quick start:**
-```bash
-cd ecs-fargate-deployment
-# 1. Place britive-broker-2.0.0.jar here
-# 2. Edit secrets.json — set BRITIVE_TENANT and BRITIVE_TOKEN
-chmod +x deploy.sh manage-secrets.sh
-./deploy.sh
+```text
+  Your network                                     Britive
+  +-----------------------------+   443, outbound  +-------------------+
+  |  Access Broker              | ---------------> |  <tenant>         |
+  |  - bootstraps with a pool   |   HTTPS + MQTT   |  .britive-app.com |
+  |    token                    | <- - - - - - - - |                   |
+  |  - receives checkout /      |   commands over  |  Resource Manager |
+  |    checkin / scan / rotate  |   the MQTT link  |  profiles,        |
+  |    requests                 |                  |  policies, pools  |
+  |  - runs your scripts        |                  +-------------------+
+  |    against the targets      |
+  +------+----------+-----------+
+         |          |
+     servers,   databases, k8s, ...
 ```
 
-See [`ecs-fargate-deployment/README.md`](ecs-fargate-deployment/README.md) for full documentation.
+- The broker **bootstraps** against `https://<tenant>.britive-app.com` with a
+  **broker pool token**, then keeps one long-lived **MQTT-over-TLS**
+  connection open to receive work.
+- Several brokers can share one pool token; Britive load-balances across the
+  brokers in a pool. A pool is the unit you attach resources to.
+- Configuration is **environment-first**: `BRITIVE_BROKER_TENANT_SUBDOMAIN`
+  and `BRITIVE_BROKER_AUTH_TOKEN` are all a broker needs. A
+  `broker-config.yml` is optional and only restricts resource types, points at
+  locally stored scripts, or configures an authenticated proxy.
+- Scripts are **uploaded to the tenant** with the permission definition and
+  fetched by the broker at checkout time, so a script change needs no
+  redeploy. Scripts baked into the image or host are also supported.
 
----
+## Before you start
 
-### EKS (AWS Kubernetes)
+| You need | Where |
+| -------- | ----- |
+| Tenant subdomain | `acme` for `https://acme.britive-app.com` |
+| A broker pool and a token | **System Administration → Brokers and Broker Pools** → create or open a pool → **Tokens**. [`../Britive Bridge/platform-setup/quick-setup.py`](../Britive%20Bridge/platform-setup/) creates both from the CLI |
+| The broker package or tarball | **System Administration → Brokers and Broker Pools → Download Brokers**. There is no public download URL |
 
-**Directory:** [`eks-deployment/`](eks-deployment/)
+### Network
 
-Deploys the broker as a Kubernetes Deployment on an existing AWS EKS cluster.
-Uses ECR for the container image. Configuration is provided via a Kubernetes ConfigMap.
+Outbound only, from wherever the broker runs:
 
-**Additional prerequisites:** AWS CLI, Docker, kubectl (configured for your EKS cluster)
+| Destination | Port | Purpose |
+| ----------- | ---- | ------- |
+| `<tenant>.britive-app.com` | 443 | Bootstrap and API |
+| MQTT host under `.britive-app.com` returned by bootstrap | 443 | Long-lived command channel (TLS) |
+| Presigned Amazon S3 URLs | 443 | Fetching scripts uploaded to the tenant |
+| Your targets | as needed | SSH 22, WinRM 5985/5986, database ports, Kubernetes API … |
 
-**Quick start:**
-```bash
-cd eks-deployment
-# 1. Place britive-broker-2.0.0.jar here
-# 2. Edit deploy.sh — set BRITIVE_TOKEN and AWS_REGION
-# 3. Edit deployment.yaml — set tenant_subdomain and authentication_token in the ConfigMap
-chmod +x deploy.sh
-./deploy.sh
+A corporate proxy is supported through the standard `HTTPS_PROXY` /
+`NO_PROXY` variables (plain `http://` CONNECT proxies only).
+
+## Choosing an option
+
+| Option | Runs on | Image | Secrets | Best for |
+| ------ | ------- | ----- | ------- | -------- |
+| [**Linux VM**](linux-vm/) | Any Linux with systemd (deb / rpm / apk / tar.gz) | none | env file at install, or a token generator script | Simplest production path; jump hosts; domain-joined or network-privileged servers |
+| [**Docker Compose**](docker-compose/) | One Docker host | [`image/`](image/) | `.env` | Evaluation, labs, small sites |
+| [**AWS ECS Fargate**](aws-ecs-fargate/) | AWS, no hosts to manage | [`image/`](image/) in ECR | Secrets Manager | AWS-native production |
+| [**Kubernetes (Helm)**](kubernetes/) | EKS, AKS, GKE, any cluster | [`image/`](image/) in your registry | Kubernetes Secret, or External Secrets / CSI | Teams standardized on Kubernetes; Kubernetes RBAC checkouts |
+
+All container options share one [image](image/): Alpine, the broker binary,
+and optional tool layers (`aws`, `kubectl`, `pywinrm`, database clients) for
+the scripts you run. Build it once, push it to your registry, deploy it
+anywhere.
+
+## Verify a deployment
+
+1. The log shows `Britive broker starting version=3.x.y` and, after the first
+   few seconds, no `Broker bootstrap failed` lines.
+2. **System Administration → Brokers and Broker Pools → your pool →
+   Brokers** lists the broker as active, under its hostname or the name your
+   `BRITIVE_BROKER_NAME_GENERATOR` script printed.
+3. Attach a resource to the pool, create a profile, and run one checkout and
+   checkin end to end.
+
+## Directory layout
+
+```text
+Access Broker/
+├── README.md               # you are here
+├── image/                  # the container image (Dockerfile, build-and-push.sh, config example)
+├── docker-compose/         # one host
+├── linux-vm/               # package install + systemd, token generator, tarball unit
+├── aws-ecs-fargate/        # CloudFormation: ECR repo, cluster, service, Secrets Manager
+└── kubernetes/             # Helm chart + per-cloud registry notes (EKS, AKS, GKE)
 ```
 
-See [`eks-deployment/README.md`](eks-deployment/README.md) for full documentation.
+## Placeholders
 
----
-
-### AKS (Azure Kubernetes)
-
-**Directory:** [`aks-deployment/`](aks-deployment/)
-
-Deploys the broker as a Kubernetes Deployment on an existing Azure AKS cluster.
-Uses Azure Container Registry (ACR) for the container image.
-
-**Additional prerequisites:** Azure CLI (`az`), Docker, kubectl (configured for your AKS cluster)
-
-**Quick start:**
-```bash
-cd aks-deployment
-# 1. Place britive-broker-2.0.0.jar here
-# 2. Edit deploy.sh — set BRITIVE_TOKEN, ACR_NAME, RESOURCE_GROUP
-# 3. Edit deployment.yaml — set tenant_subdomain and authentication_token in the ConfigMap
-chmod +x deploy.sh
-./deploy.sh
-```
-
-See [`aks-deployment/README.md`](aks-deployment/README.md) for full documentation.
-
----
-
-### GKE (Google Kubernetes)
-
-**Directory:** [`gke-deployment/`](gke-deployment/)
-
-Deploys the broker as a Kubernetes Deployment on an existing Google GKE cluster.
-Uses Google Container Registry for the container image.
-
-**Additional prerequisites:** gcloud CLI, Docker, kubectl (configured for your GKE cluster)
-
-**Quick start:**
-```bash
-cd gke-deployment
-# 1. Place britive-broker-2.0.0.jar here
-# 2. Edit deploy.sh — set BRITIVE_TOKEN
-# 3. Edit deployment.yaml — set tenant_subdomain and authentication_token in the ConfigMap
-chmod +x deploy.sh
-./deploy.sh
-```
-
-See [`gke-deployment/README.md`](gke-deployment/README.md) for full documentation.
-
----
-
-## Choosing a Deployment Option
-
-```
-Do you already have a Kubernetes cluster?
-│
-├─ No  ──▶  Use ECS Fargate (serverless, no cluster to manage)
-│
-└─ Yes
-   │
-   ├─ AWS EKS    ──▶  Use EKS deployment
-   ├─ Azure AKS  ──▶  Use AKS deployment
-   └─ Google GKE ──▶  Use GKE deployment
-```
-
-Use **ECS Fargate** if:
-- You are deploying to AWS and don't want to manage a Kubernetes cluster
-- You want secrets managed in AWS Secrets Manager with audit logging
-- You want a fully serverless, auto-scaling setup
-
-Use a **Kubernetes deployment** (EKS / AKS / GKE) if:
-- You already have a Kubernetes cluster in that cloud
-- You want the broker to run alongside your workloads in the same cluster
-- You prefer Kubernetes-native secret and config management
-
----
-
-## Common Architecture Notes
-
-All deployment options share the same broker container image and startup sequence:
-
-1. Container starts under `supervisord` (auto-restarts on crash)
-2. `start-broker.sh` runs: sets up secrets directory, configures kubectl if needed, generates `broker-config.yml`
-3. Java broker starts and connects outbound to `<tenant_subdomain>.britive-app.com` over HTTPS (port 443)
-4. Broker registers with the Britive platform using the broker pool token
-5. Britive can now orchestrate just-in-time access via the broker
-
-**Network requirement:** Outbound HTTPS (port 443) to `*.britive-app.com`. No inbound rules needed.
+Every file uses `your-tenant`, `<account>`, `<region>`, `example.com`. Replace
+them locally; never commit a pool token, an account ID or a real hostname.

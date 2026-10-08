@@ -1,0 +1,31 @@
+# Britive Access Broker — single host with Docker Compose.
+#
+# 1. Build the image: ../image/README.md (or set BROKER_IMAGE in .env to a pushed one)
+# 2. cp .env.example .env and fill in the tenant and token
+# 3. docker compose up -d && docker compose logs -f
+services:
+  broker:
+    image: "${BROKER_IMAGE:-britive-broker:local}"
+    restart: unless-stopped
+    environment:
+      BRITIVE_BROKER_TENANT_SUBDOMAIN: "${BRITIVE_BROKER_TENANT_SUBDOMAIN:?set BRITIVE_BROKER_TENANT_SUBDOMAIN in .env}"
+      BRITIVE_BROKER_AUTH_TOKEN: "${BRITIVE_BROKER_AUTH_TOKEN:?set BRITIVE_BROKER_AUTH_TOKEN in .env}"
+      BRITIVE_BROKER_LOG_FORMAT: "${BRITIVE_BROKER_LOG_FORMAT:-text}"
+      # Uncomment behind a corporate proxy
+      # HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      # NO_PROXY: "${NO_PROXY:-}"
+    volumes:
+      # Downloaded scripts and working files
+      - broker-cache:/opt/britive-broker/cache
+      # Optional: restrict resource types / local scripts (see ../image/broker-config.yml.example)
+      # - ./broker-config.yml:/opt/britive-broker/config/broker-config.yml:ro
+      # Optional: a key for SSH-based checkouts, generated with ssh-keygen and gitignored
+      # - ./broker-ssh:/opt/britive-broker/.ssh:ro
+    # The broker only makes outbound connections; nothing is published.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  broker-cache:

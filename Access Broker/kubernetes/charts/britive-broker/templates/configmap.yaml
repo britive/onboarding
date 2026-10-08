@@ -1,0 +1,11 @@
+{{- if .Values.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "britive-broker.fullname" . }}-config
+  labels:
+    {{- include "britive-broker.labels" . | nindent 4 }}
+data:
+  broker-config.yml: |
+    {{- .Values.config | nindent 4 }}
+{{- end }}

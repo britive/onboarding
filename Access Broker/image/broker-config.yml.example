@@ -1,0 +1,46 @@
+# Optional broker configuration. Mount it at /opt/britive-broker/config/broker-config.yml.
+#
+# Without this file the broker runs in open mode: it accepts every resource
+# type, scan, rotation and permission the tenant sends it, and takes the tenant
+# and token from BRITIVE_BROKER_TENANT_SUBDOMAIN / BRITIVE_BROKER_AUTH_TOKEN.
+# That is the right choice for an evaluation and for most single-purpose
+# brokers. Add this file when you need to:
+#   - restrict which resource types this broker serves (resource_types), or
+#   - run scripts baked into the image (max_supported_version: local), or
+#   - go through an HTTP proxy that needs credentials.
+#
+# Environment variables override every key in the config: section. Never put
+# the token here; leave it to the environment.
+# Reference: https://docs.britive.com/v1/docs/brokers
+
+config:
+  # version: 2
+  # ca_certificate_path: /etc/ssl/certs/corp-ca.pem   # extra CA for a TLS-intercepting proxy
+  # max_concurrent_scans: 5
+  # max_concurrent_rotates: 10
+  # logging:
+  #   level: info          # debug | info | warn | error
+  #   format: text         # text | json (json is easier for CloudWatch / Loki queries)
+  bootstrap:
+    tenant_subdomain: your-tenant   # overridden by BRITIVE_BROKER_TENANT_SUBDOMAIN
+    # authentication_token is supplied as BRITIVE_BROKER_AUTH_TOKEN
+    # broker_name_generator: /opt/britive-broker/bootstrap/broker-name-generate.sh   # default: hostname
+  # http_proxy:          # or set HTTPS_PROXY / NO_PROXY in the environment
+  #   host: proxy.example.com
+  #   port: 3128
+
+# Restrict this broker to specific resource types. Omit the whole section to
+# accept everything. Names must match the resource types and permissions
+# defined in the tenant.
+# resource_types:
+#   LinuxServer:
+#     permissions:
+#       ssh-temp-user:
+#         max_supported_version: latest       # script uploaded to the tenant
+#       ssh-local-script:
+#         max_supported_version: local        # script baked into the image
+#         checkout_script: /opt/britive-broker/scripts/ssh_checkout.sh
+#         checkin_script: /opt/britive-broker/scripts/ssh_checkin.sh
+#     scans:
+#       nightly:
+#         source: remote

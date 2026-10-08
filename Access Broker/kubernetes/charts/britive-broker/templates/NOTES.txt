@@ -1,0 +1,9 @@
+Britive Access Broker {{ .Chart.AppVersion }} deployed as {{ include "britive-broker.fullname" . }} in {{ .Release.Namespace }}.
+
+Watch it come up:
+  kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+A healthy start logs "Britive broker starting" and no "Broker bootstrap failed"
+lines after the first few seconds. In the Britive console the broker appears
+as active in its pool (System Administration > Brokers and Broker Pools),
+named after the pod{{ if .Values.britive.nameGenerator }} (or as your name generator printed){{ end }}.

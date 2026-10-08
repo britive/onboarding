@@ -1,0 +1,111 @@
+{{- if not .Values.image.repository }}
+{{- fail "Set image.repository to the image you built from ../../image and pushed to your registry" }}
+{{- end }}
+{{- if not .Values.britive.tenantSubdomain }}
+{{- fail "Set britive.tenantSubdomain (e.g. acme for acme.britive-app.com)" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "britive-broker.fullname" . }}
+  labels:
+    {{- include "britive-broker.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "britive-broker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "britive-broker.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if .Values.config }}
+        checksum/config: {{ .Values.config | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "britive-broker.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.rbac.create }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: broker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: BRITIVE_BROKER_TENANT_SUBDOMAIN
+              value: {{ .Values.britive.tenantSubdomain | quote }}
+            - name: BRITIVE_BROKER_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "britive-broker.secretName" . }}
+                  key: {{ .Values.britive.existingSecret.key }}
+            - name: BRITIVE_BROKER_LOG_FORMAT
+              value: {{ .Values.britive.logFormat | quote }}
+            {{- with .Values.britive.nameGenerator }}
+            - name: BRITIVE_BROKER_NAME_GENERATOR
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: cache
+              mountPath: /opt/britive-broker/cache
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.config }}
+            - name: config
+              mountPath: /opt/britive-broker/config/broker-config.yml
+              subPath: broker-config.yml
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.config }}
+        - name: config
+          configMap:
+            name: {{ include "britive-broker.fullname" . }}-config
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

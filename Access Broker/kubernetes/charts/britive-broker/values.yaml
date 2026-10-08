@@ -1,0 +1,120 @@
+# Default values for britive-broker. Override with -f values.yaml or --set.
+
+image:
+  # The image built from ../../image and pushed to your registry.
+  repository: ""          # e.g. 123456789012.dkr.ecr.us-west-2.amazonaws.com/britive-broker
+  tag: "3.0.2-r1"
+  pullPolicy: IfNotPresent
+imagePullSecrets: []       # - name: regcred   (private Docker Hub / cross-cloud registries)
+
+# Brokers in a pool share one token; Britive load-balances across replicas.
+replicaCount: 1
+
+britive:
+  # Tenant subdomain: "acme" for acme.britive-app.com. Required.
+  tenantSubdomain: ""
+  # Pool token. Either set authToken (the chart creates a Secret) or point
+  # existingSecret at a Secret you manage (External Secrets, CSI driver, sealed-secrets).
+  authToken: ""
+  existingSecret:
+    name: ""
+    key: BRITIVE_BROKER_AUTH_TOKEN
+  logFormat: json          # text | json
+  # Optional script path inside the image that prints the broker's display
+  # name. Default: the pod hostname.
+  nameGenerator: ""
+
+# Optional broker-config.yml, mounted at /opt/britive-broker/config/broker-config.yml.
+# Leave empty to run in open mode (every resource type accepted, env-only config).
+# See ../../image/broker-config.yml.example.
+config: ""
+#  config: |
+#    config:
+#      bootstrap:
+#        tenant_subdomain: your-tenant
+#    resource_types:
+#      LinuxServer:
+#        permissions:
+#          ssh-temp-user:
+#            max_supported_version: latest
+
+# Extra environment (HTTPS_PROXY, NO_PROXY, AWS_REGION, ...). Plain values or valueFrom.
+extraEnv: []
+#  - name: HTTPS_PROXY
+#    value: http://proxy.example.com:3128
+#  - name: NO_PROXY
+#    value: .svc,.cluster.local,10.0.0.0/8
+
+# Extra volumes/mounts, e.g. an SSH provisioning key from a Secret.
+extraVolumes: []
+#  - name: broker-ssh
+#    secret:
+#      secretName: britive-broker-ssh
+#      defaultMode: 0400
+extraVolumeMounts: []
+#  - name: broker-ssh
+#    mountPath: /opt/britive-broker/.ssh
+#    readOnly: true
+
+serviceAccount:
+  create: true
+  name: ""
+  # Cloud identity for scripts that call the cloud API:
+  #   EKS (IRSA):   eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/<role>
+  #   GKE:          iam.gke.io/gcp-service-account: <sa>@<project>.iam.gserviceaccount.com
+  #   AKS:          azure.workload.identity/client-id: <client-id>  (plus the pod label below)
+  annotations: {}
+
+# Kubernetes RBAC for scripts that grant JIT access inside THIS cluster
+# (create/delete RoleBindings). Off by default; the broker needs none of
+# this to run. A broker can only grant permissions it holds itself, so
+# scope rules to what checkouts should be able to hand out.
+rbac:
+  create: false
+  # Namespaces the broker may manage RoleBindings in. Empty = cluster-wide ClusterRole.
+  namespaces: []
+  rules:
+    - apiGroups: ["rbac.authorization.k8s.io"]
+      resources: ["rolebindings"]
+      verbs: ["create", "delete", "get", "list"]
+    - apiGroups: ["rbac.authorization.k8s.io"]
+      resources: ["roles"]
+      verbs: ["get", "list"]
+
+podLabels: {}            # azure.workload.identity/use: "true" for AKS workload identity
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  # The broker writes downloaded scripts under /opt/britive-broker/cache,
+  # which is an emptyDir, so the root filesystem can stay read-only.
+  readOnlyRootFilesystem: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+# Liveness is "the broker process is running"; there is no HTTP endpoint.
+livenessProbe:
+  exec:
+    command: ["sh", "-c", "pgrep -f '^/opt/britive-broker/britive-broker( |$)' >/dev/null"]
+  initialDelaySeconds: 20
+  periodSeconds: 30

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: britive-broker
+description: Britive Access Broker 3.x - outbound-only agent that runs checkout/checkin scripts against resources in your network
+type: application
+version: 0.1.0
+appVersion: "3.0.2"
+keywords:
+  - britive
+  - access-broker
+  - jit
+home: https://github.com/britive/onboarding
+sources:
+  - https://github.com/britive/onboarding
+  - https://github.com/britive/access-broker-examples
