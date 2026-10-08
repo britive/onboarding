@@ -1,119 +1,69 @@
-# Britive Terraform Example: Profile and Policy Management
+# Britive provider example: tags, profiles and policies
 
-This Terraform project demonstrates how to automate **Britive access control** using the [Britive Terraform provider](https://registry.terraform.io/providers/britive/britive/latest). It includes the creation and management of:
+The Britive side of an AWS onboarding, with the
+[`britive/britive`](https://registry.terraform.io/providers/britive/britive/latest/docs)
+provider: two tags, and three profiles on an AWS application that show the
+three common policy shapes.
 
-- Local Tags and Tag Members
-- Profiles across multiple applications (EKS, AWS)
-- Profile Permissions
-- Profile Policies with approval workflows and access conditions
+| Profile | Permission | Policy |
+| ------- | ---------- | ------ |
+| AWS Power User | `Poweruser-role` | Members of the team tag, **approval** by the approver tag (30 minutes to approve, valid 2 hours), extendable once |
+| AWS S3 Full Access | `S3-Fullaccess-role` | Members of the team tag, no approval |
+| AWS EC2 Full Access | `EC2-Fullaccess-role` | Members of the team tag, only from `allowed_ip_ranges` |
 
-## 🧩 Use Case
+The permissions are the sample JIT roles the AWS templates in this
+repository create ([CloudFormation](../../cloudformation/aws/) with
+`DeploySampleRoles=true`, [Terraform](../aws/) with
+`deploy_sample_roles = true`).
 
-This example is useful for organizations that want to automate access provisioning for cloud platforms (like AWS and EKS) using Just-In-Time (JIT) access policies. The profiles and policies defined here represent different user groups and their corresponding privileges.
+## Prerequisites
 
-## 📁 Project Structure
+- Terraform >= 1.5; the provider (`~> 3.0`) is fetched by `terraform init`
+- An AWS application in Britive that has been **scanned**, so the roles and
+  the account environment exist; note the application name and the
+  environment (account) name from the console
+- An API token with rights over tags, profiles and policies
+
+## Deploy
 
 ```bash
-.
-├── main.tf                # Main Terraform configuration
-├── variables.tf           # Input variables for the provider
-├── terraform.tfvars       # Values for input variables (not committed to version control)
-├── outputs.tf             # (Optional) Outputs from resources
-└── README.md              # This documentation
-````
+export BRITIVE_TENANT=https://your-tenant.britive-app.com
+export BRITIVE_TOKEN=<API token>
 
----
+cp terraform.tfvars.example terraform.tfvars   # application_name, environment_name, tag names, members
+terraform init
+terraform apply
+```
 
-## 🔐 Prerequisites
+Users in the team tag then see the three profiles in **My Access**; the
+Power User checkout waits for someone in the approver tag.
 
-* A [Britive](https://www.britive.com/) account with access to the Admin API.
-* Terraform v1.3+ installed
-* Britive Terraform provider `>= 2.1.0, < 2.1.5`
-* Britive token with appropriate permissions
-* Applications like **EKS** and **AWS Standalone** configured in Britive
+## Variables
 
-## ⚙️ Setup
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `application_name` | `AWS Standalone` | The AWS application in Britive |
+| `environment_name` | — | Account name as the scan shows it |
+| `identity_provider_name` | `Britive` | Provider the tags live on (Terraform manages local tags only) |
+| `team_tag_name` | `aws-developers` | Who may check out |
+| `team_members` | `[]` | Usernames to put in the team tag |
+| `approver_tag_name` | `aws-approvers` | Who approves the Power User profile |
+| `allowed_ip_ranges` | `10.0.0.0/8,192.168.0.0/16` | Source restriction on the EC2 profile |
 
-1. **Clone this repo**
+## Adapting it
 
-   ```bash
-   git clone https://your.repo.url
-   cd britive-terraform-example
-   ```
+- Other applications: change `application_name`, the `associations` value
+  (an environment or environment group name) and the permission
+  names/types (`role` for AWS, `Group` for Kubernetes and Okta, …) to what
+  the scan lists.
+- Approval over Slack or Teams: add the medium to `notificationMedium` and
+  the channel IDs under `approvers`.
+- Time-of-day restrictions: add `timeOfAccess` to the condition; see the
+  provider's `britive_profile_policy` documentation.
+- Keep `consumer = "papservice"` on every profile policy; other values
+  silently break access.
 
-2. **Define required variables**
+## Remove
 
-   Create a `terraform.tfvars` file with the following content:
-
-   ```hcl
-   britive-tenant = "your-tenant-id"
-   britive-token  = "your-api-token"
-   ```
-
-3. **Initialize Terraform**
-
-   ```bash
-   terraform init
-   ```
-
-4. **Validate the configuration**
-
-   ```bash
-   terraform validate
-   ```
-
-5. **Apply the configuration**
-
-   ```bash
-   terraform apply
-   ```
-
----
-
-## 🚀 What It Does
-
-### 🔖 Tags and Memberships
-
-* Creates three tags: `k8s users`, `AWS admins`, and `S3 developers`
-* Adds members (usernames) to the `k8s users` tag
-
-### 📦 Applications
-
-* Looks up existing applications: `EKS` and `AWS Standalone`
-
-### 👤 Profiles and Policies
-
-Creates 4 profiles with distinct use cases:
-
-| Profile Name   | Application    | Permissions           | Description             |
-| -------------- | -------------- | --------------------- | ----------------------- |
-| JIT Admins     | EKS            | `jit-admins` (Group)  | EKS Namespace Admins    |
-| AWS Power User | AWS Standalone | `Poweruser-role`      | General AWS Power Users |
-| AWS S3 Admins  | AWS Standalone | `S3-Fullaccess-role`  | Admins for S3           |
-| AWS EC2 Admins | AWS Standalone | `EC2-Fullaccess-role` | Admins for EC2          |
-
-### ✅ Policies
-
-Each profile is bound to a policy that includes:
-
-* Access conditions (e.g. approval workflows, IP address restrictions)
-* Approval notifications via Magic Link Email and Slack
-* User or tag-based access control
-
----
-
-## 📌 Notes
-
-* The `identity_provider_id` is dynamically fetched based on the `Britive` Identity Provider.
-* Ensure that all tag names, permission names, and approver values (users or tags) exist in your Britive environment.
-* Sensitive data like API tokens should be stored securely (e.g. via environment variables, secrets managers, or CI/CD pipelines).
-
----
-
-## 🔗 References
-
-* [Britive Terraform Provider Docs](https://registry.terraform.io/providers/britive/britive/latest/docs)
-* [Britive Admin API](https://docs.britive.com/apidocs/introduction-service-apis)
-* [Britive Official Site](https://www.britive.com/)
-
----
+`terraform destroy` deletes the policies, permissions, profiles and tags
+(members included).

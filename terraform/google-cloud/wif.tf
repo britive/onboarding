@@ -33,6 +33,13 @@ resource "google_iam_workload_identity_pool_provider" "britive" {
   oidc {
     issuer_uri = local.issuer_url
   }
+
+  lifecycle {
+    precondition {
+      condition     = var.britive_tenant_url != null || var.britive_issuer_url != null
+      error_message = "britive_tenant_url (or britive_issuer_url) is required when integration_type is \"wif\"; the provider would otherwise trust https://unset/."
+    }
+  }
 }
 
 # Identities in the pool may mint tokens for the service account (Britive's

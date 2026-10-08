@@ -1,52 +1,51 @@
-terraform {
-  required_providers {
-    snowflake = {
-      source  = "Snowflake-Labs/snowflake"
-      version = "~> 0.76.0"
-    }
-  }
-}
+# Snowflake side of the Britive Snowflake and Snowflake Standalone
+# applications: a role with MANAGE GRANTS, optionally ORGADMIN, and a service
+# user holding that role with key-pair authentication.
+# Matches docs.britive.com/docs/configuring-on-snowflake-application.
 
 provider "snowflake" {
-    organization_name = var.snowflake_organization  # required if not using profile. Can also be set via SNOWFLAKE_ORGANIZATION_NAME env var
-    account_name = var.snowflake_account
-    user     = var.snowflake_user
-    password = var.snowflake_password
-    role     = var.snowflake_admin_role
+  organization_name      = var.snowflake_organization
+  account_name           = var.snowflake_account
+  user                   = var.snowflake_admin_user
+  role                   = var.snowflake_admin_role
+  authenticator          = "SNOWFLAKE_JWT"
+  private_key            = file(pathexpand(var.snowflake_admin_private_key_file))
+  private_key_passphrase = var.snowflake_admin_private_key_passphrase
 }
 
-# Create a Custom Role for Britive
-resource "snowflake_role" "britive_role" {
-  name = var.britive_role_name
+locals {
+  # Snowflake wants the key body only: no PEM header or trailer, one line.
+  britive_public_key = replace(trimspace(file(pathexpand(var.britive_public_key_file))), "/-----[A-Z ]+-----|\\s/", "")
 }
 
-# Grant Required Privileges to the Custom Role
-resource "snowflake_grant_privileges_to_account_role" "britive_role_grants" {
-  account_role_name = snowflake_role.britive_role.name
-  privileges        = var.britive_role_privileges
+resource "snowflake_account_role" "britive" {
+  name    = var.britive_role_name
+  comment = "Used by Britive to manage grants"
 }
 
-# Assign ORGADMIN Role to BRITIVEROLE
-resource "snowflake_role_grants" "britive_orgadmin" {
-  role_name = snowflake_role.britive_role.name
-  roles     = [var.orgadmin_role]
+resource "snowflake_grant_privileges_to_account_role" "manage_grants" {
+  account_role_name = snowflake_account_role.britive.name
+  privileges        = ["MANAGE GRANTS"]
+  on_account        = true
 }
 
-# Create a User for Britive
-resource "snowflake_user" "britive_user" {
-  name          = var.britive_user_name
-  default_role  = snowflake_role.britive_role.name
-  rsa_public_key = file(var.britive_public_key_path)
+# Snowflake organization application only: ORGADMIN is granted to the Britive
+# role. Terraform must run as ORGADMIN for this grant.
+resource "snowflake_grant_account_role" "orgadmin" {
+  count = var.grant_orgadmin ? 1 : 0
+
+  role_name        = "ORGADMIN"
+  parent_role_name = snowflake_account_role.britive.name
 }
 
-# Assign the Custom Role to the User
-resource "snowflake_role_grants" "britive_user_role" {
-  role_name = snowflake_role.britive_role.name
-  users     = [snowflake_user.britive_user.name]
+resource "snowflake_service_user" "britive" {
+  name           = var.britive_user_name
+  comment        = "Britive integration; key-pair authentication only"
+  default_role   = snowflake_account_role.britive.name
+  rsa_public_key = local.britive_public_key
 }
 
-# Output Public Key
-output "britive_public_key" {
-  value     = file(var.britive_public_key_path)
-  sensitive = true
+resource "snowflake_grant_account_role" "user" {
+  role_name = snowflake_account_role.britive.name
+  user_name = snowflake_service_user.britive.name
 }

@@ -1,6 +1,7 @@
 # Resource addresses of the previous version of this module, so an existing
 # deployment keeps its objects. To keep their names too, see "Upgrading from the
-# previous version" in README.md.
+# previous version" in README.md. Remove this file once every deployment has been
+# applied on this version (target: 2027-04).
 
 moved {
   from = google_project.BritiveIntegration

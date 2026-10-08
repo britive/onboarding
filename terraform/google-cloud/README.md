@@ -36,7 +36,7 @@ In Britive ([britive-app](britive-app/README.md), optional): the application, fi
 | Organization Administrator (`roles/resourcemanager.organizationAdmin`), or Folder IAM Admin / Project IAM Admin for a narrower `access_scope` | Organisation, folder or project | Granting the role |
 | Project Creator (`roles/resourcemanager.projectCreator`) | Organisation or `folder_id` | A new project. The creator becomes its owner, which covers the APIs, the service account and the pool |
 | Billing Account User (`roles/billing.user`) | Billing account | Only if `billing_account` is set |
-| Owner, or Service Usage Admin + Service Account Admin + Workload Identity Pool Admin | The project | Only when `create_project = false` |
+| Owner, or Service Usage Admin + Service Account Admin + Workload Identity Pool Admin (`wif`) / Service Account Key Admin (`key`) | The project | Only when `create_project = false` |
 
 Key mode also needs a Google Workspace super administrator, to grant domain-wide delegation and for Terraform to act as.
 
@@ -92,7 +92,8 @@ terraform output britive_application_values
 | Project number for connected service account | `project_number_for_connected_service_account` | |
 | Britive issuer URL (check it matches the application's Settings) | `britive_issuer_url` | |
 | Service account credentials | | contents of `keys/key.json` |
-| G Suite admin, Customer ID | | `terraform -chdir=../google-workspace output` |
+| G Suite admin (*Custom user email* in current tenants), Customer ID | | `terraform -chdir=../google-workspace output` |
+| Scan all folders and projects / Scan projects only | | one must be selected; `britive-app/` picks from `access_scope` |
 
 The application's display name may contain only letters, digits and spaces; the tenant rejects other characters. When your Britive users and Google identities use different email domains, set **Replace domain** with the Britive domain as primary and the Google domain as secondary (`britive_users_domain` and `google_domain` in `britive-app/`).
 
@@ -119,7 +120,9 @@ The old role grant was authoritative: destroying it removes every member of the 
 terraform state rm google_organization_iam_binding.organization
 ```
 
-Then run `terraform plan` in each directory and confirm that nothing is replaced. To move to `wif` afterwards, switch `integration_type`, apply, create a `GCP WIF` application, and delete the old application and key.
+Then run `terraform plan` in each directory. One replacement is expected: the key file moves from `terraform/keys/key.json` to `keys/key.json` here, so `local_sensitive_file.key` is recreated (the key itself is unchanged). Delete the old `terraform/keys/key.json` by hand afterwards; it is not ignored at that path. If the previous version was applied from the `gcp/` and `workspace/` subdirectories, copy those state files to this directory and `../google-workspace` first. To move to `wif` afterwards, switch `integration_type`, apply, create a `GCP WIF` application, and delete the old application and key.
+
+`moved.tf` in this directory and in `../google-workspace` exists for that upgrade only; remove both files once every deployment has been applied on this version.
 
 ## Remove
 

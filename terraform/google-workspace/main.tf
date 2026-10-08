@@ -6,17 +6,21 @@
 # GCP application acts as that user ("G Suite admin") through domain-wide delegation
 # granted to the service account from ../google-cloud.
 #
-# The user consumes a Workspace licence. Its password is random and only in state:
-# Britive never signs in as it, it is impersonated.
+# The user consumes a Workspace licence. Its password is random and only in state
+# (output initial_password): Britive impersonates the user rather than signing in,
+# but Britive's documentation asks for one interactive sign-in so the Workspace
+# terms are accepted; see README.md.
 
 provider "googleworkspace" {
   customer_id             = var.workspace_customer_id
   credentials             = var.service_account_key_file
   impersonated_user_email = var.workspace_impersonation_email
+  # Directory API only. The rolemanagement scope exists so Terraform can create
+  # the admin role through Britive's own service account; it stays on that
+  # account's domain-wide delegation unless you remove it afterwards (README).
   oauth_scopes = [
     "https://www.googleapis.com/auth/admin.directory.rolemanagement",
     "https://www.googleapis.com/auth/admin.directory.user",
-    "https://www.googleapis.com/auth/cloud-platform",
     "https://www.googleapis.com/auth/admin.directory.group",
     "https://www.googleapis.com/auth/admin.directory.group.member",
   ]

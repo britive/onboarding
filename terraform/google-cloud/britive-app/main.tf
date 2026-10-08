@@ -42,6 +42,10 @@ locals {
     } : {},
   )
 
+  # Key mode must choose a scan scope (Britive: "either Scan all folders and
+  # projects or Scan projects only has to be selected"); WIF rejects both keys.
+  scan_organization = startswith(local.gcp.access_scope, "organization")
+
   properties = local.wif ? merge(local.common, {
     displayProgrammaticKeys = var.programmatic_access
     britiveIssuerUrl        = local.values.britive_issuer_url
@@ -50,20 +54,25 @@ locals {
     wifSA                   = local.values.service_account_email
     projectNumberForWifSA   = local.values.project_number_for_connected_service_account
     }) : merge(local.common, {
-    gSuiteAdmin = local.gsuite_admin
-    customerId  = local.customer_id
+    gSuiteAdmin      = local.gsuite_admin
+    customerId       = local.customer_id
+    scanUsersGroups  = true
+    scanOrganization = local.scan_organization
+    scanProjectsOnly = !local.scan_organization
   })
-}
-
-check "workspace_values_for_key_mode" {
-  assert {
-    condition     = local.wif || (local.gsuite_admin != "unset" && local.customer_id != "unset")
-    error_message = "Key mode needs the G Suite admin and customer ID: apply ../../google-workspace first, or set gsuite_admin_email and workspace_customer_id."
-  }
 }
 
 resource "britive_application" "gcp" {
   application_type = local.wif ? "GCP WIF" : "GCP"
+
+  # A precondition stops the plan; a check block would only warn and then
+  # create the application with gSuiteAdmin = "unset".
+  lifecycle {
+    precondition {
+      condition     = local.wif || (local.gsuite_admin != "unset" && local.customer_id != "unset")
+      error_message = "Key mode needs the G Suite admin and customer ID: apply ../../google-workspace first, or set gsuite_admin_email and workspace_customer_id."
+    }
+  }
 
   dynamic "properties" {
     for_each = local.properties

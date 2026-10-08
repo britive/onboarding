@@ -17,6 +17,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 for dir in "$HERE/britive-app" "$HERE/../google-workspace" "$HERE"; do
   if [ -f "$dir/terraform.tfstate" ]; then
     echo "== destroying $(basename "$dir")"
+    terraform -chdir="$dir" init -input=false >/dev/null
     terraform -chdir="$dir" destroy
   fi
 done

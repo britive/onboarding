@@ -6,7 +6,7 @@ output "integration_type" {
 }
 
 output "access_scope" {
-  value = var.access_scope == "organization" ? "organization ${var.organization_id}" : "${var.access_scope} ${var.scope_id}"
+  value = var.access_scope == "organization" ? "organization ${var.organization_id}" : "${var.access_scope} ${coalesce(var.scope_id, "unset")}"
 }
 
 output "britive_application_values" {
