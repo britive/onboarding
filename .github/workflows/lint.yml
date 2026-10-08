@@ -1,0 +1,53 @@
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Checks that must hold for the whole repository on every change.
+  repo:
+    name: repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install linters
+        run: pip install --quiet cfn-lint==1.35.1
+
+      - name: Repository checks
+        run: .github/scripts/repo-checks.sh
+
+      - name: Commit messages in this change
+        if: github.event_name == 'pull_request'
+        run: .github/scripts/commit-checks.sh "origin/${{ github.base_ref }}"
+
+  # Checks that run on the files a change touches, so a directory that has not
+  # been brought up to standard yet does not block unrelated work.
+  changed:
+    name: changed files
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@v4
+
+      - name: Install linters
+        run: pip install --quiet ruff==0.6.9 yamllint==1.35.1
+
+      - name: Changed-file checks
+        run: .github/scripts/changed-checks.sh "origin/${{ github.base_ref }}"

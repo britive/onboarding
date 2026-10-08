@@ -1,0 +1,14 @@
+extends: relaxed
+
+rules:
+  line-length: disable
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    indent-sequences: consistent
+  truthy:
+    check-keys: false
+
+ignore: |
+  **/charts/*/templates/
