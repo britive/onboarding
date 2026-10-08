@@ -1,7 +1,7 @@
 # britive/onboarding — keep this file short and scoped.
 # Rules are path-scoped where possible so a future bin/, lib/ or scripts/
 # directory is never silently ignored (the previous template-generated
-# file hid Britive Bridge/custom-image/scripts/ from every clone).
+# file hid bridge/custom-image/scripts/ from every clone).
 
 # OS / editors / agent state
 .DS_Store

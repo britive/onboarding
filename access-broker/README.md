@@ -53,7 +53,7 @@ Checkout/checkin script examples for dozens of resource types:
 | You need | Where |
 | -------- | ----- |
 | Tenant subdomain | `acme` for `https://acme.britive-app.com` |
-| A broker pool and a token | **System Administration → Brokers and Broker Pools** → create or open a pool → **Tokens**. [`../Britive Bridge/platform-setup/quick-setup.py`](../Britive%20Bridge/platform-setup/) creates both from the CLI |
+| A broker pool and a token | **System Administration → Brokers and Broker Pools** → create or open a pool → **Tokens**. [`../bridge/platform-setup/quick-setup.py`](../bridge/platform-setup/) creates both from the CLI |
 | The broker package or tarball | **System Administration → Brokers and Broker Pools → Download Brokers**. There is no public download URL |
 
 ### Network
@@ -97,7 +97,7 @@ anywhere.
 ## Directory layout
 
 ```text
-Access Broker/
+access-broker/
 ├── README.md               # you are here
 ├── image/                  # the container image (Dockerfile, build-and-push.sh, config example)
 ├── docker-compose/         # one host

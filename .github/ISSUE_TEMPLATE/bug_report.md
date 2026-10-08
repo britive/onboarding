@@ -6,7 +6,7 @@ labels: bug
 
 ## Which directory
 
-<!-- e.g. Access Broker/aws-ecs-fargate, terraform/google-cloud, Britive Bridge/v2/docker-compose -->
+<!-- e.g. access-broker/aws-ecs-fargate, terraform/google-cloud, bridge/v2/docker-compose -->
 
 ## What you ran
 

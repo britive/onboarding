@@ -1,7 +1,7 @@
 # Session Recording (legacy)
 
 > **Legacy.** This Guacamole-based stack is superseded by
-> [Britive Bridge](../Britive%20Bridge/v2/README.md) for all new deployments.
+> [Britive Bridge](../bridge/v2/README.md) for all new deployments.
 > Bridge records sessions itself, with no Guacamole, broker SSH server or token
 > scripts to operate, and nothing here is being developed further.
 >

@@ -17,7 +17,7 @@ In Google Cloud (this directory):
 
 - A project for the Britive service account (`project_id`), or an existing project when `create_project = false`.
 - The APIs Britive calls: Cloud Resource Manager, IAM and Directory (`admin.googleapis.com`); with `wif`, also Security Token Service and IAM Credentials.
-- The organisation custom role **Britive Integration Role** (`BritiveIntegrationRole`), with the permissions from Britive's prerequisites, plus the optional permission sets for BigQuery and Apigee constraints and AI identity scanning.
+- The organisation custom role **Britive Integration Role** (`BritiveIntegrationRole`), with the permissions from Britive's prerequisites ([organization](https://docs.britive.com/docs/custom-role-in-gcp) / [projects only](https://docs.britive.com/docs/creating-a-custom-role-for-gcp-standalone-application)), plus the optional permission sets for BigQuery and Apigee constraints and AI identity scanning.
 - The service account `britive-integration@<project_id>.iam.gserviceaccount.com`, granted the role on the organisation, or on one folder or project (`access_scope`).
 - `wif`: a workload identity pool (`britive`) with an OIDC provider (`britive-oidc`) trusting `https://<tenant>/api/auth/sso/oauth2` with the default audience, and `roles/iam.serviceAccountTokenCreator` plus `roles/iam.workloadIdentityUser` on the service account for every identity in the pool.
 - `key`: a service account key, written to `keys/key.json` (mode 0600, git-ignored).
