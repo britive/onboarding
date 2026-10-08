@@ -1,121 +1,54 @@
-# Britive AWS Integration - Terraform
+# Britive AWS integration — Terraform
 
-This directory contains Terraform configurations for deploying Britive integration resources on AWS. These Terraform modules are equivalent to the CloudFormation templates found in the `cloudformation/aws/` directory.
+Terraform equivalents of the CloudFormation templates in
+[`../../cloudformation/aws/`](../../cloudformation/aws/). All three stacks
+call one module, [`modules/britive-integration`](modules/britive-integration/),
+which creates what Britive needs in an account: the SAML identity provider,
+the integration role, and the optional session-invalidation, Access Builder
+and AI-scanning permissions.
 
-## Overview
+Prerequisites and the product side of onboarding are documented at
+<https://docs.britive.com/docs/application-onboarding-guides>; each README
+here links the outputs to the fields of the Britive application.
 
-Three deployment options are available, matching the CloudFormation examples:
+| Stack | Use it for | Scope |
+| ----- | ---------- | ----- |
+| [`single-account-stack/`](single-account-stack/) | One account: a standalone account, a POC, or the management account of an organization. `deploy_sample_roles = true` adds four demonstration JIT roles | 1 account |
+| [`organization-stackset/`](organization-stackset/) | A whole AWS Organization: the management account directly plus every member account through a service-managed StackSet with auto-deployment | Management + member accounts |
+| [`full-lab-setup/`](full-lab-setup/) | A disposable demo: integration, sample roles, and Linux/Windows/MySQL targets in their own VPC | 1 sandbox account |
 
-### 1. [Organization StackSet](organization-stackset/)
+There is no Terraform equivalent of the CloudFormation `stackset-templates/`
+option (member accounts only); `organization-stackset/` covers that case and
+the management account together.
 
-**Use case**: Deploy across an entire AWS Organization
-
-Creates resources in the master account and uses CloudFormation StackSets to deploy integration resources across all accounts in an organizational unit.
-
-**Resources**:
-
-- SAML provider and integration role in master account
-- CloudFormation StackSet for organization-wide deployment
-- Auto-deployment to new accounts
-
-**Matches CloudFormation**: `cloudformation/aws/organization-stackset/`
-
----
-
-### 2. [Full Lab Setup](full-lab-setup/)
-
-**Use case**: Complete test/demo environment with infrastructure
-
-Creates a comprehensive lab environment including Britive integration plus test infrastructure.
-
-**Resources**:
-
-- SAML provider and integration role
-- VPC with public subnets
-- Linux and Windows EC2 instances
-- MySQL RDS instance
-- KMS encryption and Secrets Manager
-- Four test roles for JIT access demonstration
-
-**Matches CloudFormation**: `cloudformation/aws/full-lab-setup/`
-
----
-
-### 3. [Single Account Stack](single-account-stack/)
-
-**Use case**: Simple single-account deployment
-
-The minimal setup for Britive integration. Available in two variants:
-
-- **Basic**: Just SAML provider and integration role
-- **With Roles**: Adds four test roles for demonstration
-
-**Matches CloudFormation**: `cloudformation/aws/single-account-stack/`
-
----
-
-## Quick Start
-
-1. Choose the deployment option that fits your needs
-2. Navigate to the corresponding directory
-3. Follow the README instructions in that directory
-
-## Prerequisites
-
-All configurations require:
-
-- Terraform >= 1.0
-- AWS CLI configured with appropriate credentials
-- SAML metadata document from your Britive tenant
-
-Additional requirements vary by deployment option - see individual READMEs.
-
-## Common Configuration
-
-All deployments use similar variables:
+## Common inputs
 
 ```hcl
-tenant_name                        = "your-tenant-name"  # Omit .britive-app.com
-saml_metadata_document_xml_content = "<SAML XML content>"
+tenant_name                        = "your-tenant"               # omit .britive-app.com
+saml_metadata_document_xml_content = file("britive-saml-metadata.xml")  # or pass with -var on the command line
 deploy_aws_invalidation_feature    = true
 ```
 
-## Comparison with CloudFormation
-
-| Feature | CloudFormation | Terraform |
-|---------|---------------|-----------|
-| **Organization StackSet** | Uses nested stacks and StackSet | Uses StackSet resource directly |
-| **Full Lab Setup** | Single template with all resources | Single `main.tf` with organized sections |
-| **Single Account** | Two separate templates | Two variants in one directory |
-| **Parameters** | JSON parameters file | `.tfvars` file |
-| **Outputs** | CloudFormation outputs | Terraform outputs |
-| **Policy Attachments** | Inline in role definition | Separate `aws_iam_role_policy_attachment` resources |
-
-## File Organization
-
-Each directory follows Terraform best practices:
-
-- `main.tf` - All resources (with clear section organization)
-- `variables.tf` - Input variables
-- `outputs.tf` - Output values
-- `terraform.tfvars.example` - Example configuration
-- `README.md` - Detailed documentation
-
-**Note**: Some configurations may have additional `.tf` files (like `stackset.tf` in organization-stackset) for logical separation of complex resources.
+The SAML metadata comes from **System Administration → Security → SAML
+Configurations → Download SAML Metadata**. It identifies your tenant, so keep
+the file out of version control (`.gitignore` already excludes `*.xml` under
+`terraform/` and `cloudformation/`), but it holds only a public signing
+certificate.
 
 ## Relationship to the CloudFormation templates
 
-Each directory here creates the same IAM resources as its counterpart under
-[`../../cloudformation/aws/`](../../cloudformation/aws/): the SAML provider,
-the integration role with the same managed policies and trust policy, and the
-optional invalidation permissions. Variable names follow the CloudFormation
-parameter names (`tenant_name`, `saml_metadata_document_xml_content`,
-`deploy_aws_invalidation_feature`) and the outputs carry the same values, so a
-Britive application configured from one can be reproduced from the other.
+Each stack creates the same IAM resources as its CloudFormation counterpart:
+the same names (`britive-<tenant>`, `britive-<tenant>-integration-role`), the
+same managed policies and trust policy, the same optional invalidation
+permissions. Variable names follow the CloudFormation parameter names and the
+outputs carry the same values, so a Britive application configured from one
+can be reproduced from the other. The organization stack even deploys the
+CloudFormation member-account template as its StackSet body.
 
-## Getting help
+## Checks
 
-- The README in each subdirectory covers deploy, verify and teardown
-- The Britive AWS onboarding guide covers the product side:
-  <https://docs.britive.com/docs/application-onboarding-guides>
-- Terraform AWS provider documentation for resource details
+```bash
+for d in modules/britive-integration single-account-stack organization-stackset full-lab-setup; do
+  terraform -chdir=$d init -backend=false >/dev/null && terraform -chdir=$d validate && tflint --chdir=$d
+done
+```

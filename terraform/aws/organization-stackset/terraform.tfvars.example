@@ -1,10 +1,16 @@
-# Example terraform.tfvars file
-# Copy this to terraform.tfvars and fill in your values
+# Copy to terraform.tfvars (gitignored) and fill in.
 
-root_ou_id                          = "<root ou id>"
-region                              = "us-east-1"
-saml_metadata_document_xml_content  = "<paste xml saml metadata content obtained from admin page in the britive ui>"
-s3_bucket_name                      = "<name of the bucket created earlier that holds the britive_integration_resources.yaml template>"
-s3_key_for_iam_resources_template   = "britive_integration_resources.yaml"
-tenant_name                         = "<name of your britive tenant - omit '.britive-app.com'>"
-deploy_aws_invalidation_feature     = true
+tenant_name = "your-tenant" # the part before .britive-app.com
+
+# Pass the metadata on the command line instead of pasting it here:
+#   terraform apply -var="saml_metadata_document_xml_content=$(cat britive-saml-metadata.xml)"
+saml_metadata_document_xml_content = "<paste the XML here, or pass it with -var as shown above>"
+
+# Root ID for the whole organization, or specific OUs.
+organizational_unit_ids = ["r-xxxx"]
+
+deploy_aws_invalidation_feature = true
+deploy_access_builder           = false
+deploy_ai_identity_scanning     = false
+region                          = "us-east-1"
+call_as                         = "SELF" # DELEGATED_ADMIN from a StackSets delegated administrator

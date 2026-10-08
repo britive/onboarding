@@ -1,12 +1,18 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.40, < 7.0"
     }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
     }
   }
 }
@@ -15,140 +21,58 @@ provider "aws" {
   region = var.region
 }
 
-# ===== Data Sources =====
-
-data "aws_caller_identity" "current" {}
-
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Get latest Amazon Linux 2 AMI
+# Current Amazon Linux 2023 and Windows Server 2022 images via SSM public parameters.
 data "aws_ssm_parameter" "amazon_linux_ami" {
-  name = "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
 
-# Get latest Windows Server 2019 AMI
 data "aws_ssm_parameter" "windows_ami" {
-  name = "/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base"
+  name = "/aws/service/ami-windows-latest/Windows_Server-2022-English-Full-Base"
 }
 
-# ===== IAM Resources =====
+# ===== Britive integration + sample JIT roles =====
+# The same module the production stacks use; the four sample roles are what
+# the lab demonstrates checkouts against.
+module "britive" {
+  source = "../modules/britive-integration"
 
-# SAML Provider
-resource "aws_iam_saml_provider" "britive" {
-  name                   = "britive-${var.tenant_name}"
-  saml_metadata_document = var.saml_metadata_document_xml_content
+  tenant_name                        = var.tenant_name
+  saml_metadata_document_xml_content = var.saml_metadata_document_xml_content
+  deploy_aws_invalidation_feature    = var.deploy_aws_invalidation_feature
+  deploy_sample_roles                = true
 }
 
-# Integration Role
-resource "aws_iam_role" "britive_integration" {
-  name                 = "britive-${var.tenant_name}-integration-role"
-  description          = "Britive Integration Role"
-  max_session_duration = 3600
+# ===== KMS and the database secret =====
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sts:AssumeRoleWithSAML",
-          "sts:SetSourceIdentity",
-          "sts:TagSession"
-        ]
-        Principal = {
-          Federated = aws_iam_saml_provider.britive.arn
-        }
-        Condition = {
-          StringEquals = {
-            "SAML:aud" = "https://signin.aws.amazon.com/saml"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# Attach IAM ReadOnly Access policy
-resource "aws_iam_role_policy_attachment" "britive_integration_iam_readonly" {
-  role       = aws_iam_role.britive_integration.name
-  policy_arn = "arn:aws:iam::aws:policy/IAMReadOnlyAccess"
-}
-
-# Attach Organizations ReadOnly Access policy
-resource "aws_iam_role_policy_attachment" "britive_integration_orgs_readonly" {
-  role       = aws_iam_role.britive_integration.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess"
-}
-
-# AWS Invalidation Feature Policy (conditional)
-resource "aws_iam_role_policy" "aws_invalidation" {
-  count = var.deploy_aws_invalidation_feature ? 1 : 0
-
-  name = "aws-invalidation"
-  role = aws_iam_role.britive_integration.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "iam:CreatePolicy",
-          "iam:DeletePolicy",
-          "iam:CreatePolicyVersion",
-          "iam:DeletePolicyVersion",
-          "iam:GetPolicy",
-          "iam:GetPolicyVersion",
-          "iam:ListPolicyVersions"
-        ]
-        Resource = "arn:aws:iam::*:policy/britive/managed/*"
-      }
-    ]
-  })
-}
-
-# ===== KMS and Secrets =====
-
-# KMS Key for RDS password encryption
 resource "aws_kms_key" "britive" {
-  description             = "KMS key for encrypting RDS password secret"
+  description             = "Encrypts the lab RDS credentials secret"
   enable_key_rotation     = true
-  deletion_window_in_days = 10
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      }
-    ]
-  })
+  deletion_window_in_days = 7
 }
 
 resource "aws_kms_alias" "britive" {
-  name          = "alias/britive-rds-key"
+  name          = "alias/britive-lab-rds"
   target_key_id = aws_kms_key.britive.key_id
 }
 
-# RDS Admin Password Secret
 resource "random_password" "rds_password" {
-  length           = 16
+  length           = 20
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
+# recovery_window_in_days = 0 so a destroy/apply cycle does not fail on a
+# secret still scheduled for deletion. name_prefix avoids collisions with a
+# previous lab in the same account.
 resource "aws_secretsmanager_secret" "rds_password" {
-  name        = "BritiveRdsAdminSecret"
-  description = "RDS admin password secret"
-  kms_key_id  = aws_kms_key.britive.id
+  name_prefix             = "britive-lab/rds-admin-"
+  description             = "Lab RDS administrator credentials"
+  kms_key_id              = aws_kms_key.britive.id
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "rds_password" {
@@ -159,52 +83,40 @@ resource "aws_secretsmanager_secret_version" "rds_password" {
   })
 }
 
-# ===== Networking Resources =====
+# ===== Networking =====
 
-# VPC
 resource "aws_vpc" "britive" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
-    Name = "britive-vpc"
-  }
+  tags = { Name = "britive-lab-vpc" }
 }
 
-# Public Subnets
 resource "aws_subnet" "public_1" {
   vpc_id                  = aws_vpc.britive.id
-  cidr_block              = "10.0.1.0/24"
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "britive-subnet-1"
-  }
+  tags = { Name = "britive-lab-subnet-1" }
 }
 
 resource "aws_subnet" "public_2" {
   vpc_id                  = aws_vpc.britive.id
-  cidr_block              = "10.0.2.0/24"
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 2)
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "britive-subnet-2"
-  }
+  tags = { Name = "britive-lab-subnet-2" }
 }
 
-# Internet Gateway
 resource "aws_internet_gateway" "britive" {
   vpc_id = aws_vpc.britive.id
 
-  tags = {
-    Name = "britive-igw"
-  }
+  tags = { Name = "britive-lab-igw" }
 }
 
-# Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.britive.id
 
@@ -213,12 +125,9 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.britive.id
   }
 
-  tags = {
-    Name = "britive-public-rt"
-  }
+  tags = { Name = "britive-lab-public-rt" }
 }
 
-# Route Table Associations
 resource "aws_route_table_association" "public_1" {
   subnet_id      = aws_subnet.public_1.id
   route_table_id = aws_route_table.public.id
@@ -229,10 +138,10 @@ resource "aws_route_table_association" "public_2" {
   route_table_id = aws_route_table.public.id
 }
 
-# Security Group
+# Ingress only from allowed_ingress_cidr (your own IP), never the internet.
 resource "aws_security_group" "britive" {
-  name        = "britive-security-group"
-  description = "Britive Security Group"
+  name        = "britive-lab-sg"
+  description = "Britive lab: SSH, RDP and MySQL from the allowed CIDR only"
   vpc_id      = aws_vpc.britive.id
 
   ingress {
@@ -240,7 +149,7 @@ resource "aws_security_group" "britive" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.allowed_ingress_cidr]
   }
 
   ingress {
@@ -248,7 +157,7 @@ resource "aws_security_group" "britive" {
     from_port   = 3389
     to_port     = 3389
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.allowed_ingress_cidr]
   }
 
   ingress {
@@ -256,7 +165,7 @@ resource "aws_security_group" "britive" {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.allowed_ingress_cidr]
   }
 
   egress {
@@ -267,37 +176,43 @@ resource "aws_security_group" "britive" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "britive-sg"
-  }
+  tags = { Name = "britive-lab-sg" }
 }
 
-# ===== EC2 Resources =====
+# ===== EC2 =====
 
-# EC2 Key Pair
+# A key pair is generated unless you supply ssh_public_key.
+resource "tls_private_key" "generated" {
+  count = var.ssh_public_key == "" ? 1 : 0
+
+  algorithm = "ED25519"
+}
+
 resource "aws_key_pair" "britive" {
-  key_name   = "britive-keypair"
-  public_key = var.ssh_public_key
+  key_name   = "britive-lab-${var.tenant_name}"
+  public_key = var.ssh_public_key != "" ? var.ssh_public_key : tls_private_key.generated[0].public_key_openssh
 
-  tags = {
-    Name = "britive-keypair"
-  }
+  tags = { Name = "britive-lab-keypair" }
 }
 
-# Linux EC2 Instance
 resource "aws_instance" "linux" {
   ami                    = data.aws_ssm_parameter.amazon_linux_ami.value
-  instance_type          = "t2.micro"
+  instance_type          = "t3.micro"
   key_name               = aws_key_pair.britive.key_name
   subnet_id              = aws_subnet.public_1.id
   vpc_security_group_ids = [aws_security_group.britive.id]
 
-  tags = {
-    Name = "Britive-Linux"
+  metadata_options {
+    http_tokens = "required" # IMDSv2
   }
+
+  root_block_device {
+    encrypted = true
+  }
+
+  tags = { Name = "Britive-Linux" }
 }
 
-# Windows EC2 Instance
 resource "aws_instance" "windows" {
   ami                    = data.aws_ssm_parameter.windows_ami.value
   instance_type          = "t3.small"
@@ -305,174 +220,47 @@ resource "aws_instance" "windows" {
   subnet_id              = aws_subnet.public_1.id
   vpc_security_group_ids = [aws_security_group.britive.id]
 
-  tags = {
-    Name = "Britive-Windows"
+  metadata_options {
+    http_tokens = "required"
   }
+
+  root_block_device {
+    encrypted = true
+  }
+
+  tags = { Name = "Britive-Windows" }
 }
 
-# ===== RDS Resources =====
+# ===== RDS =====
 
-# RDS Subnet Group
 resource "aws_db_subnet_group" "britive" {
-  name        = "britive-db-subnet-group"
-  description = "Subnet group for RDS"
+  name        = "britive-lab-db-subnets"
+  description = "Lab RDS subnet group"
   subnet_ids  = [aws_subnet.public_1.id, aws_subnet.public_2.id]
 
-  tags = {
-    Name = "britive-db-subnet-group"
-  }
+  tags = { Name = "britive-lab-db-subnets" }
 }
 
-# MySQL RDS Instance
+# Publicly addressable so a laptop in allowed_ingress_cidr can connect for the
+# database demo; the security group is what limits who can reach it.
 resource "aws_db_instance" "mysql" {
-  identifier              = "britive-mysql"
+  identifier              = "britive-lab-${var.tenant_name}"
   engine                  = "mysql"
+  engine_version          = "8.0"
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
+  storage_type            = "gp3"
+  storage_encrypted       = true
+  kms_key_id              = aws_kms_key.britive.arn
   db_name                 = "britive"
   username                = jsondecode(aws_secretsmanager_secret_version.rds_password.secret_string)["username"]
   password                = jsondecode(aws_secretsmanager_secret_version.rds_password.secret_string)["password"]
   publicly_accessible     = true
-  backup_retention_period = 7
+  backup_retention_period = 1
   vpc_security_group_ids  = [aws_security_group.britive.id]
   db_subnet_group_name    = aws_db_subnet_group.britive.name
   skip_final_snapshot     = true
+  deletion_protection     = false
 
-  tags = {
-    Name = "britive-mysql"
-  }
-}
-
-# ===== Test Roles for JIT Access =====
-
-# Read-Only Role
-resource "aws_iam_role" "readonly" {
-  name                 = "Readonly-admin-role"
-  description          = "Britive ReadOnly Role for limited access"
-  max_session_duration = 3600
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = aws_iam_saml_provider.britive.arn
-        }
-        Action = [
-          "sts:AssumeRoleWithSAML"
-        ]
-        Condition = {
-          StringEquals = {
-            "SAML:aud" = "https://signin.aws.amazon.com/saml"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "readonly_policy" {
-  role       = aws_iam_role.readonly.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-}
-
-# Power User Role
-resource "aws_iam_role" "poweruser" {
-  name                 = "Poweruser-role"
-  description          = "Elevated access role for Britive users"
-  max_session_duration = 3600
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = aws_iam_saml_provider.britive.arn
-        }
-        Action = [
-          "sts:AssumeRoleWithSAML",
-          "sts:SetSourceIdentity",
-          "sts:TagSession"
-        ]
-        Condition = {
-          StringEquals = {
-            "SAML:aud" = "https://signin.aws.amazon.com/saml"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "poweruser_policy" {
-  role       = aws_iam_role.poweruser.name
-  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
-}
-
-# EC2 Full Access Role
-resource "aws_iam_role" "ec2_admin" {
-  name                 = "EC2-Fullaccess-role"
-  description          = "Britive EC2 Full Access Role"
-  max_session_duration = 3600
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = aws_iam_saml_provider.britive.arn
-        }
-        Action = [
-          "sts:AssumeRoleWithSAML"
-        ]
-        Condition = {
-          StringEquals = {
-            "SAML:aud" = "https://signin.aws.amazon.com/saml"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_admin_policy" {
-  role       = aws_iam_role.ec2_admin.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-}
-
-# S3 Full Access Role
-resource "aws_iam_role" "s3_admin" {
-  name                 = "S3-Fullaccess-role"
-  description          = "Elevated access role for Britive users"
-  max_session_duration = 3600
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = aws_iam_saml_provider.britive.arn
-        }
-        Action = [
-          "sts:AssumeRoleWithSAML",
-          "sts:SetSourceIdentity",
-          "sts:TagSession"
-        ]
-        Condition = {
-          StringEquals = {
-            "SAML:aud" = "https://signin.aws.amazon.com/saml"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "s3_admin_policy" {
-  role       = aws_iam_role.s3_admin.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+  tags = { Name = "britive-lab-mysql" }
 }

@@ -1,108 +1,92 @@
-# Britive Full Lab Setup - Terraform
+# Britive AWS lab (Terraform)
 
-This Terraform configuration creates a complete Britive integration lab environment on AWS.
+A complete environment to demonstrate Britive on AWS in one `apply`: the
+integration (through [`../modules/britive-integration`](../modules/britive-integration/)),
+four sample JIT roles, and targets to use them against — a Linux instance, a
+Windows instance and a MySQL database in their own VPC. Equivalent to
+[`../../../cloudformation/aws/full-lab-setup/`](../../../cloudformation/aws/full-lab-setup/).
 
-## Overview
+**For demonstrations and proofs of concept only.** It creates billable
+resources (two instances, an RDS instance; roughly USD 50 per month) and
+exposes them to the CIDR you allow. Destroy it when the demo is over.
 
-This setup creates a comprehensive test environment including:
+## What it creates
 
-### IAM Resources
-- SAML provider for Britive authentication
-- Britive integration role with read-only access to IAM and Organizations
-- Optional AWS Invalidation feature permissions
-- Four test roles (ReadOnly, PowerUser, EC2 Admin, S3 Admin) for JIT access testing
-
-### Network Infrastructure
-- VPC with DNS support (10.0.0.0/16)
-- Two public subnets in different AZs
-- Internet Gateway
-- Route tables and associations
-- Security group allowing SSH, RDP, and MySQL access
-
-### Compute Resources
-- Linux EC2 instance (Amazon Linux 2, t2.micro)
-- Windows EC2 instance (Windows Server 2019, t3.small)
-- EC2 key pair for SSH/RDP access
-
-### Database Resources
-- MySQL RDS instance (db.t3.micro)
-- RDS subnet group
-- Secrets Manager secret for database credentials
-- KMS key for secret encryption
+| Area | Resources |
+| ---- | --------- |
+| Britive | SAML provider `britive-<tenant>`, integration role `britive-<tenant>-integration-role`, optional invalidation permissions |
+| Sample JIT roles | `Readonly-admin-role`, `Poweruser-role`, `EC2-Fullaccess-role`, `S3-Fullaccess-role` |
+| Network | VPC (`10.0.0.0/16`), two public subnets, internet gateway, security group open to `allowed_ingress_cidr` only |
+| Compute | Amazon Linux 2023 `t3.micro` and Windows Server 2022 `t3.small`, IMDSv2, encrypted disks, one key pair (generated unless you supply a public key) |
+| Database | MySQL 8.0 `db.t3.micro`, encrypted with a KMS key, credentials in Secrets Manager |
 
 ## Prerequisites
 
-- Terraform >= 1.0
-- AWS CLI configured with appropriate credentials
-- SAML metadata document from your Britive tenant
-- SSH key pair (will be created if not provided)
+- Terraform >= 1.5 and credentials for a sandbox account
+- The SAML metadata XML from your tenant: **System Administration → Security
+  → SAML Configurations → Download SAML Metadata**
+- Your public IP (`curl -s https://checkip.amazonaws.com`) for
+  `allowed_ingress_cidr`
 
-## Files
+## Deploy
 
-- `main.tf` - All resources (IAM, VPC, EC2, RDS, KMS, Secrets, Test Roles)
-- `variables.tf` - Input variable definitions
-- `outputs.tf` - Output values
-- `terraform.tfvars.example` - Example variables file
-- `README.md` - This file
+```bash
+cp terraform.tfvars.example terraform.tfvars   # tenant_name, allowed_ingress_cidr
+terraform init
+terraform apply -var="saml_metadata_document_xml_content=$(cat britive-saml-metadata.xml)"
 
-## Usage
+# Save the generated private key (skip if you supplied ssh_public_key)
+terraform output -raw generated_private_key_pem > lab-key.pem && chmod 600 lab-key.pem
+```
 
-1. Copy the example variables file:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   ```
+## Configure the application in Britive
 
-2. Edit `terraform.tfvars` with your values:
-   - `tenant_name` - Your Britive tenant name (without .britive-app.com)
-   - `saml_metadata_document_xml_content` - SAML metadata XML from Britive
-   - `ssh_public_key` - Your SSH public key (optional, for EC2 access)
-   - `deploy_aws_invalidation_feature` - Enable/disable invalidation feature (default: true)
+**System Administration → Tenant Applications → Create Application → AWS
+Standalone** (a single account), then:
 
-3. Initialize Terraform:
-   ```bash
-   terraform init
-   ```
+| Britive field | Terraform output |
+| ------------- | ---------------- |
+| Account ID | `account_id` |
+| Identity Provider Name | `saml_provider_name` |
+| Integration Role Name | `integration_role_name` |
+| Duration of backend connection (hours) | `backend_connection_duration_hours` |
+| Region | `region` you deployed to |
 
-4. Review the plan:
-   ```bash
-   terraform plan
-   ```
+After **Save and Test**, create a profile per sample role and check one out
+from the Britive console: the console session lands in this account with
+that role.
 
-5. Apply the configuration:
-   ```bash
-   terraform apply
-   ```
+## Reach the targets
 
-## Outputs
+```bash
+ssh -i lab-key.pem ec2-user@$(terraform output -raw linux_instance_public_ip)
 
-After successful deployment, Terraform will output:
-- VPC ID
-- Linux and Windows instance IDs and public IPs
-- RDS endpoint and credentials secret ARN
-- Britive SAML provider and integration role ARNs
-- Test role ARNs
+aws ec2 get-password-data --instance-id $(terraform output -raw windows_instance_id) \
+  --priv-launch-key lab-key.pem --query PasswordData --output text   # then RDP to windows_instance_public_ip
 
-## Testing JIT Access
+aws secretsmanager get-secret-value --secret-id $(terraform output -raw rds_secret_arn) \
+  --query SecretString --output text
+mysql -h $(terraform output -raw rds_endpoint | cut -d: -f1) -u britive -p
+```
 
-The following test roles are created for demonstrating Britive JIT capabilities:
-- `Readonly-admin-role` - Read-only access to AWS resources
-- `Poweruser-role` - Power user access (all services except IAM)
-- `EC2-Fullaccess-role` - Full access to EC2
-- `S3-Fullaccess-role` - Full access to S3
+## Variables
 
-## Security Notes
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `tenant_name` | — | Tenant subdomain |
+| `saml_metadata_document_xml_content` | — | SAML metadata XML (contents) |
+| `allowed_ingress_cidr` | — | The only CIDR allowed to reach the lab; `0.0.0.0/0` is rejected |
+| `deploy_aws_invalidation_feature` | `true` | Session-invalidation permissions |
+| `ssh_public_key` | `""` | Your public key; empty generates a key pair |
+| `region` | `us-east-1` | Lab region |
+| `vpc_cidr` | `10.0.0.0/16` | VPC CIDR |
 
-- The security group allows access from 0.0.0.0/0 for testing purposes
-- In production, restrict access to specific IP ranges
-- RDS is publicly accessible for testing - disable in production
-- SSH keys should be managed securely
-- Consider enabling MFA for sensitive operations
+## Teardown
 
-## Cleanup
-
-To destroy all resources:
 ```bash
 terraform destroy
 ```
 
-**Note**: Ensure you want to delete all resources before confirming the destroy operation.
+Everything is removed, including the secret (no recovery window) and the
+database (no final snapshot). Remove the application from Britive and delete
+`lab-key.pem` afterwards.

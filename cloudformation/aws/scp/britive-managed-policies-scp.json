@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OnlyBritiveIntegrationRoleManagesBritivePolicies",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "arn:aws:iam::*:policy/britive/managed/*",
+      "Condition": {
+        "StringNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::*:role/britive-<tenant>-integration-role"
+        }
+      }
+    },
+    {
+      "Sid": "OnlyBritiveIntegrationRoleManagesBritiveRoles",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "arn:aws:iam::*:role/britive/managed/*",
+      "Condition": {
+        "StringNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::*:role/britive-<tenant>-integration-role"
+        }
+      }
+    }
+  ]
+}

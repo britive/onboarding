@@ -1,16 +1,24 @@
-output "master_account_id" {
-  description = "The AWS Account ID where the master stack is deployed"
-  value       = data.aws_caller_identity.current.account_id
+output "management_account_id" {
+  description = "Enter as 'Management Account ID' in the Britive AWS application."
+  value       = module.britive_management_account.account_id
 }
 
 output "identity_provider_name" {
-  description = "The name of the Britive SAML identity provider"
-  value       = "britive-${var.tenant_name}"
+  description = "Enter as 'Identity Provider Name'. The same name exists in every member account."
+  value       = module.britive_management_account.saml_provider_name
 }
 
 output "integration_role_name" {
-  description = "The name of the Britive integration role"
-  value       = "britive-${var.tenant_name}-integration-role"
+  description = "Enter as 'Integration Role Name'. The same name exists in every member account."
+  value       = module.britive_management_account.integration_role_name
 }
 
-data "aws_caller_identity" "current" {}
+output "backend_connection_duration_hours" {
+  description = "Enter as 'Duration of backend connection'."
+  value       = module.britive_management_account.backend_connection_duration_hours
+}
+
+output "stack_set_name" {
+  description = "StackSet deploying the member-account resources."
+  value       = aws_cloudformation_stack_set.britive_resources.name
+}

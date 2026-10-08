@@ -1,112 +1,80 @@
-# Britive Single Account Stack - Terraform
+# Britive AWS integration — single account (Terraform)
 
-This Terraform configuration deploys Britive integration resources to a single AWS account.
+Creates what Britive needs in one AWS account: the SAML identity provider and
+the integration role, with the optional session-invalidation, Access Builder
+and AI-scanning permissions, and optionally four sample JIT roles for a
+demonstration. Equivalent to the CloudFormation templates in
+[`../../../cloudformation/aws/single-account-stack/`](../../../cloudformation/aws/single-account-stack/).
 
-## Overview
-
-This directory provides **two variants** matching the CloudFormation templates:
-
-### 1. Basic Integration (default - `main.tf`)
-Matches `britive_integration_resources.yaml`
-- A SAML provider for Britive authentication
-- A Britive integration role with necessary permissions (3600s max session)
-- Optional AWS Invalidation feature permissions
-
-### 2. Integration with Test Roles (`main-with-roles.tf.example`)
-Matches `britive_integration_with_roles.yaml`
-- Everything from the basic integration
-- Extended max session duration (10800s)
-- Four test roles for JIT access demonstration:
-  - Readonly-admin-role
-  - Poweruser-role
-  - EC2-Fullaccess-role
-  - S3-Fullaccess-role
-
-This is the simplest deployment option, suitable for:
-- Single AWS accounts
-- Testing and evaluation
-- Small deployments
+Use this for a standalone account, a proof of concept, or the **management
+account** of an organization (service-managed StackSets cannot target it —
+see [`../organization-stackset/`](../organization-stackset/) for the rest of
+the organization).
 
 ## Prerequisites
 
-- Terraform >= 1.0
-- AWS CLI configured with appropriate credentials
-- SAML metadata document from your Britive tenant
+- Terraform >= 1.5 and AWS credentials for the target account with
+  permission to create IAM roles, policies and SAML providers
+- The SAML metadata XML from your tenant: **System Administration → Security
+  → SAML Configurations → Download SAML Metadata**. It identifies your
+  tenant, so keep it out of version control, but it contains only the
+  identity provider's public signing certificate.
+- Product steps and prerequisites:
+  [Britive AWS onboarding guide](https://docs.britive.com/docs/application-onboarding-guides)
 
-## Files
+## Deploy
 
-- `main.tf` - Basic integration resources (SAML provider and integration role)
-- `main-with-roles.tf.example` - Alternative main with test roles included
-- `outputs.tf` - Output values for basic integration
-- `outputs-with-roles.tf.example` - Alternative outputs for integration with test roles
-- `variables.tf` - Input variable definitions
-- `terraform.tfvars.example` - Example variables file
-
-## Usage
-
-### Option A: Basic Integration (default)
-
-1. Copy the example variables file:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   ```
-
-2. Edit `terraform.tfvars` with your values:
-   - `tenant_name` - Your Britive tenant name (without .britive-app.com)
-   - `saml_metadata_document_xml_content` - SAML metadata XML from Britive
-   - `deploy_aws_invalidation_feature` - Enable/disable invalidation feature (default: true)
-
-3. Initialize and apply:
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-### Option B: Integration with Test Roles
-
-1. Replace the main configuration with the test roles version:
-   ```bash
-   mv main.tf main-basic.tf.bak
-   mv main-with-roles.tf.example main.tf
-   mv outputs.tf outputs-basic.tf.bak
-   mv outputs-with-roles.tf.example outputs.tf
-   ```
-
-2. Follow steps 1-3 from Option A above
-
-## Resources Created
-
-- `aws_iam_saml_provider.britive` - SAML identity provider for Britive
-- `aws_iam_role.britive_integration` - Integration role with read-only access to IAM and Organizations
-- `aws_iam_role_policy.aws_invalidation` - Optional inline policy for AWS invalidation feature
-
-## Outputs
-
-- `saml_provider_arn` - ARN of the SAML provider
-- `saml_provider_name` - Name of the SAML provider
-- `integration_role_arn` - ARN of the integration role
-- `integration_role_name` - Name of the integration role
-
-## Permissions
-
-The integration role includes:
-- `IAMReadOnlyAccess` - Read-only access to IAM resources
-- `AWSOrganizationsReadOnlyAccess` - Read-only access to AWS Organizations
-
-If AWS Invalidation is enabled, additional permissions are added:
-- Policy management operations under `arn:aws:iam::*:policy/britive/managed/*`
-
-## Integration with Britive
-
-After deployment:
-1. Note the SAML provider ARN and integration role name from the outputs
-2. Configure these values in your Britive tenant
-3. Test the integration by attempting to access AWS through Britive
-
-## Cleanup
-
-To destroy all resources:
 ```bash
-terraform destroy
+cp terraform.tfvars.example terraform.tfvars   # set tenant_name and the flags
+terraform init
+terraform apply -var="saml_metadata_document_xml_content=$(cat britive-saml-metadata.xml)"
 ```
+
+Set `deploy_sample_roles = true` for the four demonstration roles
+(`Readonly-admin-role`, `Poweruser-role`, `EC2-Fullaccess-role`,
+`S3-Fullaccess-role`). They are plain IAM roles trusting the Britive SAML
+provider; delete them, or set the flag back to `false`, before production use.
+
+## Configure the application in Britive
+
+**System Administration → Tenant Applications → Create Application → AWS**
+(or **AWS Standalone** for an account outside an organization), then map the
+outputs:
+
+| Britive field | Terraform output |
+| ------------- | ---------------- |
+| Management Account ID / Account ID | `account_id` |
+| Identity Provider Name | `saml_provider_name` |
+| Integration Role Name | `integration_role_name` (the name, not the ARN) |
+| Duration of backend connection (hours) | `backend_connection_duration_hours` |
+| Region | the region you deploy workloads in |
+
+**Save and Test** runs the first scan. The sample roles (if created) then
+appear as permissions you can attach to a profile.
+
+## Variables
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `tenant_name` | — | Tenant subdomain |
+| `saml_metadata_document_xml_content` | — | SAML metadata XML (contents) |
+| `deploy_aws_invalidation_feature` | `true` | Session-invalidation permissions on `policy/britive/managed/*` |
+| `deploy_access_builder` | `false` | Access Builder permissions on `role/britive/managed/*` |
+| `deploy_ai_identity_scanning` | `false` | Attach `AmazonBedrockReadOnly` |
+| `max_session_duration` | `3600` | Integration role session length (seconds) |
+| `deploy_sample_roles` | `false` | Four demonstration JIT roles |
+| `region` | `us-east-1` | Provider region (IAM is global) |
+
+## Protecting the Britive-managed paths
+
+With session invalidation enabled, apply the SCP in
+[`../../../cloudformation/aws/scp/`](../../../cloudformation/aws/scp/) from
+the management account so only the integration role can modify
+`policy/britive/managed/*`.
+
+## Update and remove
+
+Re-run `terraform apply` with new values — for example after a SAML
+certificate rotation, pass the new metadata file. `terraform destroy` removes
+everything, including the sample roles; remove the AWS application from
+Britive first.

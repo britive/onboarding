@@ -1,86 +1,30 @@
 terraform {
+  required_version = ">= 1.5"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.40, < 7.0"
     }
   }
 }
 
+# Run with credentials for the organization's management account (or a
+# delegated administrator for CloudFormation StackSets).
 provider "aws" {
   region = var.region
 }
 
-# SAML Provider
-resource "aws_iam_saml_provider" "britive" {
-  name                   = "britive-${var.tenant_name}"
-  saml_metadata_document = var.saml_metadata_document_xml_content
-}
+# The management account itself: service-managed StackSets never deploy to
+# it, yet the Britive "AWS" application type requires the identity provider
+# and integration role there. See ../modules/britive-integration.
+module "britive_management_account" {
+  source = "../modules/britive-integration"
 
-# Integration Role
-resource "aws_iam_role" "britive_integration" {
-  name                 = "britive-${var.tenant_name}-integration-role"
-  description          = "Britive Integration Role"
-  max_session_duration = 3600
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sts:AssumeRoleWithSAML",
-          "sts:SetSourceIdentity",
-          "sts:TagSession"
-        ]
-        Principal = {
-          Federated = aws_iam_saml_provider.britive.arn
-        }
-        Condition = {
-          StringEquals = {
-            "SAML:aud" = "https://signin.aws.amazon.com/saml"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# Attach IAM ReadOnly Access policy
-resource "aws_iam_role_policy_attachment" "britive_integration_iam_readonly" {
-  role       = aws_iam_role.britive_integration.name
-  policy_arn = "arn:aws:iam::aws:policy/IAMReadOnlyAccess"
-}
-
-# Attach Organizations ReadOnly Access policy
-resource "aws_iam_role_policy_attachment" "britive_integration_orgs_readonly" {
-  role       = aws_iam_role.britive_integration.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess"
-}
-
-# AWS Invalidation Feature Policy (conditional)
-resource "aws_iam_role_policy" "aws_invalidation" {
-  count = var.deploy_aws_invalidation_feature ? 1 : 0
-
-  name = "aws-invalidation"
-  role = aws_iam_role.britive_integration.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "iam:CreatePolicy",
-          "iam:DeletePolicy",
-          "iam:CreatePolicyVersion",
-          "iam:DeletePolicyVersion",
-          "iam:GetPolicy",
-          "iam:GetPolicyVersion",
-          "iam:ListPolicyVersions"
-        ]
-        Resource = "arn:aws:iam::*:policy/britive/managed/*"
-      }
-    ]
-  })
+  tenant_name                        = var.tenant_name
+  saml_metadata_document_xml_content = var.saml_metadata_document_xml_content
+  deploy_aws_invalidation_feature    = var.deploy_aws_invalidation_feature
+  deploy_access_builder              = var.deploy_access_builder
+  deploy_ai_identity_scanning        = var.deploy_ai_identity_scanning
+  max_session_duration               = var.max_session_duration
 }
