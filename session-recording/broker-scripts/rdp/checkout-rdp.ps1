@@ -1,28 +1,56 @@
-$userEmail = $env:user_email
+# Checkout: runs on the Windows target itself (for example via SSM Run Command).
+# Creates a temporary local administrator with a random password and returns a
+# signed Guacamole token that opens a recorded RDP session as that user.
+# Pair with checkin-rdp.ps1.
+#
+# Environment: user_email, ResourceName, hostname, port, json_secret_key
+#              (32 hex chars), url, expiration (seconds, default 3600)
+
+Add-Type -AssemblyName System.Web
+
+$userEmail    = $env:user_email
 $resourceName = $env:ResourceName
 
 $username = $userEmail.Split("@")[0]
 $username = $username.Substring(0, [Math]::Min($username.Length, 16))
 $username = "$username-rec"
 
-$fullName = $userEmail
-$description = "Local admin account created for Britive POV"
+$fullName    = $userEmail
+$description = "Local admin account created by Britive"
 
-$logFile = "logs\${resourceName}.log"
+$logDir  = Join-Path $env:ProgramData "Britive\logs"
+$logFile = Join-Path $logDir "$resourceName.log"
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
+# CSPRNG password that satisfies Windows complexity: upper, lower, digit, special.
 function GenerateRandomPassword {
-    $length = 12
-    $validChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&+=_'
-    $passwordChars = @()
-    $rand = New-Object System.Random
+    $upper   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    $lower   = 'abcdefghijklmnopqrstuvwxyz'
+    $digits  = '0123456789'
+    $special = '@#$%^&+=_'
+    $all     = $upper + $lower + $digits + $special
 
-    for ($i = 0; $i -lt $length; $i++) {
-        $index = $rand.Next(0, $validChars.Length)
-        $passwordChars += $validChars[$index]
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $buf = [byte[]]::new(4)
+
+    function Pick([string]$set) {
+        $rng.GetBytes($buf)
+        $set[[BitConverter]::ToUInt32($buf, 0) % $set.Length]
     }
 
-    return -join $passwordChars
+    $chars = @((Pick $upper), (Pick $lower), (Pick $digits), (Pick $special))
+    for ($i = 0; $i -lt 12; $i++) { $chars += Pick $all }
+
+    # Fisher-Yates shuffle so the guaranteed classes are not always first
+    for ($i = $chars.Length - 1; $i -gt 0; $i--) {
+        $rng.GetBytes($buf)
+        $j = [BitConverter]::ToUInt32($buf, 0) % ($i + 1)
+        $tmp = $chars[$i]; $chars[$i] = $chars[$j]; $chars[$j] = $tmp
+    }
+
+    $rng.Dispose()
+    return -join $chars
 }
 
 function SignData {
@@ -31,8 +59,7 @@ function SignData {
     $dataBytes = [System.Text.Encoding]::UTF8.GetBytes($data)
     $hashBytes = $hmac.ComputeHash($dataBytes)
     $hmac.Dispose()
-    $combined = $hashBytes + $dataBytes
-    return $combined
+    return $hashBytes + $dataBytes
 }
 
 function EncryptData {
@@ -50,16 +77,24 @@ function EncryptData {
 }
 
 try {
-    $userPassword = GenerateRandomPassword
+    $SECRET_KEY = $env:json_secret_key
+    if (-not $SECRET_KEY -or $SECRET_KEY -notmatch '^[0-9A-Fa-f]{32}$') {
+        throw "json_secret_key must be 32 hex characters (openssl rand -hex 16)"
+    }
 
+    $userPassword   = GenerateRandomPassword
     $securePassword = ConvertTo-SecureString $userPassword -AsPlainText -Force
 
-    New-LocalUser -Name $username -Password $securePassword -FullName $fullName -Description $description | Out-Null
+    if (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) {
+        Set-LocalUser -Name $username -Password $securePassword | Out-Null
+    } else {
+        New-LocalUser -Name $username -Password $securePassword -FullName $fullName -Description $description | Out-Null
+    }
+    if (-not (Get-LocalGroupMember -Group "Administrators" -Member $username -ErrorAction SilentlyContinue)) {
+        Add-LocalGroupMember -Group "Administrators" -Member $username | Out-Null
+    }
 
-    Add-LocalGroupMember -Group "Administrators" -Member $username | Out-Null
-
-    Add-Content -Path $logFile -Value "$timestamp SUCCESS: Created local admin user '$username' with resource '$resourceName'." | Out-Null
-
+    Add-Content -Path $logFile -Value "$timestamp SUCCESS: Created local admin user '$username' with resource '$resourceName'."
 
     $connection = @{
         protocol   = "rdp"
@@ -80,28 +115,24 @@ try {
     $epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $expires = ([int64]$epoch + [int64]$expiration) * 1000
 
+    # Guacamole username is the Britive email, like every other checkout script
     $jsonObject = @{
-        username    = "$username-$expires"
-        expires     = $expires
+        username    = $userEmail
+        expires     = "$expires"
         connections = @{ $resourceName = $connection }
     }
 
     $JSON = $jsonObject | ConvertTo-Json -Depth 10 -Compress
-
-    $SECRET_KEY = $env:json_secret_key
 
     $keyBytes = [byte[]]::new($SECRET_KEY.Length / 2)
     for ($i = 0; $i -lt $SECRET_KEY.Length; $i += 2) {
         $keyBytes[$i / 2] = [Convert]::ToByte($SECRET_KEY.Substring($i, 2), 16)
     }
 
-    $signedData = SignData -data $JSON -key $keyBytes
-
+    $signedData    = SignData -data $JSON -key $keyBytes
     $encryptedData = EncryptData -data $signedData -key $keyBytes
-
-    $base64Token = [Convert]::ToBase64String($encryptedData)
-
-    $TOKEN = [System.Web.HttpUtility]::UrlEncode($base64Token)
+    $base64Token   = [Convert]::ToBase64String($encryptedData)
+    $TOKEN         = [System.Web.HttpUtility]::UrlEncode($base64Token)
 
     $result = @{
         token = $TOKEN
@@ -114,4 +145,5 @@ catch {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Add-Content -Path $logFile -Value "$timestamp ERROR: $_"
     Write-Host "ERROR: $_"
+    exit 1
 }

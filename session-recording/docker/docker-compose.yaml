@@ -1,40 +1,41 @@
+---
+# Legacy Guacamole session-recording stack. Secrets are read from ./.env
+# (copy .env.example); nothing in this file needs editing. See README.md.
 services:
   postgres:
     image: postgres:16
     hostname: postgres
     container_name: postgres
+    restart: always
     environment:
       POSTGRES_DB: guacamole_db
       POSTGRES_USER: guacamole
-      POSTGRES_PASSWORD: guacamole
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
     volumes:
-      - initdb:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "5432:5432"
+      # Generated once with initdb.sh, see README.md step 3.
+      - ./initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+      - pgdata:/var/lib/postgresql/data
   broker:
     image: broker-docker:latest
     restart: always
     container_name: britive-broker
     environment:
-#      britive.broker.authentication.token: demo
-      BRITIVE_TOKEN: BRITIVE_TOKEN
-    ports:
-      - "2222:22"
+      BRITIVE_TOKEN: "${BRITIVE_TOKEN:-}"
     volumes:
-      - ./broker-ssh:/root/.ssh:ro
+      # Writable: the remote-*-ssh.sh scripts persist accepted target host
+      # keys to known_hosts here.
+      - ./broker-ssh:/root/.ssh
   guacd:
-    image: guacamole/guacd
+    image: guacamole/guacd:1.5.5
     hostname: guacd
     container_name: guacd
     user: "1000:1001"
     mem_limit: 512m
     restart: always
-    ports:
-      - "4822:4822"
     volumes:
       - ./recordings:/home/guacd/recordings
   guacamole:
-    image: guacamole/guacamole
+    image: guacamole/guacamole:1.5.5
     container_name: guacamole
     mem_limit: 512m
     restart: always
@@ -42,34 +43,20 @@ services:
     environment:
       GUACD_HOSTNAME: guacd
       GUACD_PORT: "4822"
-      # https://guacamole.apache.org/doc/gug/json-auth.html#configuring-guacamole-to-accept-encrypted-json
-      JSON_SECRET_KEY: "<json secret key goes here>"
+      # https://guacamole.apache.org/doc/gug/json-auth.html
+      JSON_SECRET_KEY: "${JSON_SECRET_KEY:?set JSON_SECRET_KEY in .env}"
       EXTENSION_PRIORITY: "json, *"
       RECORDING_SEARCH_PATH: /home/guacamole/recordings
       POSTGRESQL_HOSTNAME: postgres
       POSTGRESQL_DATABASE: guacamole_db
       POSTGRESQL_USERNAME: guacamole
-      POSTGRESQL_PASSWORD: guacamole
+      POSTGRESQL_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
     ports:
       - "8080:8080"
     volumes:
       - ./recordings:/home/guacamole/recordings
-      - initdb:/opt/guacamole/extensions/guacamole-auth-jdbc/postgresql/schema:ro
     depends_on:
       - guacd
       - postgres
-  guacenc:
-    image: tancou/guacenc
-    container_name: guacenc
-    mem_limit: 512m
-    restart: always
-    environment:
-      AUTOCONVERT: "true"
-      PARALLEL: "true"
-    depends_on:
-      - guacd
-      - guacamole
-    volumes:
-      - ./recordings:/record
 volumes:
-  initdb:
+  pgdata:

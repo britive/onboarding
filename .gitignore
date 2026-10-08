@@ -56,6 +56,9 @@ python/britive/data_input.json
 # Broker SSH key pair for the session-recording docker variant — both halves.
 session-recording/docker/broker-ssh/*
 !session-recording/docker/broker-ssh/.gitkeep
+# Generated Guacamole DB schema and the recorded sessions themselves.
+session-recording/docker/initdb.sql
+session-recording/docker/recordings/
 # Filled-in CloudFormation parameter files and downloaded SAML metadata.
 # Tracked templates are named parameters.example.json.
 cloudformation/**/parameters.json
