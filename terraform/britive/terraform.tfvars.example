@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored). Credentials go in the environment:
+#   export BRITIVE_TENANT=https://your-tenant.britive-app.com
+#   export BRITIVE_TOKEN=<API token with rights over profiles, policies and tags>
+
+application_name = "AWS Standalone"      # as named in System Administration > Tenant Applications
+environment_name = "<account name as the application scan shows it>"
+
+team_tag_name     = "aws-developers"
+team_members      = ["alice@example.com", "bob@example.com"]
+approver_tag_name = "aws-approvers"
+allowed_ip_ranges = "10.0.0.0/8,192.168.0.0/16"

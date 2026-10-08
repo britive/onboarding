@@ -40,7 +40,10 @@ locals {
     "resourcemanager.projects.list",
     "resourcemanager.projects.setIamPolicy",
   ]
+  # The organization guide lists four; the projects-only guide adds
+  # bigquery.datasets.get (read-only), included so both scopes work.
   bigquery_permissions = [
+    "bigquery.datasets.get",
     "bigquery.datasets.update",
     "bigquery.tables.get",
     "bigquery.tables.getIamPolicy",
@@ -73,20 +76,6 @@ locals {
 
   project_id     = var.create_project ? google_project.britive[0].project_id : data.google_project.existing[0].project_id
   project_number = var.create_project ? google_project.britive[0].number : data.google_project.existing[0].number
-}
-
-check "scope_id_set" {
-  assert {
-    condition     = var.access_scope == "organization" || var.scope_id != null
-    error_message = "scope_id is required when access_scope is \"folder\" or \"project\"."
-  }
-}
-
-check "tenant_set_for_wif" {
-  assert {
-    condition     = !local.wif || var.britive_tenant_url != null || var.britive_issuer_url != null
-    error_message = "britive_tenant_url is required when integration_type is \"wif\"."
-  }
 }
 
 # ------------------------------------------------------------------------ project
@@ -148,11 +137,20 @@ resource "google_organization_iam_member" "britive" {
   member = "serviceAccount:${google_service_account.britive.email}"
 }
 
+# A missing scope_id fails the plan here (a precondition stops apply; a check
+# block would only warn and then create the binding on "folders/none").
 resource "google_folder_iam_member" "britive" {
   count  = var.access_scope == "folder" ? 1 : 0
   folder = "folders/${trimprefix(coalesce(var.scope_id, "none"), "folders/")}"
   role   = google_organization_iam_custom_role.britive.id
   member = "serviceAccount:${google_service_account.britive.email}"
+
+  lifecycle {
+    precondition {
+      condition     = var.scope_id != null
+      error_message = "scope_id (the folder number) is required when access_scope is \"folder\"."
+    }
+  }
 }
 
 resource "google_project_iam_member" "britive" {
@@ -160,4 +158,11 @@ resource "google_project_iam_member" "britive" {
   project = coalesce(var.scope_id, "none")
   role    = google_organization_iam_custom_role.britive.id
   member  = "serviceAccount:${google_service_account.britive.email}"
+
+  lifecycle {
+    precondition {
+      condition     = var.scope_id != null
+      error_message = "scope_id (the project ID) is required when access_scope is \"project\"."
+    }
+  }
 }

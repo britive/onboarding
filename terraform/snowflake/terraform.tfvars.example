@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+# Account identifier <org>-<account>, e.g. from https://<org>-<account>.snowflakecomputing.com
+snowflake_organization = "myorg"
+snowflake_account      = "myaccount"
+
+# Administrator Terraform signs in as, with key-pair authentication.
+snowflake_admin_user             = "TERRAFORM_ADMIN"
+snowflake_admin_private_key_file = "~/.ssh/snowflake_admin.p8"
+# snowflake_admin_private_key_passphrase = "..."
+snowflake_admin_role = "ACCOUNTADMIN" # ORGADMIN when grant_orgadmin = true
+
+# Public key of the key pair Britive will use (private half goes into the Britive application).
+britive_public_key_file = "~/.ssh/britive_snowflake.pub"
+
+# britive_role_name = "BRITIVEROLE"
+# britive_user_name = "BRITIVEUSER"
+grant_orgadmin = false # true only for the Snowflake organization application

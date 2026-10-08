@@ -45,11 +45,19 @@ EOF
   read -rp "Press ENTER once delegation is saved..."
 
   terraform -chdir="$WORKSPACE_DIR" init -input=false
+  # The plan file holds the generated password; remove it however this exits.
+  trap 'rm -f "$WORKSPACE_DIR/tfplan"' EXIT
   # Delegation takes a few minutes to take effect; until then the plan fails with
-  # unauthorized_client. Retry the plan for up to 10 minutes, then apply what it shows.
+  # unauthorized_client. Retry only that error, for up to 10 minutes.
   for attempt in $(seq 1 30); do
-    if terraform -chdir="$WORKSPACE_DIR" plan -input=false -out=tfplan; then
+    if terraform -chdir="$WORKSPACE_DIR" plan -input=false -out=tfplan 2> "$WORKSPACE_DIR/plan.err"; then
+      rm -f "$WORKSPACE_DIR/plan.err"
       break
+    fi
+    if ! grep -q unauthorized_client "$WORKSPACE_DIR/plan.err"; then
+      cat "$WORKSPACE_DIR/plan.err" >&2
+      rm -f "$WORKSPACE_DIR/plan.err"
+      fail "the Workspace plan failed for a reason other than pending delegation (see above)"
     fi
     [ "$attempt" -lt 30 ] || fail "Workspace still refuses the service account after 10 minutes: check the client ID and scopes above"
     echo "waiting for domain-wide delegation to take effect (attempt $attempt/30)..."
