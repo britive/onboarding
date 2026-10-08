@@ -23,18 +23,17 @@
 #
 # Build (multi-arch recommended so it runs on Fargate ARM64 and x86 nodes):
 #   docker buildx build --platform linux/amd64,linux/arm64 \
-#     --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
-#     -t <your-registry>/britive-bridge-custom:v2.1.0-r1 --push .
+#     --build-arg BASE_IMAGE=britive/bridge:v2.3.1 \
+#     -t <your-registry>/britive/bridge:v2.3.1-r1 --push .
 #
 # Or single-arch for local use:
 #   docker build -t britive-bridge-custom:local .
 
-# Pinned, never :latest. That tag tracks the newest release across MAJOR
-# versions, so it moves on every release and will eventually point at a major
-# these templates do not support. A v1 deployment must override this with
-# britive/bridge:v1.0.2 -- pointing a v1 template at a v2 image crash-loops on
-# the datastore v1 never had.
-ARG BASE_IMAGE=britive/bridge:v2.1.0
+# Pinned, never :latest. That tag tracks the newest release and moves without
+# notice, so two builds of the "same" image can differ. Check what is
+# published before bumping:
+#   curl -s https://hub.docker.com/v2/repositories/britive/bridge/tags | jq -r '.results[].name'
+ARG BASE_IMAGE=britive/bridge:v2.3.1
 FROM ${BASE_IMAGE}
 
 # Root needed to install packages; the base image's own entrypoint/user is
@@ -102,15 +101,15 @@ RUN set -eu; \
     id bridge >/dev/null 2>&1 || { echo "MISSING: 'bridge' user in base image — adjust the USER directive" >&2; exit 1; }; \
     echo "All required utilities present."
 
-# ── Bridge v2: bake the configuration in (REQUIRED for v2, ignored by v1) ────
-# Bridge v2 reads /etc/britive-bridge/config.yaml and every protocol in it is
-# OFF by default — the process refuses to start unless at least one is enabled,
-# and it validates the tenant from the FILE before environment overrides apply.
-# There is no way to supply this purely through environment variables, so a v2
-# deployment must carry its config in the image.
+# ── Bake the configuration in (REQUIRED on ECS Fargate) ─────────────────────
+# Bridge reads /etc/britive-bridge/config.yaml; every protocol in it is OFF by
+# default and the process refuses to start unless at least one is enabled.
+# Environment variables can complete or override the file but not replace it.
+# Fargate has no volume to mount a file from, so an ECS deployment carries its
+# config in the image. Docker Compose and Kubernetes bind-mount it instead and
+# can leave BAKE_CONFIG=false.
 #
 # Enable by building with:  --build-arg BAKE_CONFIG=true
-# Leave at the default for v1, which does not use this file.
 #
 # BRIDGE_CONFIG names a file inside THIS build context (default bridge.yaml).
 # It is always copied to a temp path so the COPY is valid whether or not the
@@ -136,9 +135,10 @@ RUN set -eux; \
     fi; \
     rm -f /tmp/bridge-config.yaml
 
-# ── Bridge v2: trust the AWS RDS certificate authorities ────────────────────
-# The v2 proxy verifies a target database's certificate when a checkout sets
-# target_tls=true; without these roots it fails with
+# ── Trust the AWS RDS certificate authorities ───────────────────────────────
+# The proxy verifies a target database's certificate when a checkout sets
+# target_tls=true, and the datastore connection verifies RDS when the ECS
+# stack's DbSslMode is verify-full; without these roots both fail with
 # "x509: certificate signed by unknown authority".
 #
 # update-ca-certificates prints

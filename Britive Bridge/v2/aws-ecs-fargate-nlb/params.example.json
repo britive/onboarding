@@ -17,7 +17,7 @@
   },
   {
     "ParameterKey": "ImageUri",
-    "ParameterValue": "<account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:v2.1.0-r1"
+    "ParameterValue": "<account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:v2.3.1-r1"
   },
   {
     "ParameterKey": "CpuArchitecture",
@@ -28,8 +28,12 @@
     "ParameterValue": "<arn:aws:acm:<region>:<account>:certificate/xxxx - must be in the SAME region as the NLB>"
   },
   {
+    "ParameterKey": "BridgeUrl",
+    "ParameterValue": "https://bridge.example.com"
+  },
+  {
     "ParameterKey": "DbHost",
-    "ParameterValue": "<postgres endpoint hostname>"
+    "ParameterValue": "<RdsEndpoint output of rds-postgres.yaml>"
   },
   {
     "ParameterKey": "DbPort",
@@ -37,7 +41,11 @@
   },
   {
     "ParameterKey": "DbSecretArn",
-    "ParameterValue": "<arn:aws:secretsmanager:<region>:<account>:secret:xxxx - JSON secret containing a 'password' key>"
+    "ParameterValue": "<DbSecretArn output of rds-postgres.yaml - JSON secret containing a 'password' key>"
+  },
+  {
+    "ParameterKey": "DbSslMode",
+    "ParameterValue": "verify-full"
   },
   {
     "ParameterKey": "BrokerTenantSubdomain",
@@ -45,7 +53,7 @@
   },
   {
     "ParameterKey": "BrokerAuthToken",
-    "ParameterValue": "<broker pool token from Britive: Admin > Access Broker > Broker Pools>"
+    "ParameterValue": "<broker pool token from Britive: System Administration > Brokers and Broker Pools, or platform-setup/quick-setup.py>"
   },
   {
     "ParameterKey": "EncryptionKeyB64",
@@ -56,8 +64,12 @@
     "ParameterValue": ""
   },
   {
+    "ParameterKey": "EnableAwsBrokerScripts",
+    "ParameterValue": "false"
+  },
+  {
     "ParameterKey": "StackNamePrefix",
-    "ParameterValue": "britive-bridge"
+    "ParameterValue": "britive-bridge-v2"
   },
   {
     "ParameterKey": "TaskCpu",

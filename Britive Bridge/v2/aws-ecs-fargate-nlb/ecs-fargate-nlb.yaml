@@ -8,9 +8,9 @@ Description: >
   Ingress is gated by a managed prefix list plus the VPC CIDR. MSSQL has no
   native listener (ECS caps a service at 5 load-balancer registrations: 1 web +
   4 native) but stays reachable through the browser SQL client. PostgreSQL for
-  the Bridge datastore is NOT created here - supply an existing instance via
-  DbHost / DbPort / DbSecretArn. Secrets live in Secrets Manager and are
-  injected at runtime.
+  the Bridge datastore is a SEPARATE stack (rds-postgres.yaml) whose outputs
+  feed DbHost / DbPort / DbSecretArn. Every secret is injected from Secrets
+  Manager at runtime; none is visible in the task definition.
 
 Parameters:
   StackNamePrefix:
@@ -48,9 +48,11 @@ Parameters:
     Type: String
     AllowedPattern: ".+"
     Description: >
-      Container image URI in YOUR ECR registry, built with ecr/build-and-push.sh
-      - that image bakes /etc/britive-bridge/config.yaml and the broker script
-      dependencies in, which the upstream britive/bridge image does not carry.
+      Container image URI in YOUR ECR registry, built with
+      ../../custom-image/build-and-push.sh (BAKE_CONFIG=true WITH_RDS_CA=true).
+      That image bakes /etc/britive-bridge/config.yaml in, which Fargate has no
+      volume to mount from, and adds the broker script dependencies the
+      upstream britive/bridge image does not carry.
       Format: <account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:<tag>.
       Must match CpuArchitecture.
   CpuArchitecture:
@@ -86,18 +88,50 @@ Parameters:
     Description: Fargate task memory in MiB.
   DbHost:
     Type: String
-    Description: PostgreSQL host - endpoint of your existing PostgreSQL instance.
+    Description: PostgreSQL host - the RdsEndpoint output of rds-postgres.yaml, or your own instance.
   DbPort:
     Type: String
     Default: "5432"
-    Description: PostgreSQL port.
+    Description: PostgreSQL port - the RdsPort output of rds-postgres.yaml.
   DbSecretArn:
     Type: String
     Description: >
-      Secrets Manager ARN of the PostgreSQL master credentials — the
-      Secrets Manager secret holding the datastore password. The secret must
-      contain a "password" key (JSON), which is injected as
-      BRIDGE_DATASTORE_PASSWORD.
+      Secrets Manager ARN holding the datastore password - the DbSecretArn
+      output of rds-postgres.yaml. The secret must be JSON with a "password"
+      key, which is injected as BRIDGE_DATASTORE_PASSWORD.
+  DbSslMode:
+    Type: String
+    Default: require
+    AllowedValues:
+      - require
+      - verify-ca
+      - verify-full
+    Description: >
+      TLS mode for the datastore connection. verify-full checks the RDS
+      certificate against the AWS RDS CAs and requires an image built with
+      WITH_RDS_CA=true; require encrypts without verifying.
+  BridgeUrl:
+    Type: String
+    AllowedPattern: "^https://[^/]+$"
+    Description: >
+      Public URL users reach Bridge at (scheme + host, no path, no trailing
+      slash), for example https://bridge.example.com. Used to build the
+      Britive OAuth redirect_uri (<BridgeUrl>/api/auth/britive/callback).
+      Behind the NLB the container serves plain HTTP and receives no
+      X-Forwarded-Proto, so without this Bridge derives http://<host>/... and
+      login only works where the browser upgrades it. Must match the ACM
+      certificate host and the DNS record you create in Step 6.
+  EnableAwsBrokerScripts:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >
+      Grant the task role the AWS permissions that broker checkout/checkin
+      scripts in access-broker-examples use (EC2/RDS discovery, SSM sessions,
+      and read/write of Secrets Manager secrets named <StackNamePrefix>/*).
+      Leave false unless your scripts call the AWS API.
   BrokerTenantSubdomain:
     Type: String
     Description: Britive tenant subdomain, for example demo. Used for broker startup, web login, and automatic license retrieval.
@@ -130,6 +164,7 @@ Parameters:
 
 Conditions:
   HasSshKey: !Not [!Equals [!Ref BrokerSSHPrivateKey, ""]]
+  AwsBrokerScripts: !Equals [!Ref EnableAwsBrokerScripts, "true"]
 
 Resources:
   # ── Logging ───────────────────────────────────────────────────────────────
@@ -146,12 +181,27 @@ Resources:
       ClusterName: !Sub ${StackNamePrefix}-cluster
 
   # ── Secrets Manager ───────────────────────────────────────────────────────
+  # Retained on stack delete: the PostgreSQL datastore outlives this stack and
+  # every checkout payload in it is encrypted with this key. Deleting the key
+  # with the stack would make a restored database unreadable.
   EncryptionKeySecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Name: !Sub ${StackNamePrefix}/bridge/encryption-key-b64
       Description: Bridge checkout encryption key (BRIDGE_ENCRYPTION_KEY_B64). PERMANENT — never rotate.
       SecretString: !Ref EncryptionKeyB64
+
+  # The pool token goes through Secrets Manager rather than a plain
+  # Environment entry so NoEcho actually holds: a plain entry is readable by
+  # anyone with ecs:DescribeTaskDefinition and is recorded in CloudTrail.
+  BrokerAuthTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${StackNamePrefix}/broker/auth-token
+      Description: Britive broker pool token (BRITIVE_BROKER_AUTH_TOKEN).
+      SecretString: !Ref BrokerAuthToken
 
   ClusterTokenSecret:
     Type: AWS::SecretsManager::Secret
@@ -215,6 +265,7 @@ Resources:
                   - !Ref EncryptionKeySecret
                   - !Ref ClusterTokenSecret
                   - !Ref HostKeySeedSecret
+                  - !Ref BrokerAuthTokenSecret
                   - !Ref DbSecretArn
                   - !If [HasSshKey, !Ref BrokerSSHKeySecret, !Ref AWS::NoValue]
 
@@ -250,39 +301,51 @@ Resources:
         # Broker checkout/checkin/scan/rotate scripts (access-broker-examples)
         # call the AWS API from inside the container: discover EC2/RDS targets,
         # run SSM sessions, and write rotated credentials back to Secrets
-        # Manager. Without these, `aws ec2 describe-instances` / rotation calls
-        # fail with AccessDenied mid-checkout.
-        - PolicyName: BrokerTargetDiscoveryAndRotation
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ec2:DescribeInstances
-                  - ec2:DescribeTags
-                  - ec2:DescribeSecurityGroups
-                  - rds:DescribeDBInstances
-                  - rds:DescribeDBClusters
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - ssm:StartSession
-                  - ssm:TerminateSession
-                  - ssm:ResumeSession
-                  - ssm:DescribeInstanceInformation
-                  - ssm:DescribeSessions
-                  - ssm:SendCommand
-                  - ssm:GetCommandInvocation
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                  - secretsmanager:PutSecretValue
-                  - secretsmanager:UpdateSecret
-                  - secretsmanager:DescribeSecret
-                  - secretsmanager:CreateSecret
-                  - secretsmanager:ListSecrets
-                Resource: "*"
+        # Manager. Opt in with EnableAwsBrokerScripts=true. Checkout scripts
+        # run as this role, so the Secrets Manager grant is scoped to secrets
+        # named <StackNamePrefix>/* - put the secrets your scripts use under
+        # that prefix (rds-postgres.yaml already does for the DB secret).
+        - !If
+          - AwsBrokerScripts
+          - PolicyName: BrokerTargetDiscoveryAndRotation
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ec2:DescribeInstances
+                    - ec2:DescribeTags
+                    - ec2:DescribeSecurityGroups
+                    - rds:DescribeDBInstances
+                    - rds:DescribeDBClusters
+                    - ssm:DescribeInstanceInformation
+                    - ssm:DescribeSessions
+                  Resource: "*"
+                - Effect: Allow
+                  Action:
+                    - ssm:StartSession
+                    - ssm:TerminateSession
+                    - ssm:ResumeSession
+                    - ssm:SendCommand
+                    - ssm:GetCommandInvocation
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*
+                    - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:session/*
+                    - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-StartSSHSession
+                    - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript
+                    - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunPowerShellScript
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                    - secretsmanager:PutSecretValue
+                    - secretsmanager:UpdateSecret
+                    - secretsmanager:DescribeSecret
+                    - secretsmanager:CreateSecret
+                  Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${StackNamePrefix}/*
+                - Effect: Allow
+                  Action: secretsmanager:ListSecrets
+                  Resource: "*"
+          - !Ref AWS::NoValue
 
   # ── Security Groups ───────────────────────────────────────────────────────
 
@@ -581,9 +644,9 @@ Resources:
 
   # NOTE: MSSQL has no dedicated NLB target group/listener — ECS caps a
   # service at 5 load balancer registrations (1 web TG + ssh/rdp/mysql/postgres
-  # already use all 5). The container still listens on 1433 (bridge.yaml
-  # enables it) and remains reachable via the browser SQL client; it is just
-  # not fronted by a native TCP listener. See ../README.md and ../config/README.md.
+  # already use all 5). bridge.yaml therefore enables MSSQL in browser mode
+  # only; nothing listens on 1433 and no port is mapped for it. See
+  # README.md ("The 5-registration ceiling").
 
   # ── ECS Task Definition ───────────────────────────────────────────────────
   BridgeTaskDefinition:
@@ -623,15 +686,15 @@ Resources:
               Protocol: tcp
             - ContainerPort: 5432
               Protocol: tcp
-            - ContainerPort: 1433
-              Protocol: tcp
           EntryPoint: !If
             - HasSshKey
             - ["/bin/sh", "-c"]
             - !Ref AWS::NoValue
+          # Write the key to disk, then drop it from the environment so the
+          # checkout scripts the broker spawns do not inherit it.
           Command: !If
             - HasSshKey
-            - - "mkdir -p /home/bridge/.ssh && echo \"$SSH_PRIVATE_KEY\" > /home/bridge/.ssh/id_ed25519 && chmod 700 /home/bridge/.ssh && chmod 600 /home/bridge/.ssh/id_ed25519 && exec /entrypoint.sh"
+            - - "mkdir -p /home/bridge/.ssh && printf '%s\\n' \"$SSH_PRIVATE_KEY\" > /home/bridge/.ssh/id_ed25519 && chmod 700 /home/bridge/.ssh && chmod 600 /home/bridge/.ssh/id_ed25519 && unset SSH_PRIVATE_KEY && exec /entrypoint.sh"
             - !Ref AWS::NoValue
           Environment:
             - Name: BRIDGE_ROLE
@@ -640,8 +703,14 @@ Resources:
               Value: !Ref BrokerTenantSubdomain
             - Name: BRITIVE_BROKER_TENANT_SUBDOMAIN
               Value: !Ref BrokerTenantSubdomain
-            - Name: BRITIVE_BROKER_AUTH_TOKEN
-              Value: !Ref BrokerAuthToken
+            # Explicit OAuth redirect_uri (tree-derived env name, v2.3.0+). See
+            # the BridgeUrl parameter for why the container cannot derive it.
+            - Name: BRIDGE_SERVER_AUTH_BRITIVE_REDIRECT_URL
+              Value: !Sub "${BridgeUrl}/api/auth/britive/callback"
+            # Honour X-Forwarded-For from the NLB ENIs so recordings log real
+            # client IPs; bridge.yaml leaves trusted_proxies empty for this.
+            - Name: BRIDGE_SERVER_TRUSTED_PROXIES
+              Value: !Ref NativeAccessCidr
             # 8080 serves plain HTTP — TLS is terminated at the NLB, not the
             # container (avoids NLB-probe "TLS handshake error EOF" log flood).
             - Name: BRIDGE_TLS_ENABLED
@@ -657,8 +726,10 @@ Resources:
             - Name: BRIDGE_DATASTORE_NAME
               Value: bridge
             - Name: BRIDGE_DATASTORE_SSLMODE
-              Value: require
+              Value: !Ref DbSslMode
           Secrets:
+            - Name: BRITIVE_BROKER_AUTH_TOKEN
+              ValueFrom: !Ref BrokerAuthTokenSecret
             - Name: BRIDGE_ENCRYPTION_KEY_B64
               ValueFrom: !Ref EncryptionKeySecret
             - Name: BRIDGE_CLUSTER_TOKEN
@@ -738,14 +809,22 @@ Outputs:
       Single host for EVERYTHING. Point your Route 53 ALIAS (e.g.
       bridge.example.com) at this value — it serves the web UI (443) and
       all native protocols (ssh 2222, rdp 3389, mysql 3306, postgres 5432).
-  BridgeUrl:
-    Description: External URL for the Bridge web UI / BRIDGE_URL script parameter.
+  PublicUrl:
+    Description: >
+      Public URL for the Bridge web UI and the BRIDGE_URL script parameter
+      (the BridgeUrl parameter; the OAuth redirect_uri is built from it).
+    Value: !Ref BridgeUrl
+  NlbUrl:
+    Description: Raw NLB URL. The certificate will not match; use for pre-DNS smoke tests with curl -k only.
     Value: !Sub https://${BridgeNativeLoadBalancer.DNSName}
   DataFileSystemId:
     Value: !Ref BridgeFileSystem
   EncryptionKeySecretArn:
-    Description: Secrets Manager ARN for BRIDGE_ENCRYPTION_KEY_B64. PERMANENT — never rotate.
+    Description: Secrets Manager ARN for BRIDGE_ENCRYPTION_KEY_B64. PERMANENT — never rotate. Retained on stack delete.
     Value: !Ref EncryptionKeySecret
+  BrokerAuthTokenSecretArn:
+    Description: Secrets Manager ARN for the broker pool token; rotate by updating the BrokerAuthToken parameter.
+    Value: !Ref BrokerAuthTokenSecret
   BrokerSSHKeySecretArn:
     Condition: HasSshKey
     Description: Secrets Manager ARN for the broker SSH private key.

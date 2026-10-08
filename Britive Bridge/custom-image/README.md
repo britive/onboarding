@@ -1,31 +1,39 @@
-# Britive Bridge — Custom Image (extend the broker with utilities)
+# Britive Bridge — Custom Image
 
-The stock `britive/bridge` image ships the **broker** (and `bridge.sh`). The
-broker runs your **checkout/checkin scripts** to create and destroy ephemeral
-credentials. Those scripts call command-line tools — `ssh`, `mysql`, `aws`,
-`jq`, `python3`, … — that aren't all present in the stock image.
+The stock `britive/bridge` image ships the Bridge and the **broker** (with
+`bridge.sh`). The broker runs your **checkout/checkin scripts** to create and
+destroy ephemeral credentials, and those scripts call command-line tools —
+`ssh`, `mysql`, `aws`, `jq`, `python3`, … — that are not all present in the
+stock image.
 
-This directory shows how to build a **custom image** that layers those tools on
-top of `britive/bridge`, then deploy it anywhere the stock image goes
-(**ECS** or **Kubernetes**) by simply pointing at your image instead.
+This directory builds a **custom image** that layers those tools on top of
+`britive/bridge`, and does two more things a v2 deployment needs:
 
-Two worked examples are included:
+- **Bakes `bridge.yaml` into the image** (`BAKE_CONFIG=true`). Required on ECS
+  Fargate, which has no volume to mount a config file from. Docker Compose and
+  Kubernetes bind-mount the file instead and can skip this.
+- **Trusts the AWS RDS certificate authorities** (`WITH_RDS_CA=true`), so
+  database checkouts with `target_tls=true` and a `verify-full` datastore
+  connection succeed.
+
+Two worked examples are included under [`scripts/`](scripts/):
 
 1. **Linux SSH** — JIT SSH access by provisioning a one-time `ed25519` key on a
-   target host and registering a proxied bridge session.
+   target host and registering a proxied Bridge session.
 2. **Aurora MySQL** — JIT database access by creating/dropping a temporary MySQL
-   user (or granting/revoking a role), using master creds from AWS Secrets Manager.
+   user (or granting/revoking a role), using master credentials from AWS
+   Secrets Manager.
 
 ---
 
 ## How it fits together
 
 ```
-            build & push                     deploy (ECS or K8s)
- Dockerfile ─────────────►  your-registry/   ──────────────►  broker container
- (FROM britive/bridge       britive-bridge-                    runs checkout/checkin
-  + ssh/mysql/aws/jq...)    custom:latest                      scripts that now have
-                                                               all the tools they need
+            build & push                      deploy (ECS / Compose / Helm)
+ Dockerfile ─────────────►  your-registry/    ─────────────────►  bridge container
+ (FROM britive/bridge        britive/bridge:                       runs checkout/checkin
+  + ssh/mysql/aws/jq          v2.3.1-r1                            scripts that now have
+  + baked bridge.yaml)                                             all the tools they need
 ```
 
 - The broker still pulls the **actual scripts from the Britive platform** at
@@ -40,7 +48,7 @@ Two worked examples are included:
 ## What the examples need (and the Dockerfile installs)
 
 | Utility | Linux SSH | Aurora MySQL | Notes |
-|---------|:---------:|:------------:|-------|
+| ------- | :-------: | :----------: | ----- |
 | `ssh`, `ssh-keygen` | ✓ | | provision the one-time key on the target |
 | `python3` | ✓ | | JSON-encode the private key in the payload |
 | `base64`, `tr`, `head` | ✓ | ✓ | coreutils — present in most bases, installed to be safe |
@@ -58,108 +66,97 @@ both Fargate ARM64 and mixed Kubernetes nodes.
 ## Prerequisites
 
 - Docker with **buildx** (for multi-arch builds) — `docker buildx version`
-- A container registry you can push to: **Docker Hub** (to keep images and the
-  planned Helm chart in one place — see the [k8s option](../v1/kubernetes/)) or
-  **Amazon ECR**
-- Completed [platform setup](../platform-setup/) and a working Bridge deployment
-  pattern ([ECS](../v1/aws-ecs-fargate-alb/) or [Kubernetes](../v1/kubernetes/))
+- A container registry you can push to: **Amazon ECR** (create it with
+  [`../v2/aws-ecs-fargate-nlb/ecr-repo.yaml`](../v2/aws-ecs-fargate-nlb/ecr-repo.yaml))
+  or **Docker Hub**
+- Completed [platform setup](../platform-setup/)
 
 ---
 
-## 1. Build & push
+## 1. Configure
+
+Edit [`bridge.yaml`](bridge.yaml). At minimum set
+`server.auth.britive.tenant` to your tenant subdomain; the build refuses to
+bake the file while it is still `your-tenant`. The supplied file enables SSH,
+RDP, MySQL and PostgreSQL in native and browser mode and everything else in
+browser mode only — exactly what the ECS template wires. Secrets never go in
+this file; the deployment injects them at runtime.
+
+---
+
+## 2. Build & push
 
 ```bash
-# Docker Hub (run `docker login` first)
-REGISTRY=docker.io/yourorg ./build-and-push.sh
-
-# Amazon ECR (script auto-creates the repo and logs in)
-REGISTRY=<account-id>.dkr.ecr.us-west-2.amazonaws.com ./build-and-push.sh
-```
-
-### Pick the base image deliberately
-
-`BASE_IMAGE` defaults to `britive/bridge:v2.1.0`. **Never set it to
-`britive/bridge:latest`** — that tag tracks the newest release across major
-versions, so it moves on every release and a build is no longer reproducible.
-
-```bash
-# Bridge v2 (current) - bake the config and trust the RDS CAs
-REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com TAG=v2.1.0-r1 \
-  BASE_IMAGE=britive/bridge:v2.1.0 \
+# Amazon ECR (script logs in; creates the repo with immutable tags if missing)
+REGISTRY=<account>.dkr.ecr.<region>.amazonaws.com \
   BAKE_CONFIG=true WITH_RDS_CA=true \
   ./build-and-push.sh
 
-# Bridge v1 (legacy) - MUST override the default
-REGISTRY=docker.io/yourorg TAG=v1.0.2-r1 \
-  BASE_IMAGE=britive/bridge:v1.0.2 \
-  ./build-and-push.sh
+# Docker Hub (run `docker login` first)
+REGISTRY=docker.io/yourorg ./build-and-push.sh
 ```
 
-A v1 template pointed at a v2 image crash-loops on the PostgreSQL datastore
-that v1 never required, so the override matters.
+Defaults: `BASE_IMAGE=britive/bridge:v2.3.1`, `IMAGE_NAME=britive/bridge`,
+`TAG=<base tag>-r1` (so `v2.3.1-r1`). Bump the `-rN` suffix on every rebuild —
+ECR tags are immutable and `latest` is refused.
+
+### Pick the base image deliberately
+
+**Never set `BASE_IMAGE` to `britive/bridge:latest`** — that tag tracks the
+newest release and moves without notice. Check what is published before
+bumping:
+
+```bash
+curl -s 'https://hub.docker.com/v2/repositories/britive/bridge/tags?page_size=100' \
+  | python3 -c 'import json,sys; print(*[t["name"] for t in json.load(sys.stdin)["results"]])'
+```
 
 Local single-arch build (no push) for testing:
 
 ```bash
-docker build -t britive-bridge-custom:local .
-docker run --rm britive-bridge-custom:local \
-  sh -c 'for c in ssh ssh-keygen mysql aws jq python3; do command -v $c || exit 1; done'
+docker build --build-arg BAKE_CONFIG=true -t britive-bridge-custom:local .
+docker run --rm --entrypoint sh britive-bridge-custom:local \
+  -c 'for c in ssh ssh-keygen mysql aws jq python3; do command -v $c || exit 1; done; cat /etc/britive-bridge/config.yaml | head -5'
 ```
+
+Confirm what you expect is actually in the image rather than assuming the
+Dockerfile did it: the `cat` above proves the config was baked, and
+`docker inspect <image> --format '{{.Architecture}}'` proves the architecture
+matches the `CpuArchitecture` you will deploy with.
 
 ---
 
-## 2. Deploy the custom image
+## 3. Deploy the custom image
 
-### ECS (Fargate)
+### ECS Fargate
 
-Use any of the AWS ECS options in this repo and set the image to yours. With the
-CloudFormation templates, that's the `ImageUri` parameter:
-
-```jsonc
-// params.json
-{ "ParameterKey": "ImageUri",
-  "ParameterValue": "docker.io/yourorg/britive-bridge-custom:latest" }
-```
+Set the [`../v2/aws-ecs-fargate-nlb/`](../v2/aws-ecs-fargate-nlb/) stack's
+`ImageUri` parameter to the pushed image.
 
 For the **SSH example**, the broker needs its provisioning private key. The
-[ALB + SSH template](../v1/aws-ecs-fargate-alb-ssh/) already injects a key from
-Secrets Manager to `/home/bridge/.ssh/id_ed25519` — use that template with your
-custom `ImageUri`.
+template injects it from Secrets Manager to `/home/bridge/.ssh/id_ed25519`
+when `BrokerSSHPrivateKey` is set.
 
 For the **MySQL example**, the broker calls AWS Secrets Manager and reaches
-Aurora. Grant the ECS **task role** (named `<StackNamePrefix>-task-role-<region>`
-by the templates) `secretsmanager:GetSecretValue` via an inline policy scoped
-to the DB secret's ARN, and make sure the task's security group can reach the
-Aurora endpoint (3306).
+Aurora. Set the stack's `EnableAwsBrokerScripts=true` (grants the task role
+read/write on secrets under `<StackNamePrefix>/*` plus EC2/RDS discovery), put
+the DB master secret under that prefix, and make sure the task's security group
+can reach the Aurora endpoint (3306).
+
+### Docker Compose
+
+[`../v2/docker-compose/`](../v2/docker-compose/) bind-mounts `bridge.yaml`
+directly, so a custom image is only needed for the extra utilities: set
+`BRIDGE_IMAGE` in `.env` to your pushed image and leave `BAKE_CONFIG=false`.
 
 ### Kubernetes
 
-Ready-to-apply overlays live in [`k8s-overlays/`](k8s-overlays/) — they patch
-the base [Kubernetes deployment](../v1/kubernetes/) with your custom image, the
-SSH-key mount, and the IRSA service account. After the base manifests are up:
-
-```bash
-# 0. Generate the broker's provisioning keypair (once) and install the PUBLIC
-#    key in the provisioning user's authorized_keys on each target host:
-#    ssh-keygen -t ed25519 -f ./bridge_ed25519 -N ''
-
-# 1. Broker SSH provisioning key (Linux SSH example)
-kubectl -n britive-bridge create secret generic bridge-ssh-key \
-  --from-file=id_ed25519=./bridge_ed25519
-
-# 2. IRSA service account (Aurora MySQL example) — edit the role ARN first
-kubectl apply -f k8s-overlays/serviceaccount-irsa.yaml
-
-# 3. Patch the Deployment: your image + SA + SSH mount (strategic merge —
-#    do not use --type merge, it wipes list fields from the base Deployment)
-kubectl -n britive-bridge patch deployment britive-bridge \
-  --type strategic --patch-file k8s-overlays/deployment-patch.yaml
-```
-
-Edit the placeholders first (`image:` → your build,
-`eks.amazonaws.com/role-arn` → your role). Need only one example? Apply just its
-pieces — see [`k8s-overlays/README.md`](k8s-overlays/README.md). The MySQL
-example also needs pod egress to the Aurora endpoint on 3306.
+Use Britive's official Helm chart —
+[learn.britive.com/bridge/deploy/kubernetes/](https://learn.britive.com/bridge/deploy/kubernetes/) —
+and point `image.repository` / `image.tag` at your build. Provide the SSH key
+and cloud credentials the examples need as a Secret and a workload identity
+(IRSA / GKE Workload Identity / AKS workload identity) through the chart's
+values.
 
 ---
 
@@ -171,7 +168,9 @@ example also needs pod egress to the Aurora endpoint on 3306.
 OS username from the user's email, generate a one-time `ed25519` keypair, SSH to
 the target (as a privileged provisioning user) to create the user + install the
 public key (optionally passwordless sudo), then register the session with
-`bridge.sh checkout-create` and return a browser URL. Checkin reverses it.
+`bridge.sh checkout-create` and return a browser URL. Checkin reverses it,
+deleting the Bridge transaction first so a live session ends before the
+credential is removed.
 
 **Broker container needs:** `ssh`, `ssh-keygen`, `base64`, `python3`, `bridge.sh`.
 
@@ -179,8 +178,14 @@ public key (optionally passwordless sudo), then register the session with
 `britivebroker`) reachable by the broker's key, with root or passwordless sudo.
 
 Key script variables (set as Britive profile/permission parameters):
-`BRITIVE_USER_EMAIL`, `TRX`, `BRITIVE_REMOTE_HOST`, `BRIDGE_URL`, `EXPIRATION`,
-and optional `REMOTE_USER`, `PROVISION_HOST/PORT/KEY`, `BRITIVE_SUDO`.
+`BRITIVE_USER_EMAIL`, `TRX`, `BRITIVE_REMOTE_HOST`, `BRIDGE_URL`, `EXPIRATION`
+(seconds), and optional `REMOTE_USER`, `PROVISION_HOST/PORT/KEY`,
+`BRITIVE_SUDO`.
+
+> The scripts use `StrictHostKeyChecking=no` for the provisioning hop because
+> the container has no `known_hosts`. For production, pin the target host key
+> (`-o UserKnownHostsFile=` on a mounted file, or `accept-new` on a persistent
+> volume) and keep checkout and checkin on the same policy.
 
 ### Aurora MySQL — `scripts/aurora-mysql/`
 
@@ -211,12 +216,13 @@ optional `AWS_REGION` (default `us-west-2`).
   over `%`. The SSH provisioning account should be a dedicated, minimal-rights
   user, not a shared admin.
 - **No secrets in the image.** Keys and DB creds are injected at runtime
-  (Secrets Manager / K8s Secret), never baked into the image or committed here.
+  (Secrets Manager / `.env` / Kubernetes Secret), never baked into the image or
+  committed here. `bridge.yaml` is baked in, so it must not contain any either.
 - **Ephemeral by design.** Both examples create credentials on checkout and
   destroy them on checkin; verify checkin runs (and consider the optional
   user-deletion block in the SSH checkin for full teardown).
-- **Pin versions for production.** Replace `:latest` (base and your image) with
-  immutable tags/digests so deployments are reproducible.
+- **Pin versions.** Immutable `-rN` tags on your image and a pinned
+  `BASE_IMAGE` keep deployments reproducible.
 
 ---
 

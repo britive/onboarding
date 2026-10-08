@@ -9,7 +9,8 @@ host in your own ECR registry.
 | File | Purpose |
 | ---- | ------- |
 | `ecr-repo.yaml` | ECR repository for your Bridge image (deploy once) |
-| [`../../custom-image/`](../../custom-image/) | Shared image builder — bakes your config and adds the broker runtime |
+| `rds-postgres.yaml` | RDS PostgreSQL datastore (deploy once; the ECS stack consumes its outputs) |
+| [`../../custom-image/`](../../custom-image/) | Shared image builder — bakes your config, trusts the RDS CAs, adds script dependencies |
 | [`../../custom-image/bridge.yaml`](../../custom-image/bridge.yaml) | The Bridge configuration baked into that image |
 | `ecs-fargate-nlb.yaml` | ECS Fargate service, NLB, EFS, security groups, IAM, secrets |
 | `params.example.json` | Parameter file for the ECS stack |
@@ -27,11 +28,9 @@ host in your own ECR registry.
 - You only need Britive's AWS SAML integration — see
   [cloudformation/aws/](../../../cloudformation/aws/) instead. The Bridge is a
   separate product from the AWS account integration.
-- You are running **Bridge v1.x** — use [../../v1/](../../v1/), whose templates
-  match that version. v1 has no datastore or encryption-key parameters, and this
-  template will not work with a v1 image.
 - You cannot expose an internet-facing load balancer. The Bridge needs to be
   reachable by the browsers and native clients of the people using it.
+- You want one host for an evaluation — see [../docker-compose/](../docker-compose/).
 
 ## Table of Contents
 
@@ -73,8 +72,8 @@ host in your own ECR registry.
         +----------+         +-----------+
         |                                |
    +----+-----+                    +-----+------+
-   |   EFS    |  recordings        | PostgreSQL |  datastore
-   |  /data   |  + certs           |  (yours)   |  (you supply)
+   |   EFS    |  recordings        | RDS        |  datastore
+   |  /data   |  + certs           | PostgreSQL |  (rds-postgres.yaml)
    +----------+                    +------------+
 ```
 
@@ -112,9 +111,9 @@ produces a connect command that looks valid and never works.
 | Resource | Notes |
 | -------- | ----- |
 | VPC with two **public** subnets in different AZs | The NLB, the Fargate task and the EFS mount targets all live here |
-| **PostgreSQL** instance reachable from the VPC | Mandatory in Bridge v2. RDS, Aurora or self-managed |
-| Secrets Manager secret with the DB password | Must be JSON containing a `password` key |
+| **PostgreSQL** reachable from the VPC | Mandatory in Bridge v2. `rds-postgres.yaml` creates one (Step 4); or bring your own plus a Secrets Manager secret whose JSON has a `password` key |
 | **ACM certificate** for your Bridge hostname | Must be in the **same region** as the NLB |
+| **A public hostname** for Bridge (`BridgeUrl`) | Must match the certificate; you create the DNS record in Step 6 |
 | **Managed prefix list** of client public IPs | Gates the NLB. See [Step 4](#4-create-a-managed-prefix-list) |
 
 ### Required IAM permissions
@@ -129,7 +128,7 @@ Manager secrets, and CloudWatch log groups.
 | Value | Where to find it |
 | ----- | ---------------- |
 | Tenant subdomain | Your Britive URL, without `.britive-app.com` |
-| Broker pool token | Britive console: **Admin → Access Broker → Broker Pools** |
+| Broker pool token | Printed by [`../../platform-setup/quick-setup.py`](../../platform-setup/), or Britive console: **System Administration → Brokers and Broker Pools** |
 
 ---
 
@@ -141,8 +140,7 @@ overwritten, so what a task pulls on restart cannot silently change.
 ```bash
 aws cloudformation create-stack \
   --stack-name britive-bridge-ecr \
-  --template-body file://ecr-repo.yaml \
-  --capabilities CAPABILITY_NAMED_IAM
+  --template-body file://ecr-repo.yaml
 
 aws cloudformation wait stack-create-complete \
   --stack-name britive-bridge-ecr
@@ -170,17 +168,13 @@ server:
       tenant: "your-tenant" # <- your subdomain, without .britive-app.com
 ```
 
-The Bridge validates this from the **file** before environment overrides are
-applied. Leaving it unset crash-loops the task at startup, so
-the image build refuses to proceed until you change it.
+Environment variables can complete or override the file, but Fargate has no
+volume to mount a file from, so the file itself must be in the image. The
+build refuses to bake it while the tenant is still the placeholder.
 
-**Recommended changes:**
-
-```yaml
-server:
-  trusted_proxies:
-    - "10.0.0.0/16" # <- your VPC CIDR, so recordings log real client IPs
-```
+Values that differ per deployment — the datastore endpoint, the trusted-proxy
+CIDR, the public URL — are injected by the stack as environment variables, so
+you do not edit them here.
 
 **Protocols.** Every protocol is off by default and the Bridge refuses to start
 unless at least one is enabled. The supplied file enables SSH, RDP, MySQL and
@@ -209,11 +203,11 @@ cd ../../custom-image
 
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 REGION=us-east-1
-IMAGE_URI="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/britive/bridge:v2.1.0-r1"
+IMAGE_URI="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/britive/bridge:v2.3.1-r1"
 
 docker build \
   --platform linux/arm64 \
-  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.3.1 \
   --build-arg BAKE_CONFIG=true \
   --build-arg WITH_RDS_CA=true \
   -t "$IMAGE_URI" .
@@ -228,15 +222,18 @@ Use `$IMAGE_URI` as the `ImageUri` parameter in Step 5.
 
 The build fails if the tenant is still the `your-tenant` placeholder, and
 asserts that the RDS certificates actually landed in the trust store — so
-neither mistake reaches a running task.
+neither mistake reaches a running task. Confirm the result before pushing:
+
+```bash
+docker run --rm --entrypoint head "$IMAGE_URI" -5 /etc/britive-bridge/config.yaml
+docker inspect "$IMAGE_URI" --format '{{.Architecture}}'   # arm64 for CpuArchitecture=ARM64
+```
 
 > **Pin `BASE_IMAGE` to a specific tag; do not use `britive/bridge:latest`.**
-> That tag tracks whatever was published most recently — it points at v2.1.0
-> today and will move on the next release, so two builds of the "same" image
-> can differ. Worse, `latest` is shared across major versions, so it will
-> eventually point at a v3 image that this template does not support. The
-> Dockerfile's own `BASE_IMAGE` default is `latest` for backwards
-> compatibility, which is why every command here passes it explicitly.
+> That tag tracks whatever was published most recently and moves on every
+> release, so two builds of the "same" image can differ. The Dockerfile
+> defaults to `v2.3.1`; check Docker Hub before bumping it (one-liner in
+> [`../../custom-image/README.md`](../../custom-image/README.md)).
 
 > **`PLATFORM` must match the `CpuArchitecture` stack parameter.** Fargate will
 > not run an image built for the other architecture, and the failure shows up as
@@ -247,7 +244,7 @@ To build for Intel/AMD instead:
 
 ```bash
 docker build --platform linux/amd64 \
-  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.3.1 \
   --build-arg BAKE_CONFIG=true --build-arg WITH_RDS_CA=true \
   -t "$IMAGE_URI" .
 # and set CpuArchitecture=X86_64 on the ECS stack
@@ -269,20 +266,36 @@ This key encrypts checkout payloads in the datastore.
 > stored checkout payload undecryptable. Generate it once, store it somewhere
 > durable, and keep it for the life of the deployment.
 
-### 2. Create the database password secret
+### 2. Deploy the PostgreSQL datastore
 
-The stack expects a Secrets Manager secret whose JSON contains a `password`
-key:
+`rds-postgres.yaml` creates an encrypted RDS PostgreSQL 17 instance, its
+security group, and a Secrets Manager secret with a generated password. It is
+a separate stack because RDS takes 10–15 minutes to create or delete, while
+the ECS stack can be recreated in a couple of minutes. Deploy it **once**:
 
 ```bash
-aws secretsmanager create-secret \
-  --name britive-bridge/datastore \
-  --secret-string '{"username":"bridge","password":"REPLACE_ME"}' \
-  --query ARN --output text
+aws cloudformation create-stack \
+  --stack-name britive-bridge-v2-db \
+  --template-body file://rds-postgres.yaml \
+  --parameters \
+      ParameterKey=StackNamePrefix,ParameterValue=britive-bridge-v2 \
+      ParameterKey=VpcId,ParameterValue=vpc-EXAMPLE \
+      ParameterKey=SubnetIds,ParameterValue=\"subnet-aaaa,subnet-bbbb\" \
+      ParameterKey=AllowedCidr,ParameterValue=10.0.0.0/16
+
+aws cloudformation wait stack-create-complete --stack-name britive-bridge-v2-db
+aws cloudformation describe-stacks --stack-name britive-bridge-v2-db \
+  --query 'Stacks[0].Outputs' --output table
 ```
 
-Create the `bridge` database and role on your PostgreSQL instance, and allow
-inbound 5432 from the Bridge task's security group.
+Copy `RdsEndpoint`, `RdsPort` and `DbSecretArn` into `DbHost`, `DbPort` and
+`DbSecretArn` of the ECS parameter file. Use the **same `StackNamePrefix`** on
+both stacks: the ECS task role's Secrets Manager permissions are scoped to
+secrets named `<StackNamePrefix>/*`.
+
+Bringing your own PostgreSQL instead? Create the `bridge` database and role,
+allow inbound 5432 from the VPC CIDR, and create a secret whose JSON has a
+`password` key — `aws secretsmanager create-secret --name britive-bridge-v2/bridge/db --secret-string '{"username":"bridge","password":"…"}'`.
 
 ### 3. Request an ACM certificate
 
@@ -314,19 +327,26 @@ aws ec2 create-managed-prefix-list \
 Entries can be changed later with `aws ec2 modify-managed-prefix-list` — no
 stack update required.
 
+### 5. Decide the public hostname
+
+`BridgeUrl` (for example `https://bridge.example.com`) must be the hostname on
+the ACM certificate and the DNS record you will create in Step 6. The stack
+uses it to build the Britive OAuth `redirect_uri`; behind the NLB the
+container sees plain HTTP and cannot derive it on its own.
+
 ---
 
 ## Step 5: Deploy the ECS Stack
 
 ### Via AWS CLI
 
-Copy `params.example.json`, fill it in, then:
+Copy `params.example.json` to `params.json` (gitignored), fill it in, then:
 
 ```bash
 aws cloudformation create-stack \
   --stack-name britive-bridge \
   --template-body file://ecs-fargate-nlb.yaml \
-  --parameters file://params.example.json \
+  --parameters file://params.json \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation wait stack-create-complete --stack-name britive-bridge
@@ -399,8 +419,28 @@ curl -sI https://bridge.example.com/readyz
 
 ### The broker registered
 
-In the Britive console under **Admin → Access Broker → Broker Pools**, the
-broker appears in the pool matching `BrokerAuthToken`.
+In the Britive console under **System Administration → Brokers and Broker
+Pools**, the broker appears in the pool matching `BrokerAuthToken`.
+
+### The license was retrieved
+
+Bridge fetches its license from the tenant through the broker token. Without
+one it runs in **limited mode**: browser sessions work, but native sessions,
+live view and recording downloads return HTTP 403.
+
+```bash
+curl -s https://bridge.example.com/api/license/status
+```
+
+### Login redirects to the right host
+
+Open `https://bridge.example.com` in a browser and sign in with Britive. The
+redirect after SSO must land on `https://bridge.example.com/...`; an `http://`
+redirect means `BridgeUrl` is wrong.
+
+Finally, re-run [`../../platform-setup/quick-setup.py`](../../platform-setup/)
+with the real `BridgeUrl` so checkouts return the right link, and run a test
+checkout end to end.
 
 ---
 
@@ -414,10 +454,10 @@ broker appears in the pool matching `BrokerAuthToken`.
 cd ../../custom-image
 # edit bridge.yaml, then rebuild with a NEW tag - tags are immutable
 docker build --platform linux/arm64 \
-  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.3.1 \
   --build-arg BAKE_CONFIG=true --build-arg WITH_RDS_CA=true \
-  -t "<registry>/britive/bridge:v2.1.0-r2" .
-docker push "<registry>/britive/bridge:v2.1.0-r2"
+  -t "<registry>/britive/bridge:v2.3.1-r2" .
+docker push "<registry>/britive/bridge:v2.3.1-r2"
 ```
 
 Then update **only** `ImageUri`:
@@ -439,10 +479,13 @@ aws cloudformation update-stack \
       ParameterKey=DbHost,UsePreviousValue=true \
       ParameterKey=DbPort,UsePreviousValue=true \
       ParameterKey=DbSecretArn,UsePreviousValue=true \
+      ParameterKey=DbSslMode,UsePreviousValue=true \
+      ParameterKey=BridgeUrl,UsePreviousValue=true \
       ParameterKey=BrokerTenantSubdomain,UsePreviousValue=true \
       ParameterKey=BrokerAuthToken,UsePreviousValue=true \
       ParameterKey=EncryptionKeyB64,UsePreviousValue=true \
       ParameterKey=BrokerSSHPrivateKey,UsePreviousValue=true \
+      ParameterKey=EnableAwsBrokerScripts,UsePreviousValue=true \
       ParameterKey=AcmCertificateArn,UsePreviousValue=true \
       ParameterKey=StackNamePrefix,UsePreviousValue=true
 ```
@@ -458,9 +501,9 @@ aws cloudformation update-stack \
 ```bash
 cd ../../custom-image
 docker build --platform linux/arm64 \
-  --build-arg BASE_IMAGE=britive/bridge:v2.1.1 \
+  --build-arg BASE_IMAGE=britive/bridge:vX.Y.Z \
   --build-arg BAKE_CONFIG=true --build-arg WITH_RDS_CA=true \
-  -t "<registry>/britive/bridge:v2.1.1-r1" .
+  -t "<registry>/britive/bridge:vX.Y.Z-r1" .
 ```
 
 Then update `ImageUri` as above. Check the
@@ -486,27 +529,32 @@ across them. A checkout routed to the draining task runs the old image. Wait for
 | `NativeClientPrefixListId` | Yes | — | Managed prefix list (`pl-…`) of allowed **public** client IPs |
 | `ImageUri` | Yes | — | Your ECR image from Step 3 |
 | `AcmCertificateArn` | Yes | — | ACM cert for the Bridge hostname, same region as the NLB |
-| `DbHost` | Yes | — | PostgreSQL endpoint |
-| `DbSecretArn` | Yes | — | Secrets Manager secret containing a `password` key |
+| `BridgeUrl` | Yes | — | `https://<hostname>` users reach Bridge at; builds the OAuth `redirect_uri` |
+| `DbHost` | Yes | — | `RdsEndpoint` output of `rds-postgres.yaml` |
+| `DbSecretArn` | Yes | — | `DbSecretArn` output of `rds-postgres.yaml` (JSON with a `password` key) |
 | `BrokerTenantSubdomain` | Yes | — | Britive tenant subdomain |
-| `BrokerAuthToken` | Yes | — | Broker pool token (`NoEcho`) |
-| `EncryptionKeyB64` | Yes | — | `openssl rand -base64 32` (`NoEcho`, **permanent**) |
-| `NativeAccessCidr` | No | `10.0.0.0/8` | In-VPC CIDR allowed to reach task ports; set to your VPC CIDR |
+| `BrokerAuthToken` | Yes | — | Broker pool token (`NoEcho`; stored in Secrets Manager) |
+| `EncryptionKeyB64` | Yes | — | `openssl rand -base64 32` (`NoEcho`, **permanent**, secret retained on delete) |
+| `NativeAccessCidr` | No | `10.0.0.0/8` | In-VPC CIDR allowed to reach task ports; also the trusted-proxy range. Set to your VPC CIDR |
 | `CpuArchitecture` | No | `ARM64` | Must match the image `PLATFORM` |
 | `TaskCpu` / `TaskMemory` | No | `1024` / `2048` | Fargate task size |
 | `DbPort` | No | `5432` | PostgreSQL port |
+| `DbSslMode` | No | `require` | `verify-full` checks the RDS certificate (needs `WITH_RDS_CA=true` in the image) |
 | `BrokerSSHPrivateKey` | No | `""` | Broker SSH key for SSH checkouts (`NoEcho`) |
-| `StackNamePrefix` | No | `britive-bridge-v2` | Prefix for named resources |
+| `EnableAwsBrokerScripts` | No | `false` | Grant the task role EC2/RDS discovery, SSM and `<StackNamePrefix>/*` secrets for broker scripts that call AWS |
+| `StackNamePrefix` | No | `britive-bridge-v2` | Prefix for named resources; use the same on `rds-postgres.yaml` |
 
 ### Outputs
 
 | Output | Use |
 | ------ | --- |
-| `LoadBalancerDnsName` | CNAME target for your Bridge hostname |
-| `BridgeUrl` | Base URL of the deployment |
+| `LoadBalancerDnsName` | CNAME / alias target for your Bridge hostname |
+| `PublicUrl` | Base URL of the deployment (the `BridgeUrl` you passed) |
+| `NlbUrl` | Raw NLB URL for `curl -k` smoke tests before DNS exists |
 | `ClusterName` / `ServiceName` | For `aws ecs` commands |
 | `DataFileSystemId` | EFS holding recordings and generated certs |
-| `EncryptionKeySecretArn` | Where the encryption key is stored |
+| `EncryptionKeySecretArn` | Where the encryption key is stored (retained on stack delete) |
+| `BrokerAuthTokenSecretArn` | Where the broker pool token is stored |
 | `BrokerSSHKeySecretArn` | Where the broker SSH key is stored |
 
 ---
@@ -524,6 +572,10 @@ across them. A checkout routed to the draining task runs the old image. Wait for
 | Native client times out, browser works | Client IP absent from the prefix list | Add it with `aws ec2 modify-managed-prefix-list` |
 | `denied` pushing to ECR | Tag already exists (immutable) | Push a new tag; never reuse |
 | Recordings lost after redeploy | Writing outside `/data` | `recording.output_dir` must stay under `/data` (EFS) |
+| Login bounces to `http://…` or loops | `BridgeUrl` wrong or missing | Set it to `https://<hostname on the cert>` and update the stack |
+| Native checkout returns 403, browser works | No license (limited mode) | `curl https://<host>/api/license/status`; confirm the broker shows connected and `BrokerAuthToken` is current |
+| `x509: certificate signed by unknown authority` on the datastore | `DbSslMode=verify-full` with an image built without `WITH_RDS_CA=true` | Rebuild with `WITH_RDS_CA=true`, or set `DbSslMode=require` |
+| Broker script fails with `AccessDenied` calling AWS | `EnableAwsBrokerScripts` is `false`, or the secret is not under `<StackNamePrefix>/` | Set the parameter to `true`; name secrets `<StackNamePrefix>/…` |
 
 ---
 
@@ -544,16 +596,34 @@ aws ecr batch-delete-image \
 aws cloudformation delete-stack --stack-name britive-bridge-ecr
 ```
 
-The database, ACM certificate and prefix list were created outside these
-templates and are not removed.
+The encryption-key secret (`<StackNamePrefix>/bridge/encryption-key-b64`) and
+the broker SSH key secret are **retained** on stack delete, because the
+database that depends on them outlives the stack. Delete them by hand once the
+database is gone:
+
+```bash
+aws secretsmanager delete-secret --secret-id britive-bridge-v2/bridge/encryption-key-b64 --force-delete-without-recovery
+```
+
+The datastore stack takes a final snapshot on delete and also retains its
+secret:
+
+```bash
+aws cloudformation delete-stack --stack-name britive-bridge-v2-db
+aws cloudformation wait stack-delete-complete --stack-name britive-bridge-v2-db
+# then delete the final RDS snapshot and the retained secret when no longer needed
+```
+
+The ACM certificate and prefix list were created outside these templates and
+are not removed.
 
 ---
 
 ## Further Reading
 
 - [Britive Bridge documentation](https://learn.britive.com/bridge/)
-- [Deploying on AWS ECS](https://learn.britive.com/bridge/deploy/aws-ecs/)
+- [Deploying on AWS ECS](https://learn.britive.com/bridge/deploy/aws-ecs/) — includes the cluster-mode reference for horizontal scale
 - [Configuration reference](https://learn.britive.com/bridge-files/bridge.reference.yaml)
 - [Access Broker examples](https://github.com/britive/access-broker-examples)
-- [Bridge v1.x deployment options](../../v1/) — for older Bridge releases
+- [Docker Compose option](../docker-compose/) — one host, for evaluation
 - [Platform setup](../../platform-setup/) — run first; creates the broker pool and token

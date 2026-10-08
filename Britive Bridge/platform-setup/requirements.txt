@@ -1,4 +1,6 @@
 # Dependencies for quick-setup.py
 # Install:  pip install -r requirements.txt
-britive>=4.0.0
-requests>=2.31.0
+# britive 4.1.2 added the `fields` argument to access_broker.resources.types.create,
+# which quick-setup.py relies on; older 4.x raises TypeError.
+britive>=4.1.2,<5
+requests>=2.32.4,<3

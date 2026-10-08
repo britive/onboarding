@@ -5,32 +5,40 @@
 # same tag runs on Fargate ARM64 and x86 / mixed Kubernetes nodes.
 #
 # Usage:
-#   REGISTRY=docker.io/yourorg ./build-and-push.sh                 # Docker Hub
-#   REGISTRY=<acct>.dkr.ecr.us-west-2.amazonaws.com ./build-and-push.sh   # ECR
+#   REGISTRY=docker.io/yourorg ./build-and-push.sh                       # Docker Hub
+#   REGISTRY=<acct>.dkr.ecr.us-west-2.amazonaws.com ./build-and-push.sh  # ECR
 #
 # Env overrides:
 #   REGISTRY    (required) target registry/namespace, no trailing slash
-#   IMAGE_NAME  image repo name              (default: britive-bridge-custom)
-#   TAG         image tag                    (default: latest)
-#   BASE_IMAGE  base to extend               (default: britive/bridge:v2.1.0)
-#               Bridge v1 deployments MUST set britive/bridge:v1.0.2
+#   IMAGE_NAME  image repo name              (default: britive/bridge)
+#   BASE_IMAGE  base to extend               (default: britive/bridge:v2.3.1)
+#   TAG         image tag                    (default: <base tag>-r1, e.g. v2.3.1-r1)
+#               Never "latest": the ECR repo from ecr-repo.yaml has immutable
+#               tags, so a reused tag fails to push, and a moving tag makes
+#               what a task pulls on restart unpredictable.
 #   BAKE_CONFIG bake BRIDGE_CONFIG into the image  (default: false)
-#               REQUIRED for Bridge v2 - it will not start without a config
+#               REQUIRED for ECS Fargate — there is no volume to mount it from
 #   BRIDGE_CONFIG  config file in this directory   (default: bridge.yaml)
 #   WITH_RDS_CA trust the AWS RDS CAs          (default: false)
-#               needed for database checkouts using target_tls=true
+#               needed for database checkouts using target_tls=true and for
+#               DbSslMode=verify-full on the datastore
 #   PLATFORMS   buildx platforms             (default: linux/amd64,linux/arm64)
 
 set -euo pipefail
 
 REGISTRY="${REGISTRY:?Set REGISTRY, e.g. docker.io/yourorg or <acct>.dkr.ecr.<region>.amazonaws.com}"
-IMAGE_NAME="${IMAGE_NAME:-britive-bridge-custom}"
-TAG="${TAG:-latest}"
-BASE_IMAGE="${BASE_IMAGE:-britive/bridge:v2.1.0}"
+IMAGE_NAME="${IMAGE_NAME:-britive/bridge}"
+BASE_IMAGE="${BASE_IMAGE:-britive/bridge:v2.3.1}"
+TAG="${TAG:-${BASE_IMAGE##*:}-r1}"
 BAKE_CONFIG="${BAKE_CONFIG:-false}"
 BRIDGE_CONFIG="${BRIDGE_CONFIG:-bridge.yaml}"
 WITH_RDS_CA="${WITH_RDS_CA:-false}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
+
+if [ "$TAG" = "latest" ]; then
+  echo "ERROR: TAG=latest is not allowed; use an immutable tag such as ${BASE_IMAGE##*:}-r1" >&2
+  exit 1
+fi
 
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
 
@@ -40,12 +48,18 @@ echo "    config:    $([ "$BAKE_CONFIG" = "true" ] && echo "${BRIDGE_CONFIG} (ba
 echo "    rds CAs:   ${WITH_RDS_CA}"
 echo "    platforms: ${PLATFORMS}"
 
-# ECR repos must exist before push; create on demand if this is an ECR target.
+# ECR repos must exist before push. Prefer creating it with
+# ../v2/aws-ecs-fargate-nlb/ecr-repo.yaml; if it is missing, create it here
+# with the same properties (immutable tags, scan on push).
 if echo "$REGISTRY" | grep -q 'dkr.ecr'; then
   REGION=$(echo "$REGISTRY" | sed -E 's/.*\.ecr\.([^.]+)\.amazonaws\.com/\1/')
   echo "==> ECR detected (region ${REGION}). Ensuring repo + login..."
   aws ecr describe-repositories --repository-names "$IMAGE_NAME" --region "$REGION" >/dev/null 2>&1 \
-    || aws ecr create-repository --repository-name "$IMAGE_NAME" --region "$REGION" >/dev/null
+    || aws ecr create-repository \
+         --repository-name "$IMAGE_NAME" \
+         --region "$REGION" \
+         --image-tag-mutability IMMUTABLE \
+         --image-scanning-configuration scanOnPush=true >/dev/null
   aws ecr get-login-password --region "$REGION" \
     | docker login --username AWS --password-stdin "${REGISTRY%%/*}"
 else
@@ -68,4 +82,4 @@ docker buildx build \
 
 echo "==> Pushed ${FULL_IMAGE}"
 echo "    Set this as the image in your ECS task definition (ImageUri) or"
-echo "    Kubernetes Deployment (image:)."
+echo "    Helm values (image.repository / image.tag)."

@@ -1,33 +1,33 @@
 # Britive Bridge v2.x — Deployment Options
 
-Deployment templates for **Bridge v2.x** — the current release line. **Use
-these for all new deployments.** [`../v1/`](../v1/) is legacy and exists only
-for deployments already running v1.
+Deployment templates for **Bridge v2.x**, the current release line. Every
+image reference pins `britive/bridge:v2.3.1`; bump it deliberately after
+reading the [release notes](https://learn.britive.com/releases/).
 
-> Pin the image tag. `britive/bridge:latest` tracks the newest release across
-> major versions, so it is not safe to build against.
+> Do not build against `britive/bridge:latest`. It tracks the newest release
+> and moves without notice, so two builds of the "same" image can differ.
 
-## What changed from v1
-
-v2 is not a drop-in upgrade of a v1 deployment. Three things are new and all
-three are mandatory:
+## What v2 requires
 
 | Requirement | Why it matters |
 | ----------- | -------------- |
-| **PostgreSQL datastore** | Checkouts, sessions and the audit index live in the database. The task will not start without one. |
-| **Encryption key** | Encrypts checkout payloads at rest. It is **permanent** — rotating it after go-live makes stored payloads undecryptable. |
-| **Configuration baked into the image** | Every protocol is off by default and the Bridge refuses to start unless at least one is enabled. The tenant is validated from the file before environment overrides apply, so it cannot be supplied by environment variable alone. |
+| **PostgreSQL datastore** | Checkouts, sessions and the audit index live in the database. The process will not start without one. |
+| **Encryption key** | `BRIDGE_ENCRYPTION_KEY_B64` encrypts checkout payloads at rest. It is **permanent** — rotating it after go-live makes stored payloads undecryptable. |
+| **A configuration file with at least one protocol enabled** | Every protocol is off by default and the Bridge refuses to start otherwise. Environment variables are applied after the file is read and before it is validated, so they can complete a partial file — but they cannot replace it. |
 
-Because configuration lives in the image, a config change is an image change:
-build a new tag, then update the stack's `ImageUri`. The
-[shared image builder](../custom-image/) handles this with
-`--build-arg BAKE_CONFIG=true`.
+Where the configuration file comes from differs per option: Docker Compose
+bind-mounts [`../custom-image/bridge.yaml`](../custom-image/bridge.yaml);
+ECS Fargate has no volume to mount it from, so the
+[custom image builder](../custom-image/) bakes it into the image
+(`--build-arg BAKE_CONFIG=true`), and a config change becomes an image change.
 
 ## Options
 
 | Option | Where it runs | TLS / external access | Persistence |
 | ------ | ------------- | --------------------- | ----------- |
-| [**AWS ECS Fargate + NLB**](aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an ACM certificate; TCP listeners for native SSH, RDP, MySQL and PostgreSQL | EFS for recordings, PostgreSQL for state |
+| [**AWS ECS Fargate + NLB**](aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an ACM certificate; TCP listeners for native SSH, RDP, MySQL and PostgreSQL | EFS for recordings; RDS PostgreSQL from the included `rds-postgres.yaml` |
+| [**Docker Compose**](docker-compose/) | Any Docker host / VM | The container's own TLS (self-signed by default); every native port published | Docker volumes for Bridge data and PostgreSQL |
+| **Kubernetes** | Any cluster | Your Ingress | Britive's official Helm chart — `oci://registry-1.docker.io/britive/bridge-chart` — documented at [learn.britive.com/bridge/deploy/kubernetes/](https://learn.britive.com/bridge/deploy/kubernetes/). Not duplicated here. |
 
 ## Before you start
 
@@ -38,9 +38,14 @@ and token every deployment needs.
 
 ```
 v2/
-└── aws-ecs-fargate-nlb/
-    ├── ecs-fargate-nlb.yaml     # ECS service, NLB, EFS, IAM, secrets
-    ├── ecr-repo.yaml            # ECR repository (immutable tags)
-    ├── params.example.json      # all 17 stack parameters
-    └── README.md                # prerequisites through cleanup
+├── aws-ecs-fargate-nlb/
+│   ├── ecr-repo.yaml            # ECR repository (immutable tags)
+│   ├── rds-postgres.yaml        # RDS PostgreSQL datastore, deployed once
+│   ├── ecs-fargate-nlb.yaml     # ECS service, NLB, EFS, IAM, secrets
+│   ├── params.example.json      # every ECS stack parameter
+│   └── README.md                # prerequisites through cleanup
+└── docker-compose/
+    ├── docker-compose.yaml      # PostgreSQL + Bridge on one host
+    ├── .env.example
+    └── README.md
 ```
