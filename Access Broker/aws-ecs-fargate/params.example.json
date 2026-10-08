@@ -1,0 +1,62 @@
+[
+  {
+    "ParameterKey": "StackNamePrefix",
+    "ParameterValue": "britive-broker"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "<vpc-xxxxxxxx>"
+  },
+  {
+    "ParameterKey": "SubnetIds",
+    "ParameterValue": "<subnet-aaaa,subnet-bbbb - private subnets with a NAT route, or public with AssignPublicIp=ENABLED>"
+  },
+  {
+    "ParameterKey": "AssignPublicIp",
+    "ParameterValue": "DISABLED"
+  },
+  {
+    "ParameterKey": "ImageUri",
+    "ParameterValue": "<account>.dkr.ecr.<region>.amazonaws.com/britive-broker:3.0.2-r1"
+  },
+  {
+    "ParameterKey": "CpuArchitecture",
+    "ParameterValue": "ARM64"
+  },
+  {
+    "ParameterKey": "TaskCpu",
+    "ParameterValue": "256"
+  },
+  {
+    "ParameterKey": "TaskMemory",
+    "ParameterValue": "512"
+  },
+  {
+    "ParameterKey": "DesiredCount",
+    "ParameterValue": "1"
+  },
+  {
+    "ParameterKey": "BrokerTenantSubdomain",
+    "ParameterValue": "<your britive tenant subdomain - omit '.britive-app.com'>"
+  },
+  {
+    "ParameterKey": "BrokerAuthToken",
+    "ParameterValue": "<broker pool token: System Administration > Brokers and Broker Pools > pool > Tokens>"
+  },
+  {
+    "ParameterKey": "LogFormat",
+    "ParameterValue": "json"
+  },
+  {
+    "ParameterKey": "LogRetentionDays",
+    "ParameterValue": "30"
+  },
+  {
+    "ParameterKey": "EnableAwsBrokerScripts",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "EksClusterArns",
+    "ParameterValue": ""
+  }
+]

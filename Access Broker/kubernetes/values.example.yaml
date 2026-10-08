@@ -1,0 +1,44 @@
+# Example values for the britive-broker chart. Copy, edit, and:
+#   helm upgrade --install britive-broker charts/britive-broker -n britive --create-namespace -f values.yaml
+#
+# Never commit a real token. Prefer britive.existingSecret with External
+# Secrets Operator or the Secrets Store CSI driver.
+
+image:
+  repository: <account>.dkr.ecr.<region>.amazonaws.com/britive-broker   # or myregistry.azurecr.io/britive-broker, us-docker.pkg.dev/<project>/britive/britive-broker
+  tag: 3.0.2-r1
+
+britive:
+  tenantSubdomain: your-tenant
+  # Option A: let the chart create the Secret (fine for an evaluation):
+  # authToken: "<broker-pool-token>"
+  # Option B: a Secret you manage (External Secrets, CSI driver, sealed-secrets):
+  existingSecret:
+    name: britive-broker-token
+    key: BRITIVE_BROKER_AUTH_TOKEN
+  logFormat: json
+
+replicaCount: 1
+
+# Cloud identity for scripts that call the cloud API. Pick the one for your cluster.
+serviceAccount:
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/britive-broker
+    # iam.gke.io/gcp-service-account: britive-broker@<project>.iam.gserviceaccount.com
+    # azure.workload.identity/client-id: <client-id>
+podLabels: {}
+  # azure.workload.identity/use: "true"
+
+# Kubernetes JIT checkouts in this cluster: let the broker create RoleBindings
+# in the listed namespaces only.
+rbac:
+  create: false
+  namespaces: []
+  #  - dev
+  #  - staging
+
+extraEnv: []
+  # - name: HTTPS_PROXY
+  #   value: http://proxy.example.com:3128
+  # - name: NO_PROXY
+  #   value: .svc,.cluster.local,10.0.0.0/8
