@@ -195,7 +195,9 @@ class ScanScim:
             user_tags = []
             for tag in user.get("userTags", []):
                 name = tag["name"]
-                if not name.startswith(self.britive_group_prefix):
+                # Tags on other identity providers were skipped above and must
+                # not be indexed here.
+                if not name.startswith(self.britive_group_prefix) or name not in self.tenant_groups:
                     continue
                 user_tags.append(name)
                 self.tenant_groups[name]["users"].append(username)
@@ -302,7 +304,7 @@ class ScanScim:
 
     def remove_entitlements(self):
         logging.info("removing entitlements")
-        if len(self.entitlements_to_create) == 0:
+        if len(self.entitlements_to_remove) == 0:
             logging.info("no entitlements to remove")
         for tag_name, usernames in self.entitlements_to_remove.items():
             tag_id = self.tenant_groups[tag_name]["id"]
@@ -311,7 +313,7 @@ class ScanScim:
                 self.b.identity_management.tags.remove_user(
                     tag_id=tag_id, user_id=user_id
                 )
-                logging.info(f"removed {username} to {tag_name}")
+                logging.info(f"removed {username} from {tag_name}")
 
     def disable_users(self):
         logging.info("disabling users")
@@ -438,7 +440,7 @@ def process():
     scan_scim.disable_users()
 
 
-# lambda handler - in case this is run inside an AWS Lambda function - otherwise ignore/remove
+# AWS Lambda entry point: log and swallow so the invocation is recorded as handled.
 def handler(event, context):
     try:
         process()
@@ -446,6 +448,10 @@ def handler(event, context):
         logging.error(str(e))
 
 
-# run from command line
+# Command line: let the exception set a non-zero exit code.
 if __name__ == "__main__":
-    handler(None, None)
+    try:
+        process()
+    except Exception as e:
+        logging.error(str(e))
+        raise SystemExit(1) from e

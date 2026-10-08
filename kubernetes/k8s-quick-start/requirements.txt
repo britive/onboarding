@@ -1,3 +1,0 @@
-pybritive
-britive
-boto3

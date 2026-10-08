@@ -1,130 +1,83 @@
-import os
+#!/usr/bin/env python3
+"""Create what the Britive OCI application needs in a tenancy: a service user
+with an API signing key, a group, and the policy that grants the group the
+four statements Britive documents for OCI 2.0
+(docs.britive.com/docs/creating-a-policy-in-oracle-cloud-oci2).
 
-from colorama import Fore, Style
+Authentication: the OCI CLI configuration (~/.oci/config), as a tenancy
+administrator. Tenancies with identity domains also need the user added to
+the IdentityDomainAdministrator group in each domain Britive should manage;
+do that in the console after running this.
+"""
+
+import argparse
+import sys
+from pathlib import Path
 
 import oci
-from britive.britive import Britive
 
-# Color definitions from Colorama
-caution: str = f"{Style.BRIGHT}{Fore.RED}"
-warn: str = f"{Style.BRIGHT}{Fore.YELLOW}"
-info: str = f"{Style.BRIGHT}{Fore.BLUE}"
-green: str = f"{Style.BRIGHT}{Fore.GREEN}"
-
-# Instance Britive
-br = Britive(tenant=os.getenv("BRITIVE_TENANT"), token=os.getenv("BRITIVE_API_TOKEN"))
+POLICY_STATEMENTS = [
+    "Allow group {group} to use users in tenancy",
+    "Allow group {group} to use groups in tenancy",
+    "Allow group {group} to inspect policies in tenancy",
+    "Allow group {group} to inspect domains in tenancy",
+]
 
 
-class OCIInt:
-    def __init__(self, config_file):
-        # Load OCI configuration file
-        self.config = oci.config.from_file(config_file)
-        self.identity_client = oci.identity.IdentityClient(self.config)
-        self.tenancy_ocid = self.config["tenancy"]
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--user-name", default="britive-service", help="service user name (default britive-service)")
+    parser.add_argument("--email", required=True, help="e-mail for the service user")
+    parser.add_argument("--public-key-file", required=True, type=Path, help="PEM public key to upload as the user's API signing key")
+    parser.add_argument("--group-name", default="BritiveGroup", help="group name (default BritiveGroup)")
+    parser.add_argument("--policy-name", default="BritivePolicy", help="policy name (default BritivePolicy)")
+    parser.add_argument("--config", default="~/.oci/config", help="OCI CLI config file")
+    parser.add_argument("--profile", default="DEFAULT", help="profile in the config file")
+    args = parser.parse_args()
 
-    def get_tenancy_ocid(self):
-        """
-        Get the OCID of the root compartment (tenancy).
-        """
-        print(f"Tenancy OCID: {self.tenancy_ocid}")
-        return self.tenancy_ocid
+    try:
+        public_key = args.public_key_file.read_text(encoding="utf-8")
+    except OSError as exc:
+        sys.exit(f"cannot read {args.public_key_file}: {exc}")
+    if "BEGIN PUBLIC KEY" not in public_key:
+        sys.exit(f"{args.public_key_file} is not a PEM public key")
 
-    def create_user(self, first_name, last_name, email):
-        """
-        Create a user in the root compartment (tenancy).
-        """
-        create_user_details = oci.identity.models.CreateUserDetails(
-            compartment_id=self.tenancy_ocid,
-            name=email.split("@")[0],  # Use email as base for the name
-            description=f"User {first_name} {last_name}",
-            email=email,
-        )
-        user = self.identity_client.create_user(create_user_details).data
-        print(f"User Created: {user.name}, OCID: {user.id}")
-        return user
+    config = oci.config.from_file(args.config, args.profile)
+    identity = oci.identity.IdentityClient(config)
+    tenancy = config["tenancy"]
+    print(f"tenancy {tenancy}")
 
-    def add_api_key_to_user(self, user_id, public_key_content):
-        """
-        Add an API key to a user.
-        """
-        api_key_details = oci.identity.models.CreateApiKeyDetails(
-            key=public_key_content
-        )
-        api_key = self.identity_client.upload_api_key(user_id, api_key_details).data
-        print(f"API Key Fingerprint: {api_key.fingerprint}")
-        return api_key
+    try:
+        user = identity.create_user(oci.identity.models.CreateUserDetails(
+            compartment_id=tenancy, name=args.user_name, description="Britive integration service user", email=args.email,
+        )).data
+        print(f"created user {user.name} ({user.id})")
 
-    def create_group(self, group_name, description):
-        """
-        Create a group in the root compartment (tenancy).
-        """
-        create_group_details = oci.identity.models.CreateGroupDetails(
-            compartment_id=self.tenancy_ocid, name=group_name, description=description
-        )
-        group = self.identity_client.create_group(create_group_details).data
-        print(f"Group Created: {group.name}, OCID: {group.id}")
-        return group
+        api_key = identity.upload_api_key(user.id, oci.identity.models.CreateApiKeyDetails(key=public_key)).data
+        print(f"uploaded API key, fingerprint {api_key.fingerprint}")
 
-    def assign_user_to_group(self, user_id, group_id):
-        """
-        Assign a user to a group.
-        """
-        add_user_group_details = oci.identity.models.AddUserToGroupDetails(
-            user_id=user_id, group_id=group_id
-        )
-        self.identity_client.add_user_to_group(add_user_group_details)
-        print(f"User with OCID {user_id} added to group with OCID {group_id}")
+        group = identity.create_group(oci.identity.models.CreateGroupDetails(
+            compartment_id=tenancy, name=args.group_name, description="Britive integration",
+        )).data
+        print(f"created group {group.name} ({group.id})")
 
-    def create_policy(self, policy_name, policy_statements, description):
-        """
-        Create a policy in the root compartment (tenancy).
-        """
-        create_policy_details = oci.identity.models.CreatePolicyDetails(
-            compartment_id=self.tenancy_ocid,
-            name=policy_name,
-            description=description,
-            statements=policy_statements,
-        )
-        policy = self.identity_client.create_policy(create_policy_details).data
-        print(f"Policy Created: {policy.name}, OCID: {policy.id}")
-        return policy
+        identity.add_user_to_group(oci.identity.models.AddUserToGroupDetails(user_id=user.id, group_id=group.id))
+        print(f"added {user.name} to {group.name}")
+
+        policy = identity.create_policy(oci.identity.models.CreatePolicyDetails(
+            compartment_id=tenancy, name=args.policy_name, description="Britive integration",
+            statements=[s.format(group=args.group_name) for s in POLICY_STATEMENTS],
+        )).data
+        print(f"created policy {policy.name} ({policy.id})")
+    except oci.exceptions.ServiceError as exc:
+        sys.exit(f"OCI error {exc.status} {exc.code}: {exc.message}")
+
+    print("\nBritive application fields (OCI):")
+    print(f"  Tenancy OCID:  {tenancy}")
+    print(f"  User OCID:     {user.id}")
+    print(f"  Fingerprint:   {api_key.fingerprint}")
+    print("  Private key:   the key matching --public-key-file")
 
 
-# Example Usage
 if __name__ == "__main__":
-    oci_manager = OCIInt(config_file="~/.oci/config")
-
-    # Get Tenancy OCID
-    oci_manager.get_tenancy_ocid()
-
-    # Create User
-    user = oci_manager.create_user(
-        first_name="Britive", last_name="User", email="britive.user@example.com"
-    )
-
-    # Add API Key to User
-    public_key_content = "YOUR_PUBLIC_KEY_CONTENT"
-    oci_manager.add_api_key_to_user(
-        user_id=user.id, public_key_content=public_key_content
-    )
-
-    # Create Group
-    group = oci_manager.create_group(
-        group_name="BritiveGroup", description="Group for Britive users"
-    )
-
-    # Assign User to Group
-    oci_manager.assign_user_to_group(user_id=user.id, group_id=group.id)
-
-    # Create Policy
-    policy_statements = [
-        "Allow group BritiveGroup to use users in tenancy",
-        "Allow group BritiveGroup to use groups in tenancy",
-        "Allow group BritiveGroup to inspect policies in tenancy",
-        "Allow group BritiveGroup to inspect domains in tenancy",
-    ]
-    oci_manager.create_policy(
-        policy_name="BritivePolicy",
-        policy_statements=policy_statements,
-        description="Policy for Britive group",
-    )
+    main()
