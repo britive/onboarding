@@ -11,7 +11,7 @@ One `terraform apply` onboards an AWS Organization:
   accounts that join later are onboarded without another apply.
 
 The StackSet uses the template in
-[`../../../cloudformation/aws/organization-stackset/britive_integration_resources.yaml`](../../../cloudformation/aws/organization-stackset/britive_integration_resources.yaml)
+[`../../../cloudformation/aws/britive_integration_resources.yaml`](../../../cloudformation/aws/britive_integration_resources.yaml)
 read straight from this repository; nothing is uploaded to S3.
 
 ## Prerequisites

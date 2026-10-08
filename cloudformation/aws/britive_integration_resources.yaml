@@ -1,0 +1,301 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Britive AWS integration for one account: the SAML identity provider and the
+  integration role Britive assumes to scan the account, with optional
+  permissions for session invalidation, Access Builder and AI identity
+  scanning, and optional sample JIT roles for demonstrations. Deploy it as a
+  stack in a single account, as a StackSet across an organization, or as the
+  nested template of organization-stackset/. Matches
+  docs.britive.com/docs/configuring-identity-provider, configuring-iam-roles
+  and configuring-for-session-invalidation.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Britive tenant
+        Parameters:
+          - TenantName
+          - SamlMetadataDocumentXmlContent
+      - Label:
+          default: Optional permissions
+        Parameters:
+          - DeployAwsInvalidationFeature
+          - DeployAccessBuilder
+          - DeployAiIdentityScanning
+          - MaxSessionDuration
+      - Label:
+          default: Demonstration
+        Parameters:
+          - DeploySampleRoles
+    ParameterLabels:
+      TenantName:
+        default: Tenant subdomain (acme for acme.britive-app.com)
+      SamlMetadataDocumentXmlContent:
+        default: SAML metadata XML (System Administration > Security > SAML Configurations > Download SAML Metadata)
+      DeployAwsInvalidationFeature:
+        default: Session invalidation permissions
+      DeployAccessBuilder:
+        default: Access Builder permissions
+      DeployAiIdentityScanning:
+        default: AI identity scanning (AmazonBedrockReadOnly)
+      MaxSessionDuration:
+        default: Integration role maximum session duration (seconds)
+      DeploySampleRoles:
+        default: Create four sample JIT roles
+
+Parameters:
+  TenantName:
+    Type: String
+    AllowedPattern: "^[a-zA-Z0-9][a-zA-Z0-9-]*$"
+    ConstraintDescription: letters, digits and hyphens only; the part before .britive-app.com
+    Description: Britive tenant subdomain, without ".britive-app.com". Names the provider britive-<tenant> and the role britive-<tenant>-integration-role.
+  SamlMetadataDocumentXmlContent:
+    Type: String
+    MinLength: 100
+    ConstraintDescription: paste the metadata XML itself, not a file path
+    Description: Contents of the SAML metadata XML downloaded from the Britive tenant.
+  DeployAwsInvalidationFeature:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Grant the IAM policy permissions Britive's session-invalidation feature needs, scoped to policy/britive/managed/* in this account.
+  DeployAccessBuilder:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Grant the IAM role permissions Britive Access Builder needs to create Britive-managed roles, scoped to role/britive/managed/* in this account.
+  DeployAiIdentityScanning:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Attach AmazonBedrockReadOnly so Britive can scan AI identities.
+  MaxSessionDuration:
+    Type: Number
+    Default: 3600
+    MinValue: 3600
+    MaxValue: 43200
+    Description: Maximum session duration of the integration role in seconds. Enter the same value, in hours, as "Duration of backend connection" when creating the AWS application in Britive.
+  DeploySampleRoles:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Create Readonly-admin-role, Poweruser-role, EC2-Fullaccess-role and S3-Fullaccess-role, trusting the Britive SAML provider, for demonstrations.
+
+Conditions:
+  Invalidation: !Equals [!Ref DeployAwsInvalidationFeature, "true"]
+  AccessBuilder: !Equals [!Ref DeployAccessBuilder, "true"]
+  AiScanning: !Equals [!Ref DeployAiIdentityScanning, "true"]
+  SampleRoles: !Equals [!Ref DeploySampleRoles, "true"]
+
+Resources:
+  BritiveSamlProvider:
+    Type: AWS::IAM::SAMLProvider
+    Properties:
+      Name: !Sub britive-${TenantName}
+      SamlMetadataDocument: !Ref SamlMetadataDocumentXmlContent
+
+  # Assumed by Britive to scan the account. Every role Britive brokers must
+  # grant the same three actions: SetSourceIdentity is required once a Source
+  # Identity attribute is configured on the application, TagSession by
+  # session invalidation.
+  BritiveIntegrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub britive-${TenantName}-integration-role
+      Description: Assumed by Britive to scan this account and, optionally, manage Britive-managed policies and roles
+      MaxSessionDuration: !Ref MaxSessionDuration
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/IAMReadOnlyAccess
+        # Needed in the management account to discover the organization;
+        # harmless in member accounts, where it returns nothing.
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSOrganizationsReadOnlyAccess
+        - !If
+          - AiScanning
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonBedrockReadOnly
+          - !Ref AWS::NoValue
+
+  # Session invalidation: Britive writes deny policies under policy/britive/managed/
+  # to cut live sessions short. Pair with the SCP in scp/ so nothing but this
+  # role can touch that path.
+  BritiveInvalidationPolicy:
+    Type: AWS::IAM::Policy
+    Condition: Invalidation
+    Properties:
+      PolicyName: britive-aws-invalidation
+      Roles:
+        - !Ref BritiveIntegrationRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:CreatePolicy
+              - iam:DeletePolicy
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicyVersion
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicyVersions
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/britive/managed/*
+
+  # Access Builder: Britive creates and removes roles under role/britive/managed/.
+  BritiveAccessBuilderPolicy:
+    Type: AWS::IAM::Policy
+    Condition: AccessBuilder
+    Properties:
+      PolicyName: britive-access-builder
+      Roles:
+        - !Ref BritiveIntegrationRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:UpdateRole
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/britive/managed/*
+
+  # Sample JIT roles for demonstrations. Each trusts the Britive SAML provider
+  # exactly as a production role must.
+  SampleReadOnlyRole:
+    Type: AWS::IAM::Role
+    Condition: SampleRoles
+    Properties:
+      RoleName: Readonly-admin-role
+      Description: "Sample Britive JIT role: read-only access"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/ReadOnlyAccess
+
+  SamplePowerUserRole:
+    Type: AWS::IAM::Role
+    Condition: SampleRoles
+    Properties:
+      RoleName: Poweruser-role
+      Description: "Sample Britive JIT role: PowerUserAccess"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/PowerUserAccess
+
+  SampleEc2AdminRole:
+    Type: AWS::IAM::Role
+    Condition: SampleRoles
+    Properties:
+      RoleName: EC2-Fullaccess-role
+      Description: "Sample Britive JIT role: EC2 full access"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonEC2FullAccess
+
+  SampleS3AdminRole:
+    Type: AWS::IAM::Role
+    Condition: SampleRoles
+    Properties:
+      RoleName: S3-Fullaccess-role
+      Description: "Sample Britive JIT role: S3 full access"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref BritiveSamlProvider
+            Action:
+              - sts:AssumeRoleWithSAML
+              - sts:SetSourceIdentity
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                SAML:aud: https://signin.aws.amazon.com/saml
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonS3FullAccess
+
+Outputs:
+  AccountId:
+    Description: Enter as the account ID (or Management Account ID) in the Britive application.
+    Value: !Ref AWS::AccountId
+  BritiveSamlProviderName:
+    Description: Enter as "Identity Provider Name" in the Britive application.
+    Value: !Sub britive-${TenantName}
+  BritiveSamlProviderArn:
+    Value: !Ref BritiveSamlProvider
+  BritiveIntegrationRoleName:
+    Description: Enter as "Integration Role Name" in the Britive application (the name, not the ARN).
+    Value: !Ref BritiveIntegrationRole
+  BritiveIntegrationRoleArn:
+    Value: !GetAtt BritiveIntegrationRole.Arn
+  MaxSessionDurationSeconds:
+    Description: Divide by 3600 and enter as "Duration of backend connection" (hours) in the Britive application.
+    Value: !Ref MaxSessionDuration
+  SampleReadOnlyRoleArn:
+    Condition: SampleRoles
+    Value: !GetAtt SampleReadOnlyRole.Arn
+  SamplePowerUserRoleArn:
+    Condition: SampleRoles
+    Value: !GetAtt SamplePowerUserRole.Arn
+  SampleEc2AdminRoleArn:
+    Condition: SampleRoles
+    Value: !GetAtt SampleEc2AdminRole.Arn
+  SampleS3AdminRoleArn:
+    Condition: SampleRoles
+    Value: !GetAtt SampleS3AdminRole.Arn
