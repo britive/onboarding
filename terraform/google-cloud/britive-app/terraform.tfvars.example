@@ -1,0 +1,14 @@
+# Optional. Copy to terraform.tfvars (git-ignored) to change the defaults.
+
+# application_name = "Google Cloud"   # letters, digits and spaces only
+
+# When Britive users and Google identities use different email domains:
+# britive_users_domain = "example.com"
+# google_domain        = "example-gcp.com"
+
+# programmatic_access          = false   # temporary keys at checkout; needs key creation allowed
+# max_session_duration_seconds = 43200
+
+# Key mode only, when ../../google-workspace was not applied with Terraform:
+# gsuite_admin_email    = "britive-integration@example.com"
+# workspace_customer_id = "C01abcdef"

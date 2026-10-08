@@ -1,57 +1,16 @@
-variable "organization_id" {
-  type = string
-}
+# The Google Cloud side of the Britive GCP integration:
+#   - a project that holds the Britive service account (created, or an existing one)
+#   - the APIs Britive calls
+#   - the Britive Integration Role (organisation custom role) and the service account
+#     that holds it, at organisation, folder or project scope
+#   - how Britive authenticates as that account: wif.tf (keyless, recommended) or
+#     key.tf (legacy service account key)
 
-variable "common_resource_name" {
-  type    = string
-  default = "BritiveIntegration"
-}
+locals {
+  wif = var.integration_type == "wif"
 
-variable "workspace_customer_id" {
-  type = string
-}
-
-variable "workspace_domain" {
-  type = string
-}
-
-provider "google" {
-
-}
-
-resource "google_project" "BritiveIntegration" {
-  name                = var.common_resource_name
-  project_id          = lower(var.common_resource_name)
-  org_id              = var.organization_id
-}
-
-resource "google_project_service" "cloudresourcemanager" {
-  project = google_project.BritiveIntegration.project_id
-  service = "cloudresourcemanager.googleapis.com"
-}
-
-resource "google_project_service" "iam" {
-  project = google_project.BritiveIntegration.project_id
-  service = "iam.googleapis.com"
-}
-
-resource "google_project_service" "admin" {
-  project = google_project.BritiveIntegration.project_id
-  service = "admin.googleapis.com"
-}
-
-resource "google_organization_iam_custom_role" "BritiveIntegration" {
-  depends_on = [
-    google_project_service.admin,
-    google_project_service.cloudresourcemanager,
-    google_project_service.iam
-  ]
-  role_id     = var.common_resource_name
-  org_id      = var.organization_id
-  title       = var.common_resource_name
-  description = "required permissions for Britive to interact with GCP"
-  stage       = "GA"
-  permissions = [
+  # Permissions from Britive's prerequisites for the GCP application.
+  base_permissions = [
     "iam.roles.get",
     "iam.roles.list",
     "iam.serviceAccountKeys.create",
@@ -79,50 +38,126 @@ resource "google_organization_iam_custom_role" "BritiveIntegration" {
     "resourcemanager.projects.get",
     "resourcemanager.projects.getIamPolicy",
     "resourcemanager.projects.list",
-    "resourcemanager.projects.setIamPolicy"
+    "resourcemanager.projects.setIamPolicy",
   ]
-}
-
-resource "google_service_account" "BritiveIntegration" {
-  depends_on = [
-    google_project_service.admin,
-    google_project_service.cloudresourcemanager,
-    google_project_service.iam
+  bigquery_permissions = [
+    "bigquery.datasets.update",
+    "bigquery.tables.get",
+    "bigquery.tables.getIamPolicy",
+    "bigquery.tables.setIamPolicy",
   ]
-  account_id   = replace(lower(var.common_resource_name), " ", "")
-  display_name = var.common_resource_name
-  project = google_project.BritiveIntegration.project_id
+  apigee_permissions = [
+    "apigee.environments.get",
+    "apigee.environments.getIamPolicy",
+    "apigee.environments.setIamPolicy",
+  ]
+  ai_scan_permissions = [
+    "aiplatform.locations.get",
+    "aiplatform.locations.list",
+    "aiplatform.reasoningEngines.get",
+    "aiplatform.reasoningEngines.list",
+  ]
+  role_permissions = concat(
+    local.base_permissions,
+    var.enable_bigquery_constraints ? local.bigquery_permissions : [],
+    var.enable_apigee_constraints ? local.apigee_permissions : [],
+    var.enable_ai_identity_scan ? local.ai_scan_permissions : [],
+  )
+
+  # Cloud Resource Manager, IAM and Directory are what Britive's prerequisites list.
+  # WIF also needs the token exchange (STS) and impersonation (IAM Credentials) APIs.
+  apis = concat(
+    ["cloudresourcemanager.googleapis.com", "iam.googleapis.com", "admin.googleapis.com"],
+    local.wif ? ["iamcredentials.googleapis.com", "sts.googleapis.com"] : [],
+  )
+
+  project_id     = var.create_project ? google_project.britive[0].project_id : data.google_project.existing[0].project_id
+  project_number = var.create_project ? google_project.britive[0].number : data.google_project.existing[0].number
 }
 
-resource "google_service_account_key" "BritiveIntegrationKey" {
-  service_account_id = google_service_account.BritiveIntegration.name
-  public_key_type    = "TYPE_X509_PEM_FILE"
+check "scope_id_set" {
+  assert {
+    condition     = var.access_scope == "organization" || var.scope_id != null
+    error_message = "scope_id is required when access_scope is \"folder\" or \"project\"."
+  }
 }
 
-resource "local_sensitive_file" "key" {
-  content_base64 = google_service_account_key.BritiveIntegrationKey.private_key
-  filename       = "../keys/key.json"
+check "tenant_set_for_wif" {
+  assert {
+    condition     = !local.wif || var.britive_tenant_url != null || var.britive_issuer_url != null
+    error_message = "britive_tenant_url is required when integration_type is \"wif\"."
+  }
 }
 
-resource "google_organization_iam_binding" "organization" {
+# ------------------------------------------------------------------------ project
+resource "google_project" "britive" {
+  count = var.create_project ? 1 : 0
+
+  name                = var.project_name
+  project_id          = var.project_id
+  org_id              = var.folder_id == null ? var.organization_id : null
+  folder_id           = var.folder_id
+  billing_account     = var.billing_account
+  auto_create_network = false
+  deletion_policy     = var.allow_project_deletion ? "DELETE" : "PREVENT"
+}
+
+data "google_project" "existing" {
+  count      = var.create_project ? 0 : 1
+  project_id = var.project_id
+}
+
+resource "google_project_service" "apis" {
+  for_each = toset(local.apis)
+
+  project            = local.project_id
+  service            = each.value
+  disable_on_destroy = false
+}
+
+# Newly enabled APIs take a minute to answer everywhere; without this the service
+# account or the pool can fail with "API not enabled" on the first apply.
+resource "time_sleep" "apis" {
+  create_duration = "60s"
+  depends_on      = [google_project_service.apis]
+}
+
+# ------------------------------------------------------------ role and service account
+resource "google_organization_iam_custom_role" "britive" {
+  org_id      = var.organization_id
+  role_id     = var.role_id
+  title       = "Britive Integration Role"
+  description = "Permissions Britive needs to read IAM and grant roles just in time."
+  stage       = "GA"
+  permissions = local.role_permissions
+}
+
+resource "google_service_account" "britive" {
+  project      = local.project_id
+  account_id   = var.service_account_id
+  display_name = "Britive integration"
+  description  = local.wif ? "Impersonated by the Britive tenant through workload identity federation. No key." : "Used by the Britive GCP application with a service account key."
+  depends_on   = [time_sleep.apis]
+}
+
+# The role is added for this one member; other members of the role are untouched.
+resource "google_organization_iam_member" "britive" {
+  count  = var.access_scope == "organization" ? 1 : 0
   org_id = var.organization_id
-  role   = google_organization_iam_custom_role.BritiveIntegration.id
-
-  members = [
-    "serviceAccount:${google_service_account.BritiveIntegration.email}"
-  ]
+  role   = google_organization_iam_custom_role.britive.id
+  member = "serviceAccount:${google_service_account.britive.email}"
 }
 
-output "organizations_unique_identifier" {
-  value = var.organization_id
+resource "google_folder_iam_member" "britive" {
+  count  = var.access_scope == "folder" ? 1 : 0
+  folder = "folders/${trimprefix(coalesce(var.scope_id, "none"), "folders/")}"
+  role   = google_organization_iam_custom_role.britive.id
+  member = "serviceAccount:${google_service_account.britive.email}"
 }
 
-output "project_id_for_creating_service_accounts" {
-  value = google_project.BritiveIntegration.project_id
+resource "google_project_iam_member" "britive" {
+  count   = var.access_scope == "project" ? 1 : 0
+  project = coalesce(var.scope_id, "none")
+  role    = google_organization_iam_custom_role.britive.id
+  member  = "serviceAccount:${google_service_account.britive.email}"
 }
-
-output "customer_id_in_google_workspace_account_settings" {
-  value = var.workspace_customer_id
-}
-
-

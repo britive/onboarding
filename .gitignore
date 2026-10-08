@@ -506,7 +506,12 @@ $RECYCLE.BIN/
 
 # MANUAL ADDITIONS
 
-!google-cloud/keys/*# Created by https://www.toptal.com/developers/gitignore/api/pycharm
+# Google Cloud onboarding (key mode): the generated service account private key
+# and the Workspace plan file. A key here has organisation-wide IAM rights.
+terraform/google-cloud/keys/
+terraform/google-workspace/tfplan
+
+# Created by https://www.toptal.com/developers/gitignore/api/pycharm
 # Edit at https://www.toptal.com/developers/gitignore?templates=pycharm
 
 ### PyCharm ###

@@ -1,0 +1,8 @@
+# Key mode only. Copy to terraform.tfvars (git-ignored) and fill in.
+workspace_customer_id         = "C01abcdef"         # admin.google.com -> Account settings
+workspace_domain              = "example.com"
+workspace_impersonation_email = "admin@example.com" # an existing super administrator
+
+# service_account_key_file = "../google-cloud/keys/key.json"
+# admin_role_name          = "Britive Integration"
+# admin_user_name          = "britive-integration"

@@ -1,59 +1,81 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Deploy the Britive Google Cloud integration, end to end:
+#   1. Google Cloud: project, APIs, Britive role and service account, and either a
+#      workload identity pool (wif) or a service account key (key)      -> this directory
+#   2. Key mode only: Google Workspace admin role and user, after you grant
+#      domain-wide delegation by hand                                   -> ../google-workspace
+#   3. The Britive application, when BRITIVE_TENANT and BRITIVE_TOKEN are set
+#                                                                       -> britive-app/
+# Run from anywhere: ./deploy.sh. Needs terraform, gcloud and jq, and
+# terraform.tfvars in this directory (copy terraform.tfvars.example).
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WORKSPACE_DIR="$HERE/../google-workspace"
+APP_DIR="$HERE/britive-app"
 
-gcloud auth application-default login
-
-clear
-
-cd gcp
-terraform init
-terraform apply -var-file=../variables.tfvars
-terraform output > ../outputs/gcp.txt
-
-clear
-
-cd ..
-
-clientid=$(cat ./keys/key.json | jq -r '.client_id')
-echo "now manually do domain-wide delegation..."
-echo "admin.google.com > login > Security > Access and data control > API controls > Manage Domain Wide Delegation"
-echo "or"
-echo "direct link: https://admin.google.com/ac/owl/domainwidedelegation?hl=en"
-echo ""
-echo "Add new..."
-echo "client id: $clientid"
-echo "oauth scopes: https://www.googleapis.com/auth/admin.directory.user,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/admin.directory.group,https://www.googleapis.com/auth/admin.directory.group.member,https://www.googleapis.com/auth/admin.directory.rolemanagement"
-echo ""
-read -p "Press ENTER to continue (once the above actions are completed)..."
-
-cd workspace
-
-clear
-terraform init
-clear
-
-while ! terraform apply -var-file=../variables.tfvars
-do
-    clear
-    echo waiting for domain wide delegation action to complete - sleeping 10 seconds
-    sleep 10
+fail() { echo "error: $*" >&2; exit 1; }
+for tool in terraform gcloud jq; do
+  command -v "$tool" >/dev/null || fail "$tool is not installed"
 done
+[ -f "$HERE/terraform.tfvars" ] || fail "copy terraform.tfvars.example to terraform.tfvars in $HERE and fill it in"
 
-terraform output > ../outputs/workspace.txt
+# Terraform uses Application Default Credentials; sign in only if they are missing.
+if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
+  gcloud auth application-default login
+fi
 
-cd ..
+echo "== 1/3 Google Cloud"
+terraform -chdir="$HERE" init -input=false
+terraform -chdir="$HERE" apply
+mode=$(terraform -chdir="$HERE" output -raw integration_type)
 
-clear
+if [ "$mode" = "key" ]; then
+  echo
+  echo "== 2/3 Google Workspace (key mode)"
+  [ -f "$WORKSPACE_DIR/terraform.tfvars" ] \
+    || fail "copy terraform.tfvars.example to terraform.tfvars in $WORKSPACE_DIR and fill it in"
+  client_id=$(terraform -chdir="$HERE" output -raw service_account_client_id)
+  cat <<EOF
+Grant domain-wide delegation to the Britive service account, as a Workspace super administrator:
+  https://admin.google.com/ac/owl/domainwidedelegation
+  Add new -> Client ID: $client_id
+  OAuth scopes:
+    https://www.googleapis.com/auth/admin.directory.user,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/admin.directory.group,https://www.googleapis.com/auth/admin.directory.group.member,https://www.googleapis.com/auth/admin.directory.rolemanagement
+EOF
+  read -rp "Press ENTER once delegation is saved..."
 
-echo "required data points to create Britive GCP application..."
-echo ""
-cat outputs/gcp.txt
-cat outputs/workspace.txt
-echo ""
-echo "below is the service account credentials (content of private key file as JSON string)"
-cat keys/key.json
+  terraform -chdir="$WORKSPACE_DIR" init -input=false
+  # Delegation takes a few minutes to take effect; until then the plan fails with
+  # unauthorized_client. Retry the plan for up to 10 minutes, then apply what it shows.
+  for attempt in $(seq 1 30); do
+    if terraform -chdir="$WORKSPACE_DIR" plan -input=false -out=tfplan; then
+      break
+    fi
+    [ "$attempt" -lt 30 ] || fail "Workspace still refuses the service account after 10 minutes: check the client ID and scopes above"
+    echo "waiting for domain-wide delegation to take effect (attempt $attempt/30)..."
+    sleep 20
+  done
+  read -rp "Apply this plan? [y/N] " answer
+  [ "$answer" = "y" ] || [ "$answer" = "Y" ] || fail "stopped before applying the Workspace plan"
+  terraform -chdir="$WORKSPACE_DIR" apply -input=false tfplan
+  rm -f "$WORKSPACE_DIR/tfplan"
+fi
 
-
-
-
-
-
+echo
+echo "== 3/3 Britive application"
+if [ -n "${BRITIVE_TENANT:-}" ] && [ -n "${BRITIVE_TOKEN:-}" ]; then
+  terraform -chdir="$APP_DIR" init -input=false
+  terraform -chdir="$APP_DIR" apply
+  terraform -chdir="$APP_DIR" output -raw next_step; echo
+else
+  echo "BRITIVE_TENANT and BRITIVE_TOKEN are not set: create the application in the Britive console"
+  echo "(Applications -> Add Application -> $( [ "$mode" = "wif" ] && echo "Google Cloud Platform WIF" || echo "Google Cloud Platform" ))"
+  echo "with these values, or set both variables and run this script again:"
+  terraform -chdir="$HERE" output -json britive_application_values | jq .
+  [ "$mode" = "key" ] && terraform -chdir="$WORKSPACE_DIR" output
+fi
+if [ "$mode" = "key" ]; then
+  echo
+  echo "The service account key is $HERE/keys/key.json (mode 0600, git-ignored). Upload it to the"
+  echo "Britive application, then keep it out of shared folders and chat. It is also in terraform.tfstate."
+fi

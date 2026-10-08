@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+
+# Organisation Britive manages, and the project that holds its service account.
+organization_id = "123456789012"                # gcloud organizations list
+project_id      = "britive-integration-example" # unique across Google Cloud
+# create_project  = true                        # false: use an existing project_id
+# folder_id       = "987654321098"              # create the project in a folder
+# billing_account = "AAAAAA-BBBBBB-CCCCCC"      # only if your organisation requires one
+
+# "wif" (recommended, keyless) or "key" (legacy; also run ../google-workspace).
+integration_type   = "wif"
+britive_tenant_url = "https://your-tenant.britive-app.com"
+
+# Where Britive may grant roles: "organization", or "folder"/"project" plus scope_id.
+# access_scope = "organization"
+# scope_id     = "987654321098"   # folder number, or project ID
+
+# Optional permissions for Britive features.
+# enable_bigquery_constraints = true
+# enable_apigee_constraints   = false
+# enable_ai_identity_scan     = false
+
+# Names. Change role_id when re-creating soon after a destroy (deleted IDs stay reserved).
+# role_id                       = "BritiveIntegrationRole"
+# service_account_id            = "britive-integration"
+# workload_identity_pool_id     = "britive"
+# workload_identity_provider_id = "britive-oidc"
