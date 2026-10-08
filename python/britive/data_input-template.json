@@ -78,7 +78,7 @@
     {
       "description": "Slack for approval and other Britive notices",
       "name": "Slack_TEST",
-      "url": "https://hooks.slack.com/api/",
+      "url": "https://hooks.slack.com/services/<your-webhook-path>",
       "type": "slack"
     }
   ],

@@ -101,8 +101,8 @@ broker:
     - ./broker-ssh:/root/.ssh:ro
 ```
 
-> `broker-ssh/id_rsa` (the private key) is in `.gitignore` and must never be committed.
-> `broker-ssh/id_rsa.pub` is tracked so others can see which key is authorized on target hosts.
+> The whole `broker-ssh/` directory is in `.gitignore`. Generate your own key pair; never commit
+> either half of it. The public key is what you add to `authorized_keys` on each target host.
 
 ### 6. Start all services
 

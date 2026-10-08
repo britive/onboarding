@@ -27,7 +27,7 @@ aws/
 ├── single-account-stack/        # Single account deployment templates
 │   ├── britive_integration_resources.yaml
 │   ├── britive_integration_with_roles.yaml
-│   ├── parameters.json
+│   ├── parameters.example.json
 │   └── README.md
 ├── stackset-templates/          # Multi-account StackSet deployment
 │   ├── britive_integration_resources_stackset.yaml
@@ -37,11 +37,11 @@ aws/
 ├── organization-stackset/       # Organization-wide deployment with nested stacks
 │   ├── deploy_britive_integration_resources.yaml
 │   ├── britive_integration_resources.yaml
-│   ├── parameters.json
+│   ├── parameters.example.json
 │   └── README.md
 └── full-lab-setup/              # Complete demo environment
     ├── britive_lab_resources.yaml
-    ├── parameters.json
+    ├── parameters.example.json
     └── README.md
 ```
 
