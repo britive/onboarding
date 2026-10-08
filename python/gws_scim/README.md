@@ -29,10 +29,10 @@ This script is designed to simulate SCIM (System for Cross-domain Identity Manag
    source .venv/bin/activate
 
    # install the packages
-   pip install britive python-dotenv
+   pip install -r requirements.txt
    ```
 
-2. Set up your environment variables in a `.env` file:
+2. Set up your environment variables in a `.env` file (`cp .env.example .env`):
 
    ```
    BRITIVE_TENANT=<Britive Tenant name>
@@ -44,7 +44,7 @@ This script is designed to simulate SCIM (System for Cross-domain Identity Manag
    ```
 
 - `BRITIVE_TENANT`: In order to obtain the tenant name, reference the Britive URL used to login to the UI. If the URL is `https://example.britive-app.com` then the tenant name will be `example`.
-- `BRITIVE_API_TOKEN`: Authentication is handled solely via API tokens. As of v2.5.0 a `Bearer` token can be provided as well. A `Bearer` token is generated as part of an interactive login process and is temporary in nature. An API token can be generated at `https://{{tenant}}.britive-app.com/admin/security/api-tokens`. See the **Security** [**Creating API token**](https://docs.britive.com/v1/docs/introduction-security#creating-api-token) documentation for more details.
+- `BRITIVE_API_TOKEN`: An API token generated at `https://{{tenant}}.britive-app.com/admin/security/api-tokens`. See the **Security** [**Creating API token**](https://docs.britive.com/v1/docs/introduction-security#creating-api-token) documentation for more details.
 - `APP_GROUP`: The name of at least one Google Workspace group that should be included in the scan for users.
 - `GROUP_PREFIX`: The standard group name prefix of Google Workspace Groups to match. If the group names are `Britive - Team 1` and `Britive - Team 2` then the prefix will be `Britive -`.
    > **NOTE:** Both `APP_GROUP` and `GROUP_PREFIX` must be supplied even if `APP_GROUP` starts with the prefix defined in `GROUP_PREFIX`.

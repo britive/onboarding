@@ -1,19 +1,17 @@
-# Azure Britive Integration
+# Azure
 
-This Python script automates the process of registering a Britive application in Azure Active Directory and assigning custom roles at the Tenant Root Group level.
+The Python script that used to live here was removed: it depended on
+`azure-graphrbac`, which targets the Azure AD Graph API Microsoft retired,
+and it assigned the custom role at subscription scope where Britive requires
+the Tenant Root Group. It could not run against a current tenant.
 
-## Prerequisites
+Follow the product steps directly:
 
-- Python 3.6 or higher
-- Azure Subscription and Tenant ID
-- Azure credentials with necessary permissions
+- [Azure prerequisites](https://docs.britive.com/docs/prerequisites-azure)
+- [Registering the Britive application in Azure](https://docs.britive.com/docs/registering-britive-application-in-azure)
+- Assigning permissions for discovery-and-visibility or dynamic
+  permissioning (linked from the prerequisites page)
 
-## Installation
-
-1. **Install Required Packages**
-2. 
-   Install the required Azure SDK packages using pip:
-
-    ```bash
-    pip install azure-identity azure-core azure-graphrbac azure-mgmt-authorization python-dotenv
-    ```
+A Terraform example (`azuread` application registration + federated
+credential, custom role at the Tenant Root Group) is planned under
+`terraform/azure/`.

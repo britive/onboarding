@@ -1,0 +1,43 @@
+# Demo namespace and three Roles for the Kubernetes quick start. The
+# RoleBindings in jit-rolebindings.yaml map Britive permissions (the OIDC
+# groups claim) onto these. Replace them with your own least-privilege roles
+# for anything beyond an evaluation.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jit
+---
+# Everything in the jit namespace. Deliberately a wildcard, demo only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: jit
+  name: jit-admin
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+# Read pods only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: jit
+  name: pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+# All core-API resources (pods, services, configmaps, secrets, ...) in jit;
+# nothing in apps/, batch/ or rbac.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: jit
+  name: ns-manager
+rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]

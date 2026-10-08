@@ -1,0 +1,3 @@
+boto3~=1.38
+britive>=4.1.3,<5
+python-dotenv~=1.0

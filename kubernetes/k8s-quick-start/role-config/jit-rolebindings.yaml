@@ -1,0 +1,45 @@
+# Bind the groups Britive puts in the OIDC token (the names of the
+# permissions on the Britive profile) to the Roles in jit-roles.yaml.
+# Group names are case sensitive.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jit-admin-binding
+  namespace: jit
+subjects:
+  - kind: Group
+    name: jit-admins
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: jit-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nsmanager-binding
+  namespace: jit
+subjects:
+  - kind: Group
+    name: ns-managers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: ns-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: jit
+subjects:
+  - kind: Group
+    name: developers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io

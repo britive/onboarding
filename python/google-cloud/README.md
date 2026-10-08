@@ -1,86 +1,59 @@
-# Britive GCP Setup Script
+# Google Cloud with Python
 
-This script automates the creation of a custom IAM role and a service account, and assigns the role to the service account in a specified GCP project.
-It is designed for integrating the Britive platform with GCP.
+Two scripts for the **key-based** Google Cloud integrations. For an
+organization-level application or Workload Identity Federation (keyless),
+use [`../../terraform/google-cloud/`](../../terraform/google-cloud/).
 
+| Script | Creates | Britive application |
+| ------ | ------- | ------------------- |
+| `setup_gcp.py` | A service account and the 19-permission *projects only* custom role, bound on one project | **GCP Standalone** — [prerequisites](https://docs.britive.com/docs/creating-a-custom-role-for-gcp-standalone-application) |
+| `setup_gcds.py` | The Google Workspace admin role for directory sync (OU/users/groups read, groups update) | **GCP** (organization, key mode) — [GCDS role](https://docs.britive.com/docs/cis-custom-role-gcds) |
 
-## 🔧 Requirements
-
-- Python 3.10+
-- Required packages:
-  - `google-api-python-client`
-  - `google-auth`
-  - `google-cloud-iam`
-  - `time`
-  - `argparse`
-
-Install dependencies:
+## Setup
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 🔐 Authentication
+## `setup_gcp.py`
 
-You must authenticate using a GCP service account key with sufficient permissions to:
-
-- Create service accounts
-- Create custom roles
-- Assign IAM policies
-
-Authenticate via:
+Authenticates with Application Default Credentials
+(`gcloud auth application-default login` as someone with
+`iam.serviceAccounts.create`, `iam.roles.create` and
+`resourcemanager.projects.setIamPolicy` on the project), or with a service
+account key via `--credentials`.
 
 ```bash
-gcloud auth application-default login
+python3 setup_gcp.py --project-id my-project
+python3 setup_gcp.py --project-id my-project --service-account-name britive-sa --role-id BritiveIntegrationRole
 ```
 
-Create a service account key (if you haven't already):
+Idempotent: an existing service account is kept, an existing role has its
+permissions refreshed, an existing binding is left alone. IAM policy is
+read and written at version 3 so conditional bindings survive.
+
+Then create a key and upload it when creating the **GCP Standalone**
+application in Britive:
 
 ```bash
-gcloud iam service-accounts keys create service_account_creds.json \
-  --iam-account your-sa@your-project.iam.gserviceaccount.com
+gcloud iam service-accounts keys create britive-key.json --iam-account britive-service@my-project.iam.gserviceaccount.com
 ```
 
-Save the key at:
+Keep the key out of the repository (`*.json` keys are not tracked here).
 
-```
-google-cloud/service_account_creds.json
-```
+## `setup_gcds.py`
 
-## 🚀 Usage
-
-Run the script:
+Needs an OAuth desktop client JSON from the Google Cloud console with the
+Admin SDK API enabled; a browser opens for a Workspace super administrator
+to consent.
 
 ```bash
-python setup_gcp.py \
-  --project_id your-project-id \
-  --role_id BritiveIntegrationRole \
-  --service_account_name sa-britive-service \
-  --service_account_display_name "Britive Service Account"
+python3 setup_gcds.py --client-secrets client_secret.json
+python3 setup_gcds.py --client-secrets client_secret.json --customer-id C01abcdef --role-name BritiveDirectoryRole
 ```
 
-
-## 📋 What It Does
-
-1. **Checks if the service account exists.** Creates it if it doesn't.
-2. **Creates a custom role** named `BritiveIntegrationRole` with GCP IAM permissions required for Britive integration.
-3. **Assigns the role** to the service account at the project level.
-
-## 🗂 Directory Structure
-
-```
-.
-├── setup_gcp.py
-├── google-cloud/
-│   └── service_account_creds.json
-└── README.md
-```
-
-## 🛡️ Notes
-
-- The script is **idempotent** — it will skip creation steps for existing resources.
-- Custom role propagation may take a few seconds; the script includes a short delay before policy binding.
-- Ensure your service account key has permissions like:
-  - `iam.roles.create`
-  - `iam.serviceAccounts.*`
-  - `resourcemanager.projects.setIamPolicy`
+The script resolves the privilege IDs from the Admin SDK (`privileges.list`)
+rather than hard-coding them, creates the role, and prints it. Assign the
+role to the Britive service account's Workspace user afterwards (Admin
+console → Account → Admin roles).
