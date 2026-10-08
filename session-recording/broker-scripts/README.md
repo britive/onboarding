@@ -1,6 +1,6 @@
 # Britive Broker Scripts - Session Recording (legacy)
 
-> Legacy. New deployments use [Britive Bridge](../../Britive%20Bridge/v2/README.md).
+> Legacy. New deployments use [Britive Bridge](../../bridge/v2/README.md).
 > See [../README.md](../README.md).
 
 Checkout and check-in scripts for the Britive Access Broker. A checkout grants

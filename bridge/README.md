@@ -117,8 +117,8 @@ docker build \
 
 ## Directory layout
 
-```
-Britive Bridge/
+```text
+bridge/
 ├── README.md                       # you are here
 ├── platform-setup/                 # run FIRST — creates Britive platform objects
 │   ├── quick-setup.py

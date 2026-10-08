@@ -1,6 +1,6 @@
 # Session Recording (legacy) - Docker Compose
 
-> Legacy. New deployments use [Britive Bridge](../../Britive%20Bridge/v2/README.md).
+> Legacy. New deployments use [Britive Bridge](../../bridge/v2/README.md).
 > See [../README.md](../README.md).
 
 Runs Britive Access Broker next to Apache Guacamole so that SSH and RDP sessions
