@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Britive product documentation
+    url: https://docs.britive.com/docs/application-onboarding-guides
+    about: Prerequisites and product steps live here; this repository only holds the deployment assets.
+  - name: Britive support
+    url: https://support.britive.com
+    about: Questions about your tenant, licences or a production incident go to support, not to a public issue.
+  - name: Report a security vulnerability
+    url: https://github.com/britive/onboarding/security/advisories/new
+    about: Never file a security problem as a public issue.

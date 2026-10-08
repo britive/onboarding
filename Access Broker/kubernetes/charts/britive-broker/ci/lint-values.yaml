@@ -1,0 +1,13 @@
+# Values helm lint uses in CI (helm reads ci/*-values.yaml automatically).
+image:
+  repository: example.com/britive-broker
+britive:
+  tenantSubdomain: your-tenant
+  authToken: lint-only
+rbac:
+  create: true
+  namespaces: [dev]
+config: |
+  config:
+    bootstrap:
+      tenant_subdomain: your-tenant

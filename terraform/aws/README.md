@@ -103,33 +103,19 @@ Each directory follows Terraform best practices:
 
 **Note**: Some configurations may have additional `.tf` files (like `stackset.tf` in organization-stackset) for logical separation of complex resources.
 
-## Key Improvements Over CloudFormation
+## Relationship to the CloudFormation templates
 
-These Terraform configurations include several improvements:
+Each directory here creates the same IAM resources as its counterpart under
+[`../../cloudformation/aws/`](../../cloudformation/aws/): the SAML provider,
+the integration role with the same managed policies and trust policy, and the
+optional invalidation permissions. Variable names follow the CloudFormation
+parameter names (`tenant_name`, `saml_metadata_document_xml_content`,
+`deploy_aws_invalidation_feature`) and the outputs carry the same values, so a
+Britive application configured from one can be reproduced from the other.
 
-1. **No Deprecation Warnings**: Uses `aws_iam_role_policy_attachment` instead of deprecated `managed_policy_arns`
-2. **Simplified Structure**: Full lab setup consolidated into a single, well-organized `main.tf`
-3. **Clear Organization**: Resources grouped by type with section headers
-4. **Modern Best Practices**: Uses current Terraform patterns and conventions
-5. **Better Modularity**: Easy to customize individual sections
+## Getting help
 
-See [CHANGES.md](CHANGES.md) for detailed information about recent updates.
-
-## Getting Help
-
-For issues or questions:
-
-- Check the README in each subdirectory
-- Review the equivalent CloudFormation template for comparison
-- Consult Terraform AWS provider documentation
-- Review [CONVERSION_SUMMARY.md](CONVERSION_SUMMARY.md) for CloudFormation→Terraform mapping
-
-## Migration from CloudFormation
-
-If you're migrating from CloudFormation:
-
-1. The resources created are functionally identical
-2. Variable names closely match CloudFormation parameter names
-3. Outputs provide the same information
-4. Each Terraform directory's README explains the mapping to CloudFormation
-5. See [CONVERSION_SUMMARY.md](CONVERSION_SUMMARY.md) for detailed resource mapping
+- The README in each subdirectory covers deploy, verify and teardown
+- The Britive AWS onboarding guide covers the product side:
+  <https://docs.britive.com/docs/application-onboarding-guides>
+- Terraform AWS provider documentation for resource details

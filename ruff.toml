@@ -1,0 +1,8 @@
+line-length = 120
+target-version = "py310"
+
+[lint]
+# Errors that stop a script from running or signal dead code. Style is not
+# enforced; these are examples, not a library.
+select = ["F", "E9", "B", "S110", "S112"]
+ignore = ["F841"]
