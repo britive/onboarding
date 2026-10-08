@@ -1,99 +1,132 @@
 # =============================================================================
 # Britive Bridge v2 — deployment configuration
 #
-# This file is BAKED INTO THE IMAGE at /etc/britive-bridge/config.yaml by the
-# Dockerfile beside it. Changing it therefore means building and pushing a new
-# image tag, then updating the ECS stack's ImageUri.
+# Used two ways in this repository:
+#   - ECS Fargate: BAKED INTO THE IMAGE at /etc/britive-bridge/config.yaml by
+#     the Dockerfile beside it (Fargate has no volume to mount a file from).
+#     Changing it means building and pushing a new image tag, then updating
+#     the stack's ImageUri.
+#   - Docker Compose: bind-mounted read-only at the same path.
 #
-# Precedence: built-in defaults < this file < environment variables.
+# Precedence: built-in defaults < this file < environment variables. An
+# override is applied after the file is read and before it is validated, so
+# the environment can complete a partial file. Environment names follow the
+# key tree: server.auth.britive.tenant -> BRIDGE_SERVER_AUTH_BRITIVE_TENANT
+# (BRITIVE_TENANT is an alias). Lists are comma-separated.
 # Full reference: https://learn.britive.com/bridge-files/bridge.reference.yaml
 #
-# NO SECRETS BELONG IN THIS FILE. The CloudFormation stack injects them from
-# Secrets Manager as environment variables at runtime:
+# NO SECRETS BELONG IN THIS FILE. The deployment injects them as environment
+# variables at runtime:
 #   BRIDGE_ENCRYPTION_KEY_B64   (required, PERMANENT — never rotate after go-live)
 #   BRIDGE_DATASTORE_PASSWORD   (PostgreSQL password)
 #   BRIDGE_CLUSTER_TOKEN        (required whenever the broker is enabled)
 #   BRIDGE_HOST_KEY_SEED        (stable SSH host-key fingerprint across restarts)
 #   BRITIVE_BROKER_AUTH_TOKEN / BRITIVE_BROKER_TENANT_SUBDOMAIN
-#   BRITIVE_TENANT              (overrides server.auth.britive.tenant)
 # =============================================================================
 
 server:
   # 8080, not 443. Fargate cannot bind privileged ports (<1024) without
   # NET_BIND_SERVICE, and Fargate only allows adding SYS_PTRACE, so that
-  # capability is not grantable. The NLB's 443 TLS listener does the 443->8080
-  # translation.
+  # capability is not grantable. The NLB's 443 TLS listener (ECS) or the
+  # 443:8080 port mapping (Compose) does the translation.
   listen: 8080
   log_level: "info"
 
-  picker_enabled: true # authenticated checkout picker at /picker (default false -> 404)
+  picker_enabled: true # authenticated checkout picker at /picker
   landing_enabled: true # public landing page at "/" (default false -> redirect)
 
-  # Honour X-Forwarded-For from the NLB so session recordings capture real
-  # client IPs rather than load-balancer ENI addresses. Set to YOUR VPC CIDR.
-  trusted_proxies:
-    - "10.0.0.0/16"
+  # Honour X-Forwarded-For from a load balancer so session recordings capture
+  # real client IPs rather than LB addresses. Left empty here: the ECS stack
+  # injects BRIDGE_SERVER_TRUSTED_PROXIES from its NativeAccessCidr parameter,
+  # and Docker Compose has no proxy in front of the container.
+  trusted_proxies: []
+
+  # Session cookie Secure flag + HSTS. Keep true: users always reach Bridge over
+  # HTTPS (the NLB's TLS listener, or the container's own TLS under Compose).
+  # Set false only if clients ever speak plain HTTP end to end — otherwise the
+  # browser refuses to return the cookie and login loops silently.
+  secure_cookies: true
 
   tls:
-    # TLS terminates at the NLB using the ACM certificate; the container serves
-    # plain HTTP on 8080. Enabling TLS here as well makes the NLB's TCP health
-    # probes log "http: TLS handshake error EOF" on every check.
+    # ECS: TLS terminates at the NLB using the ACM certificate and the
+    # container serves plain HTTP on 8080 (enabling TLS here too makes the
+    # NLB's TCP health probes log "http: TLS handshake error EOF" on every
+    # check). Docker Compose overrides this to true with BRIDGE_TLS_ENABLED so
+    # the container serves its own (self-signed) certificate directly.
     enabled: false
 
-  # PostgreSQL is MANDATORY in Bridge v2. Host, port and credentials are
-  # overridden per deployment by the BRIDGE_DATASTORE_* environment variables
-  # that the CloudFormation stack injects, so the values here are placeholders.
+  # PostgreSQL is MANDATORY in Bridge v2. Host, port, credentials and sslmode
+  # are overridden per deployment by the BRIDGE_DATASTORE_* environment
+  # variables, so the values here are placeholders.
   datastore:
     host: "localhost"
     port: 5432
     user: "bridge"
     name: "bridge"
-    sslmode: "require"
+    sslmode: "disable" # ECS sets require / verify-full via DbSslMode
 
   auth:
     types:
       - britive
+      # - ldap        # add for native-client logins against AD/LDAP; see the
+      #                 commented block below
     britive:
-      # REQUIRED. Validated from this FILE before environment overrides apply,
-      # so BRITIVE_TENANT alone is not sufficient — the process crash-loops if
-      # this is left empty. Use your tenant subdomain, without
-      # ".britive-app.com".
+      # REQUIRED. Your tenant subdomain, without ".britive-app.com". The ECS
+      # image build refuses to proceed while this is still the placeholder;
+      # Docker Compose overrides it from BRITIVE_TENANT in .env instead.
       tenant: "your-tenant"
+      # redirect_url: ""  # set by the ECS stack as
+      #                   # BRIDGE_SERVER_AUTH_BRITIVE_REDIRECT_URL — behind an
+      #                   # NLB the container sees plain HTTP and would derive
+      #                   # http://... otherwise
+    # ldap:
+    #   server: "ldaps://ldap.example.com:636"
+    #   bind_dn: "cn=bridge,ou=svc,dc=example,dc=com"
+    #   bind_password: ""           # inject as BRIDGE_LDAP_BIND_PASSWORD
+    #   base_dn: "ou=people,dc=example,dc=com"
+    #   user_filter: "(uid={{username}})"
 
   recording:
-    output_dir: "/data/recordings" # EFS-backed, survives task replacement
+    output_dir: "/data/recordings" # EFS-backed on ECS; a named volume on Compose
     redact_response_bodies: true
+    paste_capture: "full" # full | redacted | metadata
+    keystroke_capture: "redacted" # redacted | off
 
   # --- Audit index and SIEM export (Bridge v2.1.0+) --------------------------
   # Indexing sessions into Activity Search is ALWAYS ON and needs no config.
-  # The block below only streams those same events to an external SIEM.
-  #
-  # Uncomment and set an endpoint to enable. Export is best-effort: it never
-  # blocks a session, and an unreachable destination drops events. The startup
-  # log prints "audit export enabled" whether the endpoint is right, wrong or
-  # empty, so verify in the admin console's Configuration tab, which reports
-  # what was configured alongside what actually got wired.
-  #
-  # audit:
-  #   export:
-  #     enabled: true
-  #     type: "webhook"            # "webhook" (HTTPS POST) or "syslog"
-  #     endpoint: ""               # webhook URL, or "host:port" for syslog
-  #     token: ""                  # webhook only: sent as Authorization: Bearer
-  #     network: "udp"             # syslog only: "udp" or "tcp"
+  # The export block only streams those same events to an external SIEM.
+  # Export is best-effort: it never blocks a session, and an unreachable
+  # destination drops events. Verify in the admin console's Configuration tab.
+  audit:
+    export:
+      enabled: false
+      type: "webhook" # "webhook" (HTTPS POST) or "syslog"
+      endpoint: "" # webhook URL, or "host:port" for syslog
+      token: "" # webhook only: sent as Authorization: Bearer
+      network: "udp" # syslog only: "udp" or "tcp"
+
+  # --- License ---------------------------------------------------------------
+  # Retrieved automatically from the tenant when BRITIVE_BROKER_AUTH_TOKEN is
+  # set. Without a license Bridge runs in limited mode (no native sessions,
+  # no live view, HTTP 403 on recording downloads). For air-gapped tenants
+  # supply the blob inline or from a file:
+  # license:
+  #   key: ""
+  #   path: "/data/license.txt"
 
 # --- Protocols ---------------------------------------------------------------
 # Every protocol is OFF by default and the Bridge refuses to start unless at
 # least one is enabled.
 #
 # NATIVE mode opens a listening port so users connect with their own client
-# (ssh, mysql, Microsoft Remote Desktop). Each native listener needs a matching
-# NLB listener and target group, and ECS caps a service at 5 load-balancer
-# registrations — 1 is spent on the web tier, leaving 4. The four below are
-# exactly what the CloudFormation template wires.
+# (ssh, mysql, Microsoft Remote Desktop). On ECS each native listener needs a
+# matching NLB listener and target group, and ECS caps a service at 5
+# load-balancer registrations — 1 is spent on the web tier, leaving 4. The
+# four below are exactly what the CloudFormation template wires. Docker
+# Compose has no such limit; it publishes every port listed here.
 #
-# BROWSER mode needs no extra registration: it rides the existing 443 listener
-# to the web tier, so it is free to enable widely.
+# BROWSER mode needs no extra registration: it rides the existing web tier,
+# so it is free to enable widely.
 
 ssh:
   native:
@@ -102,6 +135,7 @@ ssh:
   browser:
     enabled: true
   idle_timeout: "30m"
+  # allow_insecure_host_key: true  # default; set false to verify target host keys
 
 rdp:
   native:
@@ -110,6 +144,7 @@ rdp:
   browser:
     enabled: true
   idle_timeout: "30m"
+  # allow_insecure_cert: true      # default; set false to verify target RDP certs
 
 mysql:
   native:
@@ -127,9 +162,10 @@ postgres:
     enabled: true
   idle_timeout: "30m"
 
-# MSSQL is browser-only here. Native would need a 6th NLB registration, which
-# ECS does not allow. Enabling native below without adding an NLB listener
-# produces a connect command that looks valid and never works.
+# MSSQL is browser-only here. A native listener would need a 6th NLB
+# registration on ECS, which ECS does not allow. Enabling native below without
+# adding an NLB listener produces a connect command that looks valid and never
+# works. (Docker Compose users may enable it and publish 1433.)
 mssql:
   browser:
     enabled: true
@@ -146,7 +182,6 @@ k8s_exec: # Kubernetes exec — browser only by design, there is no native liste
 vnc: # browser only by design
   browser:
     enabled: true
-  idle_timeout: "30m"
 
 telnet:
   browser:

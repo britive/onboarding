@@ -1,135 +1,117 @@
 # Britive Bridge — Deployment Options
 
-> **Use [`v2/`](v2/) for anything new.** Deployment options are split by Bridge
-> major version: [`v2/`](v2/) is the current release line, and [`v1/`](v1/) is
-> **legacy** — kept so existing v1 deployments stay supportable, not for new
-> work.
->
-> The two are not interchangeable. v2 additionally requires a PostgreSQL
-> datastore, a permanent encryption key, and a configuration file baked into
-> the image.
->
-> **Do not use the `britive/bridge:latest` tag.** It tracks the newest release
-> (v2.x today), so a v1 template pointed at it pulls a v2 image and fails to
-> start. Pin explicitly: `v1.0.2` for v1, a specific `v2.x` tag for v2.
->
-> Everything here is in **BETA**: validate in a non-production environment
-> first, and expect changes between releases.
-
 Britive Bridge is a self-hosted container that connects to the Britive platform
-through the Britive Broker and brokers clientless, browser-based sessions to
-your internal resources. This directory collects **ready-to-use deployment
-templates** for the most common environments, so you can pick the one that
-matches your infrastructure and stand Bridge up quickly.
+through the Britive Broker and brokers recorded, proxied sessions — browser or
+native client — to your internal resources: SSH, RDP, databases, Kubernetes
+exec and more. This directory holds **ready-to-use deployment templates** for
+Bridge **v2.x**, the current release line.
 
-Every option deploys the same `britive/bridge` container. They differ only in
-**where** it runs and **how** traffic reaches it.
+> **Bridge v1.x is end-of-life.** Its templates were removed from this
+> repository on 2026-10-08 and no v1 image is published on Docker Hub. If you
+> still run v1, plan the move to v2 — see [v2/README.md](v2/README.md) for what
+> changed.
+>
+> **Pin the image tag.** `britive/bridge:latest` tracks the newest release and
+> moves without notice. Every template here pins `v2.3.1`. To see what is
+> published:
+>
+> ```bash
+> curl -s 'https://hub.docker.com/v2/repositories/britive/bridge/tags?page_size=100' \
+>   | python3 -c 'import json,sys; print(*[t["name"] for t in json.load(sys.stdin)["results"]])'
+> ```
+>
+> Everything here is **BETA**: validate in a non-production environment first.
+
+Official product documentation lives at <https://learn.britive.com/bridge/>.
+The templates here are examples, not supported product; they encode what we
+have verified works, with the reasons recorded inline.
 
 ---
 
-## How Bridge works (the short version)
+## How Bridge v2 works (the short version)
 
 - The Bridge container connects **outbound** to the Britive platform via the
-  Broker (MQTT). It registers using a **broker pool token**.
-- It serves an HTTPS endpoint on **port 8080** (API + WebSocket + browser
-  session protocols). By default it presents an **auto-generated self-signed
-  certificate**; you can front it with a real certificate (ALB/ACM, Ingress +
-  cert-manager, or a mounted cert).
-- It persists active session/checkout state to **`/data`**, so that path should
-  be backed by durable storage.
-- Two environment variables are always required:
-  - `BRITIVE_BROKER_TENANT_SUBDOMAIN` — e.g. `acme` for `acme.britive-app.com`
-  - `BRITIVE_BROKER_AUTH_TOKEN` — the broker pool token
+  Broker (MQTT), registering with a **broker pool token**. Nothing inbound from
+  Britive is required.
+- It serves one HTTP(S) endpoint (the **web tier**: API, browser sessions,
+  login) and, optionally, **native listeners** per protocol (SSH 2222, RDP
+  3389, MySQL 3306, PostgreSQL 5432, …) for users who prefer their own client.
+- **PostgreSQL is mandatory.** Checkouts, sessions and the audit index live
+  there. The process will not start without a reachable datastore.
+- A **permanent encryption key** (`BRIDGE_ENCRYPTION_KEY_B64`) protects stored
+  checkout payloads. Rotating it after go-live makes everything already stored
+  unreadable.
+- Configuration is a YAML file (`/etc/britive-bridge/config.yaml`) that
+  environment variables can **complete or override** — precedence is built-in
+  defaults < file < environment. Every protocol is off by default, and at
+  least one must be enabled or the process refuses to start.
+- Users authenticate to **Bridge** (Britive SSO in the browser; a Britive-held
+  Bridge password/key for native clients). The endpoint credential is
+  ephemeral, created by the broker at checkout, and the user never sees it.
 
-Users reach Bridge at an external URL (the `BRIDGE_URL`). That URL must be
-reachable from the user's browser, which is what the load balancer / ingress in
-each option provides.
+Users reach Bridge at a public URL (`BRIDGE_URL`). That URL must match the TLS
+certificate and must be reachable from the user's browser or native client —
+which is what each option's load balancer or port mapping provides.
 
 ---
 
 ## Before you start: one-time platform setup
 
-Regardless of which deployment you choose, the Britive platform needs a broker
-pool, a token, a Bridge resource, and an admin profile. The
-[`platform-setup/`](platform-setup/) directory contains an interactive script
-that creates all of these for you and prints the env vars Bridge needs.
+Every deployment needs a broker pool, a token, a Bridge resource type and an
+admin profile on the Britive platform. [`platform-setup/`](platform-setup/)
+contains an interactive script that creates all of them and prints the
+environment variables Bridge needs.
 
 Run it **first** — see [platform-setup/README.md](platform-setup/README.md).
-You'll typically run it **twice**: once before deploying (with a placeholder
-Bridge URL) and once after, to set the real URL — re-running updates the
+You will typically run it **twice**: once before deploying (with a placeholder
+Bridge URL) and once after, to set the real URL. Re-running updates the
 existing resource in place.
 
 ---
 
 ## Choosing an option
 
-### Bridge v2.x — [`v2/`](v2/) &nbsp;·&nbsp; **current — use this**
-
 | Option | Where it runs | TLS / external access | Persistence | Best for |
-|--------|---------------|-----------------------|-------------|----------|
-| [**AWS ECS Fargate + NLB**](v2/aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an **ACM cert**; TCP listeners for native protocols | EFS + PostgreSQL | Current Bridge releases on AWS |
-
-v2 requires an existing **PostgreSQL** instance and a permanent
-**encryption key**, and its configuration is baked into the image — see that
-option's README.
-
-### Bridge v1.x — [`v1/`](v1/) &nbsp;·&nbsp; **legacy, existing deployments only**
-
-| Option | Where it runs | TLS / external access | Persistence | Best for |
-|--------|---------------|-----------------------|-------------|----------|
-| [**Docker Compose**](v1/docker-compose/) | Any Docker host / VM | Self-signed (8080) or mounted cert | Docker volume | Local trials, POCs, single-VM deployments |
-| [**Linux VM (Docker)**](v1/linux-vm-docker/) | A Linux server / VM | Self-signed (8080) or mounted cert | Docker volume | Standalone Linux host; on-prem or cloud VM, fully scripted |
-| [**Windows VM (Docker)**](v1/windows-vm-docker/) | A Windows server / VM (WSL 2) | Self-signed (8080) or mounted cert | Docker volume | Standalone Windows host (Linux container via WSL 2) |
-| [**AWS ECS Fargate + NLB**](v1/aws-ecs-fargate-nlb/) | AWS ECS Fargate | TLS passthrough via NLB:443 → container self-signed cert | EFS | Serverless AWS, minimal moving parts, no ACM cert needed |
-| [**AWS ECS Fargate + ALB**](v1/aws-ecs-fargate-alb/) | AWS ECS Fargate | ALB terminates TLS with an **ACM cert** on 443 | EFS | Production AWS with a real cert + custom domain |
-| [**AWS ECS Fargate + ALB + SSH**](v1/aws-ecs-fargate-alb-ssh/) | AWS ECS Fargate | Same as ALB option | EFS | ALB option **plus** broker SSH access to EC2 via a key in Secrets Manager |
-| [**Kubernetes**](v1/kubernetes/) | Any K8s cluster (EKS/AKS/GKE/on-prem) | Ingress (cert-manager / ALB) → backend HTTPS | PVC | Teams standardized on Kubernetes; Helm chart on the roadmap |
+| ------ | ------------- | --------------------- | ----------- | -------- |
+| [**AWS ECS Fargate + NLB**](v2/aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an **ACM cert**; TCP listeners for native SSH/RDP/MySQL/PostgreSQL | EFS + RDS PostgreSQL (companion stack included) | Production on AWS, no hosts to patch |
+| [**Docker Compose**](v2/docker-compose/) | Any Docker host / VM | Container's own TLS (self-signed by default) | Docker volumes (bridge data + PostgreSQL) | Evaluation, POCs, single-server deployments |
+| **Kubernetes (Helm)** | Any cluster | Ingress of your choice | PVC + your PostgreSQL | Britive publishes an official chart: `helm install bridge oci://registry-1.docker.io/britive/bridge-chart` — see [learn.britive.com/bridge/deploy/kubernetes/](https://learn.britive.com/bridge/deploy/kubernetes/). No manifests are duplicated here. |
 
 ### Quick guidance
 
-- **Running a current Bridge release (v2.x)?** → [v2 ECS Fargate + NLB](v2/aws-ecs-fargate-nlb/).
-  The v1 options below will not start a v2 image: it needs a datastore, an
-  encryption key and a baked config that those templates do not provide.
-- **Just trying it out?** → Docker Compose.
-- **A single Linux server (on-prem or cloud VM)?** → Linux VM (Docker) — scripted
-  install with per-distro handling.
-- **A single Windows server?** → Windows VM (Docker) — runs the Linux image via
-  the WSL 2 backend (note the licensing/runtime caveats in that guide).
-- **On AWS, want the simplest production path?** → ECS Fargate + ALB.
-- **Don't have / don't want an ACM cert on AWS?** → ECS Fargate + NLB
-  (TLS passthrough to the container's self-signed cert).
-- **Need the broker to SSH into EC2 instances?** → ECS Fargate + ALB + SSH.
-- **Run everything on Kubernetes?** → Kubernetes manifests (Helm chart coming —
-  see the roadmap in that option's README).
+- **Just trying it out, or one server is enough?** → [Docker Compose](v2/docker-compose/).
+- **Production on AWS?** → [ECS Fargate + NLB](v2/aws-ecs-fargate-nlb/), with
+  the included `rds-postgres.yaml` for the datastore.
+- **Already standardized on Kubernetes?** → the official Helm chart (link
+  above). Build a [custom image](custom-image/) first if your checkout scripts
+  need extra tools.
 - **Need the broker to run scripts that use extra tools** (`ssh`, `mysql`,
-  `aws`, `jq`, …)? → build a [custom image](custom-image/) and use it as the
-  image in any option above.
+  `aws`, `jq`, …) or want the configuration baked in for Fargate? → build a
+  [custom image](custom-image/) and use it as the image in any option.
+- **Need horizontal scale** (orchestrator / proxy / session roles)? → Britive's
+  cluster-mode reference at
+  [learn.britive.com/bridge/deploy/aws-ecs/](https://learn.britive.com/bridge/deploy/aws-ecs/).
+  The single-role template here runs one task.
 
 ---
 
-## Extending the image (custom utilities)
+## Extending the image (custom utilities, baked config)
 
 The broker runs your checkout/checkin scripts to mint and destroy ephemeral
 credentials, and those scripts often need CLI tools not in the stock image. The
-[`custom-image/`](custom-image/) directory shows how to layer them on top of
-`britive/bridge` and deploy the result to **ECS or Kubernetes** unchanged — with
-two worked examples (**Linux SSH** key provisioning and **Aurora MySQL**
-temporary users/roles). This is orthogonal to the deployment options above: pick
-a deployment, point its image at your custom build.
-
-For **Bridge v2** the same builder also bakes your configuration and trusts the
-AWS RDS certificate authorities:
+[`custom-image/`](custom-image/) builder layers them on top of `britive/bridge`,
+optionally bakes `bridge.yaml` into the image (required on Fargate, which has
+no volume to mount the file from) and trusts the AWS RDS certificate
+authorities. Two worked examples are included: **Linux SSH** key provisioning
+and **Aurora MySQL** temporary users/roles.
 
 ```bash
 docker build \
-  --build-arg BASE_IMAGE=britive/bridge:v2.1.0 \
+  --build-arg BASE_IMAGE=britive/bridge:v2.3.1 \
   --build-arg BAKE_CONFIG=true \
   --build-arg WITH_RDS_CA=true \
-  -t <account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:v2.1.0-r1 .
+  -t <account>.dkr.ecr.<region>.amazonaws.com/britive/bridge:v2.3.1-r1 .
 ```
-
-`BAKE_CONFIG` is required for v2 — every protocol is off by default and the
-Bridge refuses to start unless at least one is enabled.
 
 ---
 
@@ -138,61 +120,35 @@ Bridge refuses to start unless at least one is enabled.
 ```
 Britive Bridge/
 ├── README.md                       # you are here
-├── v1/                             # Bridge v1.x deployment options
-├── v2/                             # Bridge v2.x deployment options
 ├── platform-setup/                 # run FIRST — creates Britive platform objects
 │   ├── quick-setup.py
 │   ├── requirements.txt
 │   └── README.md
-├── custom-image/                   # extend britive/bridge with extra utilities
+├── custom-image/                   # extend britive/bridge; bake config; trust RDS CAs
 │   ├── Dockerfile                  # base-distro & arch agnostic
 │   ├── build-and-push.sh           # multi-arch build → Docker Hub / ECR
+│   ├── bridge.yaml                 # the configuration that gets baked in
 │   ├── scripts/                    # worked examples: Linux SSH + Aurora MySQL
-│   ├── k8s-overlays/               # ready-to-apply: image + SSH key + IRSA SA
 │   └── README.md
-├── v1/docker-compose/
-│   ├── docker-compose.yaml
-│   └── README.md
-├── v1/linux-vm-docker/                # standalone Linux VM via Docker
-│   ├── install.sh
-│   ├── bridge.env.example
-│   └── README.md
-├── v1/windows-vm-docker/              # standalone Windows VM via Docker (WSL 2)
-│   ├── install.ps1
-│   ├── bridge.env.example
-│   └── README.md
-├── v1/aws-ecs-fargate-nlb/
-│   ├── ecs-fargate-nlb.yaml
-│   ├── params.example.json
-│   └── README.md
-├── v1/aws-ecs-fargate-alb/
-│   ├── ecs-fargate-alb.yaml
-│   ├── params.example.json
-│   └── README.md
-├── v1/aws-ecs-fargate-alb-ssh/
-│   ├── ecs-fargate-alb-ssh.yaml
-│   ├── params.example.json
-│   └── README.md
-└── v1/kubernetes/
-    ├── manifests/
-    │   ├── namespace.yaml
-    │   ├── secret.example.yaml
-    │   ├── pvc.yaml
-    │   ├── deployment.yaml
-    │   ├── service.yaml
-    │   ├── ingress.yaml
-    │   ├── external-secret.example.yaml   # optional: External Secrets Operator
-    │   ├── pvc-rwm.example.yaml           # optional HA: RWX PVC (instead of pvc.yaml)
-    │   └── ha-deployment-patch.example.yaml  # optional HA: replicas + rolling update
-    └── README.md
+└── v2/
+    ├── README.md
+    ├── aws-ecs-fargate-nlb/
+    │   ├── ecr-repo.yaml           # ECR repository (immutable tags)
+    │   ├── rds-postgres.yaml       # RDS PostgreSQL datastore (deploy once)
+    │   ├── ecs-fargate-nlb.yaml    # ECS service, NLB, EFS, IAM, secrets
+    │   ├── params.example.json
+    │   └── README.md
+    └── docker-compose/
+        ├── docker-compose.yaml
+        ├── .env.example
+        └── README.md
 ```
 
 ---
 
 ## A note on placeholders
 
-All templates use **placeholder values** (`<your-tenant-subdomain>`,
-`vpc-EXAMPLE...`, `arn:aws:acm:<region>:<account-id>:...`, `bridge.example.com`,
-etc.). Replace them with your real values before deploying. **Never commit real
-tokens, private keys, account IDs, or certificate ARNs** to source control —
-use the parameter files locally or, better, a secret store.
+All templates use **placeholder values** (`your-tenant`, `vpc-EXAMPLE…`,
+`bridge.example.com`, `<account>`). Replace them before deploying. **Never
+commit real tokens, private keys, account IDs or certificate ARNs** — keep
+parameter files local, or better, in a secret store.

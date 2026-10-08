@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  RDS PostgreSQL datastore for Britive Bridge v2. Bridge v2 will not start
+  without a PostgreSQL database; this stack provides one and exposes the three
+  values ecs-fargate-nlb.yaml needs (DbHost, DbPort, DbSecretArn). It is a
+  separate stack on purpose: RDS create/delete takes 10-15 minutes, while the
+  ECS/NLB stack can be created, updated and destroyed in a couple of minutes.
+  Deploy this once and point the ECS stack at its outputs.
+
+Parameters:
+  StackNamePrefix:
+    Type: String
+    Default: britive-bridge-v2
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9-]{1,30}"
+    Description: >
+      Prefix for named resources. Use the SAME value as the ECS stack: the
+      ECS task role's Secrets Manager permissions are scoped to secrets named
+      <StackNamePrefix>/*, which is where this stack puts the DB secret.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the database will run. Must be the ECS stack's VPC.
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >
+      Two subnets in different AZs for the RDS subnet group. Reuse the ECS
+      stack's PublicSubnetIds; the instance itself is never publicly
+      accessible.
+  AllowedCidr:
+    Type: String
+    Description: >
+      CIDR allowed to reach PostgreSQL on 5432. Set this to your VPC CIDR.
+      The two stacks are deliberately decoupled (no cross-stack security-group
+      reference), so ingress is CIDR-scoped rather than SG-scoped.
+    AllowedPattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.small
+    Description: RDS instance class. db.t4g.small is adequate for a single-role Bridge.
+  BackupRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 35
+    Description: Automated backup retention. The datastore holds checkouts, sessions and the audit index.
+
+Resources:
+  BridgeDbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bridge RDS security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref AllowedCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${StackNamePrefix}-db-sg
+
+  BridgeDbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the Bridge PostgreSQL datastore
+      SubnetIds: !Ref SubnetIds
+
+  # Generated once; the ECS stack reads the "password" key at task start.
+  # Retained on stack delete so a snapshot-restored database stays usable.
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Sub ${StackNamePrefix}/bridge/db
+      Description: RDS PostgreSQL master credentials for the Bridge datastore.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "bridge"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: "\"@/\\'"
+
+  BridgeDatabase:
+    Type: AWS::RDS::DBInstance
+    # Snapshot on delete: the database is the system of record for every
+    # checkout and recording index. Delete the final snapshot by hand once you
+    # are sure you no longer need it.
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub ${StackNamePrefix}-db
+      Engine: postgres
+      EngineVersion: "17"
+      DBInstanceClass: !Ref DbInstanceClass
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: bridge
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:password}}"
+      VPCSecurityGroups:
+        - !Ref BridgeDbSecurityGroup
+      DBSubnetGroupName: !Ref BridgeDbSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: !Ref BackupRetentionDays
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+
+Outputs:
+  RdsEndpoint:
+    Description: Pass as DbHost to ecs-fargate-nlb.yaml.
+    Value: !GetAtt BridgeDatabase.Endpoint.Address
+  RdsPort:
+    Description: Pass as DbPort to ecs-fargate-nlb.yaml.
+    Value: !GetAtt BridgeDatabase.Endpoint.Port
+  DbSecretArn:
+    Description: Pass as DbSecretArn to ecs-fargate-nlb.yaml.
+    Value: !Ref DbSecret

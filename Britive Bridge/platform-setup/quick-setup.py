@@ -396,8 +396,8 @@ def create_admin_permission(client, bridge_type_id, template_id):
                 success("Upload URLs retrieved")
                 break
             urls = None
-        except Exception:
-            pass
+        except Exception as exc:
+            warn(f"Upload URL lookup attempt {attempt + 1} failed: {exc}")
         if attempt < 4:
             time.sleep(2)
 

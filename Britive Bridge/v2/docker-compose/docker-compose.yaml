@@ -1,0 +1,89 @@
+# Britive Bridge v2 — single-server deployment (PostgreSQL + Bridge).
+# Based on https://learn.britive.com/bridge/deploy/single/
+#
+# 1. cp .env.example .env and fill in the values (see comments there).
+# 2. docker compose up -d
+# 3. Verify: curl -sk https://localhost/readyz
+#            curl -sk https://localhost/api/license/status
+#
+# The configuration is bind-mounted from ../../custom-image/bridge.yaml. The
+# values that differ for Compose (TLS on at the container, datastore host,
+# tenant) are overridden from the environment below — precedence is
+# defaults < file < environment, so the file is shared with the ECS option.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bridge
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: bridge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "bridge"]
+      interval: 5s
+      retries: 10
+
+  bridge:
+    # Pin a version tag, never :latest. Override with BRIDGE_IMAGE in .env to
+    # use a custom image built with ../../custom-image/.
+    image: "${BRIDGE_IMAGE:-britive/bridge:v2.3.1}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BRIDGE_CONFIG: /etc/britive-bridge/config.yaml
+      BRIDGE_ROLE: single
+
+      # Serve TLS from the container (self-signed, generated under /data/certs
+      # on first start) — there is no load balancer in front of it here.
+      BRIDGE_TLS_ENABLED: "true"
+      BRIDGE_API_URL: "https://localhost:8080"
+
+      # Required — permanent key, never rotate after go-live.
+      BRIDGE_ENCRYPTION_KEY_B64: "${BRIDGE_ENCRYPTION_KEY_B64:?set BRIDGE_ENCRYPTION_KEY_B64 (openssl rand -base64 32) in .env}"
+
+      # PostgreSQL (overrides the config file placeholders)
+      BRIDGE_DATASTORE_HOST: postgres
+      BRIDGE_DATASTORE_PORT: "5432"
+      BRIDGE_DATASTORE_USER: bridge
+      BRIDGE_DATASTORE_PASSWORD: "${POSTGRES_PASSWORD}"
+      BRIDGE_DATASTORE_NAME: bridge
+      BRIDGE_DATASTORE_SSLMODE: disable # same host, Docker network; the postgres image has no TLS by default
+
+      # Web login (Britive OAuth) — tenant subdomain. Overrides the
+      # "your-tenant" placeholder in bridge.yaml.
+      BRITIVE_TENANT: "${BRITIVE_TENANT:?set BRITIVE_TENANT (your tenant subdomain) in .env}"
+      # Public URL users reach Bridge at; builds the OAuth redirect_uri. Leave
+      # unset for https://localhost testing.
+      BRIDGE_SERVER_AUTH_BRITIVE_REDIRECT_URL: "${BRIDGE_URL:+${BRIDGE_URL}/api/auth/britive/callback}"
+
+      # Britive broker (JIT checkout provisioning + automatic license fetch)
+      BRITIVE_BROKER_TENANT_SUBDOMAIN: "${BRITIVE_TENANT}"
+      BRITIVE_BROKER_AUTH_TOKEN: "${BRITIVE_BROKER_AUTH_TOKEN:?set BRITIVE_BROKER_AUTH_TOKEN (from platform-setup) in .env}"
+      # Required whenever the broker is enabled (the broker calls the admin API)
+      BRIDGE_CLUSTER_TOKEN: "${BRIDGE_CLUSTER_TOKEN:?set BRIDGE_CLUSTER_TOKEN (openssl rand -hex 32) in .env}"
+
+      # Stable SSH host-key fingerprint across restarts
+      BRIDGE_HOST_KEY_SEED: "${BRIDGE_HOST_KEY_SEED:-}"
+    volumes:
+      - ../../custom-image/bridge.yaml:/etc/britive-bridge/config.yaml:ro
+      - bridge-data:/data
+    ports:
+      - "443:8080" # web UI / API / browser protocols (container listens on 8080)
+      - "2222:2222" # native SSH (2222, not 22 — matches bridge.yaml and the ECS option)
+      - "3389:3389" # native RDP
+      - "3306:3306" # native MySQL
+      - "15432:5432" # native PostgreSQL proxy (host 5432 stays free for a local pg)
+    healthcheck:
+      test: ["CMD", "curl", "-sfk", "https://127.0.0.1:8080/livez"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  pgdata:
+  bridge-data:
