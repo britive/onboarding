@@ -1,5 +1,5 @@
 config:
   version: 2
   bootstrap:
-    tenant_subdomain: demo
+    tenant_subdomain: your-tenant
     authentication_token: TOKEN HERE!

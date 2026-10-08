@@ -68,7 +68,7 @@ aws s3 ls s3://my-britive-templates/
 
 ### Step 2: Configure Parameters
 
-Edit the `parameters.json` file with your specific values:
+Copy `parameters.example.json` to `parameters.json` (gitignored) and fill in your values:
 
 ```json
 [

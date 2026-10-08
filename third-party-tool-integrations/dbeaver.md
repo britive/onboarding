@@ -8,24 +8,13 @@ It is recommended that the pre-connect script simply call a shell script vs. try
 script window.
 
 ~~~bash
-/path/to/.pyenv/shims/pybritive checkout "$1" -t demo -s | sed -n '2p' | tr -d '\n' | pbcopy
+/path/to/pybritive checkout "$1" -t your-tenant -s | sed -n '2p' | tr -d '\n' | pbcopy
 ~~~
 
 Note that `pybritive` is most likely NOT in the `PATH` for this shell script so you will need to specify the full path to it.
 The same goes for any non-shell commands.
 
 `$1` in this case is the name of the connection. It is used to map to `pybritive` profile alias so the script can be made more generic.
-
-Future versions of this script would seek to dynamically update the credentials file that DBeaver uses behind the scenes. Examples
-of that are below (note these are not yet working but adding for reference).
-
-~~~bash
-# connectionid=$(/opt/homebrew/bin/jq --arg datasource "$1" -r '.connections | to_entries[] | select(.value.name == $datasource) | .key' $HOME/Library/DBeaverData/workspace6/General/.dbeaver/data-sources.json)
-
-# /opt/homebrew/bin/openssl aes-128-cbc -d -K REDACTED -iv 00000000000000000000000000000000 -in $HOME/Library/DBeaverData/workspace6/General/.dbeaver/credentials-config.json
-~~~
-
-There appears to be a shared key `REDACTED` that was found via searching Google. No clue if that is always going to be the case.
 
 The contents of the pre-connect script are below.
 

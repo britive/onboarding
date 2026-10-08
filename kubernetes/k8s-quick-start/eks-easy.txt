@@ -7,7 +7,7 @@ export KUBECONFIG=~/.kube/config:~/.britive/kube/config
 
 # set some variables
 clustername=britive-test
-appid=<application-id>
+appid=<kubernetes application id from System Administration > Applications>
 
 # login to britive
 pybritive login

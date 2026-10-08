@@ -113,7 +113,7 @@ resource "britive_profile_policy" "jit-admins-default" {
                         "approvers-tag",
                     ]
                     userIds = [
-                        "john.doe@example.com"                        
+                        "john.doe@example.com"
                     ]
                 }
                 isValidForInDays   = true
