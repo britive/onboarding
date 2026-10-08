@@ -10,6 +10,7 @@ Each directory is one deployment option with its own `README.md` and an example 
 | --------- | ----- |
 | Connect one AWS account (POC, standalone, or a management account) | [`cloudformation/aws/single-account-stack/`](cloudformation/aws/single-account-stack/) or [`terraform/aws/single-account-stack/`](terraform/aws/single-account-stack/) |
 | Connect every account in an AWS Organization | [`cloudformation/aws/organization-stackset/`](cloudformation/aws/organization-stackset/) or [`terraform/aws/organization-stackset/`](terraform/aws/organization-stackset/) |
+| Broker IAM Identity Center permission sets, or account access manager entitlements | The same AWS stacks in the management account with the Identity Center / Account Access flags — see [`cloudformation/aws/`](cloudformation/aws/#aws-identity-center-and-aws-account-access) |
 | Try Britive on AWS with disposable Linux, Windows and MySQL targets | [`cloudformation/aws/full-lab-setup/`](cloudformation/aws/full-lab-setup/) or [`terraform/aws/full-lab-setup/`](terraform/aws/full-lab-setup/) |
 | Connect Google Cloud, keyless (workload identity federation) or with a key | [`terraform/google-cloud/`](terraform/google-cloud/) |
 | Connect Snowflake | [`terraform/snowflake/`](terraform/snowflake/) |

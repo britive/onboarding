@@ -18,6 +18,11 @@ output "backend_connection_duration_hours" {
   value       = module.britive_management_account.backend_connection_duration_hours
 }
 
+output "account_access_application_arn" {
+  description = "Enter as 'AWS Account Access Application ARN' in the Britive AWS Account Access application (empty unless deploy_account_access = true)."
+  value       = var.account_access_application_arn
+}
+
 output "stack_set_name" {
   description = "StackSet deploying the member-account resources."
   value       = aws_cloudformation_stack_set.britive_resources.name

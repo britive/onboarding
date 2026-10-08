@@ -3,12 +3,16 @@
 The resources Britive needs in an AWS account, in one place: the SAML identity
 provider, the integration role with `IAMReadOnlyAccess` and
 `AWSOrganizationsReadOnlyAccess`, and the optional permissions for session
-invalidation, Access Builder and AI identity scanning. The three stacks in
+invalidation, Access Builder and AI identity scanning. In the management
+account the same role can also carry the permissions of the **AWS Identity
+Center** and **AWS Account Access** application types. The three stacks in
 [`../../`](../../) are thin callers of this module.
 
 Product documentation: [Configuring the identity provider](https://docs.britive.com/docs/configuring-identity-provider),
 [Configuring IAM roles](https://docs.britive.com/docs/configuring-iam-roles),
-[Session invalidation](https://docs.britive.com/docs/configuring-for-session-invalidation).
+[Session invalidation](https://docs.britive.com/docs/configuring-for-session-invalidation),
+[Identity Center IAM role](https://docs.britive.com/docs/configuring-iam-roles-in-awsidentitycenter),
+[Account access manager](https://docs.britive.com/docs/enable-account-access-manager).
 
 ```hcl
 module "britive" {
@@ -21,6 +25,11 @@ module "britive" {
   deploy_access_builder           = false  # roles under role/britive/managed/*
   deploy_ai_identity_scanning     = false  # AmazonBedrockReadOnly
   deploy_sample_roles             = false  # four demo JIT roles
+
+  # management account only
+  deploy_identity_center         = false   # AWS Identity Center application
+  deploy_account_access          = false   # AWS Account Access application ...
+  account_access_application_arn = ""      # ... with its account access manager ARN
 }
 ```
 
@@ -33,6 +42,9 @@ module "britive" {
 | `deploy_ai_identity_scanning` | `false` | Attach `AmazonBedrockReadOnly` |
 | `max_session_duration` | `3600` | Integration role session length; enter the same value in hours as *Duration of backend connection* in Britive |
 | `deploy_sample_roles` | `false` | `Readonly-admin-role`, `Poweruser-role`, `EC2-Fullaccess-role`, `S3-Fullaccess-role` |
+| `deploy_identity_center` | `false` | Inline policy `britive-identity-center`: the `identitystore:*`, `sso:*`, `organizations:*` and `iam:*Policy*` read/assign actions Britive documents for the **AWS Identity Center** application. Management account only |
+| `deploy_account_access` | `false` | Inline policy `britive-account-access`: `account-access:ListApplications` on `*` plus entitlement create/delete/list on the one application. Management account only |
+| `account_access_application_arn` | `""` | The ARN from the account access manager **Settings** page (`arn:aws:account-access:…`). Required with the option above; the `arn:aws:sso::` ARN shown in IAM Identity Center is rejected |
 
 Outputs map directly onto the fields of the Britive AWS application:
 `account_id`, `saml_provider_name` (*Identity Provider Name*),

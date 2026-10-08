@@ -63,7 +63,15 @@ appear as permissions you can attach to a profile.
 | `deploy_ai_identity_scanning` | `false` | Attach `AmazonBedrockReadOnly` |
 | `max_session_duration` | `3600` | Integration role session length (seconds) |
 | `deploy_sample_roles` | `false` | Four demonstration JIT roles |
+| `deploy_identity_center` | `false` | Management account only: permissions for the **AWS Identity Center** application |
+| `deploy_account_access` | `false` | Management account only: permissions for the **AWS Account Access** application; needs the ARN below |
+| `account_access_application_arn` | `""` | From the account access manager **Settings** page (`arn:aws:account-access:…`); the output of the same name is the application's *AWS Account Access Application ARN* |
 | `region` | `us-east-1` | Provider region (IAM is global) |
+
+For the Identity Center and Account Access prerequisites (enabling the account
+access manager, the trust policy Account Access roles need) and the Britive
+application fields, see
+[`../../../cloudformation/aws/README.md`](../../../cloudformation/aws/README.md#aws-identity-center-and-aws-account-access).
 
 ## Protecting the Britive-managed paths
 
