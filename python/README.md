@@ -10,7 +10,7 @@ self-contained: its own `requirements.txt`, `README.md` and `.env.example`.
 | [`britive/`](britive/) | Bootstraps a tenant from a YAML file: identity providers, users, tags, applications, profiles, notification mediums, broker pools, resource types | any new tenant / POC |
 | [`google-cloud/`](google-cloud/) | Creates the service account and the *projects-only* custom role for a GCP Standalone application; creates the GCDS admin role in Google Workspace | GCP Standalone / GCP key mode (Terraform in [`../terraform/google-cloud/`](../terraform/google-cloud/) covers the organization and WIF variants) |
 | [`gws_scim/`](gws_scim/) | Simulates SCIM for Google Workspace: diffs a Britive application scan against the tenant and creates/disables users and tag memberships | Google Workspace application |
-| [`oci/`](oci/) | Creates the Britive service user, group, API key and policy in an OCI tenancy | OCI (2.0 policy statements) |
+| [`oci/`](oci/) | `setup_oci.py`: service user, group, API key and policy for the **OCI** application. `setup_oci_wif.py`: service user, group, identity propagation trust and policy in an identity domain for the **OCI WIF** application (no API key) | OCI 2.0 / OCI WIF onboarding guides |
 | [`azure/`](azure/) | README only — the previous script targeted the retired Azure AD Graph API and was removed | Azure onboarding guide |
 
 ## Conventions
