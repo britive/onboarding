@@ -1,54 +1,59 @@
-output "vpc_id" {
-  description = "The ID of the VPC"
-  value       = aws_vpc.britive.id
+# Britive application fields
+output "account_id" {
+  description = "Enter as the account ID in the Britive application."
+  value       = module.britive.account_id
 }
 
-output "linux_instance_id" {
-  description = "The ID of the Linux EC2 instance"
-  value       = aws_instance.linux.id
+output "saml_provider_name" {
+  description = "Enter as 'Identity Provider Name'."
+  value       = module.britive.saml_provider_name
+}
+
+output "integration_role_name" {
+  description = "Enter as 'Integration Role Name'."
+  value       = module.britive.integration_role_name
+}
+
+output "backend_connection_duration_hours" {
+  description = "Enter as 'Duration of backend connection'."
+  value       = module.britive.backend_connection_duration_hours
+}
+
+output "sample_role_arns" {
+  description = "The four sample JIT roles to attach to Britive profiles."
+  value       = module.britive.sample_role_arns
+}
+
+# Lab infrastructure
+output "vpc_id" {
+  value = aws_vpc.britive.id
 }
 
 output "linux_instance_public_ip" {
-  description = "The public IP of the Linux EC2 instance"
+  description = "ssh -i lab-key.pem ec2-user@<ip>"
   value       = aws_instance.linux.public_ip
 }
 
 output "windows_instance_id" {
-  description = "The ID of the Windows EC2 instance"
+  description = "Decrypt the Administrator password with: aws ec2 get-password-data --instance-id <id> --priv-launch-key lab-key.pem"
   value       = aws_instance.windows.id
 }
 
 output "windows_instance_public_ip" {
-  description = "The public IP of the Windows EC2 instance"
-  value       = aws_instance.windows.public_ip
+  value = aws_instance.windows.public_ip
 }
 
 output "rds_endpoint" {
-  description = "The connection endpoint for the RDS instance"
-  value       = aws_db_instance.mysql.endpoint
+  value = aws_db_instance.mysql.endpoint
 }
 
 output "rds_secret_arn" {
-  description = "The ARN of the RDS password secret"
+  description = "Secrets Manager secret with the MySQL administrator credentials."
   value       = aws_secretsmanager_secret.rds_password.arn
 }
 
-output "britive_saml_provider_arn" {
-  description = "The ARN of the Britive SAML provider"
-  value       = aws_iam_saml_provider.britive.arn
-}
-
-output "britive_integration_role_arn" {
-  description = "The ARN of the Britive integration role"
-  value       = aws_iam_role.britive_integration.arn
-}
-
-output "test_roles" {
-  description = "ARNs of test roles created for Britive integration"
-  value = {
-    readonly_role  = aws_iam_role.readonly.arn
-    poweruser_role = aws_iam_role.poweruser.arn
-    ec2_admin_role = aws_iam_role.ec2_admin.arn
-    s3_admin_role  = aws_iam_role.s3_admin.arn
-  }
+output "generated_private_key_pem" {
+  description = "Private key of the generated key pair (empty when ssh_public_key was supplied). Save with: terraform output -raw generated_private_key_pem > lab-key.pem && chmod 600 lab-key.pem"
+  value       = var.ssh_public_key == "" ? tls_private_key.generated[0].private_key_openssh : ""
+  sensitive   = true
 }

@@ -59,10 +59,11 @@ session-recording/docker/broker-ssh/*
 # Generated Guacamole DB schema and the recorded sessions themselves.
 session-recording/docker/initdb.sql
 session-recording/docker/recordings/
-# Filled-in CloudFormation parameter files and downloaded SAML metadata.
-# Tracked templates are named parameters.example.json.
+# Filled-in CloudFormation parameter files and downloaded SAML metadata
+# (identifies the tenant). Tracked templates are named parameters.example.json.
 cloudformation/**/parameters.json
-cloudformation/**/metadata.xml
+cloudformation/**/*.xml
+terraform/**/*.xml
 # Rendered Kubernetes manifests produced by deploy scripts.
 **/*-rendered.yaml
 **/*.yaml.bak

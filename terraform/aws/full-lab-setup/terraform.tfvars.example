@@ -1,14 +1,17 @@
-# Example terraform.tfvars file
-# Copy this to terraform.tfvars and fill in your values
+# Copy to terraform.tfvars (gitignored) and fill in.
 
-tenant_name                         = "your-tenant"
-deploy_aws_invalidation_feature     = true
-region                              = "us-east-1"
+tenant_name = "your-tenant" # the part before .britive-app.com
 
-# Paste your SAML metadata XML content here
-saml_metadata_document_xml_content  = "<paste xml content here>"
+# Pass the metadata on the command line instead of pasting it here:
+#   terraform apply -var="saml_metadata_document_xml_content=$(cat britive-saml-metadata.xml)"
+saml_metadata_document_xml_content = "<paste the XML here, or pass it with -var as shown above>"
 
-# SSH public key for EC2 instances (optional)
-# Generate with: ssh-keygen -t rsa -b 4096
-# Then paste the content of the .pub file here
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
+# Only this CIDR can reach the instances and the database. Your public IP:
+#   curl -s https://checkip.amazonaws.com
+allowed_ingress_cidr = "203.0.113.10/32"
+
+deploy_aws_invalidation_feature = true
+region                          = "us-east-1"
+
+# Optional: your own public key. Leave empty and Terraform generates a key pair.
+# ssh_public_key = "ssh-ed25519 AAAA..."
