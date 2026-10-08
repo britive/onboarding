@@ -179,7 +179,8 @@ Guac:
         }'
 
         JSON=$(echo -n $JSON_STRING | jq -r tostring)
-        SECRET_KEY="4c0b569e4c96df157eee1b65dd0e4d41"
+        # Must match JSON_SECRET_KEY in docker/.env (32 hex chars, openssl rand -hex 16)
+        SECRET_KEY="<json secret key goes here>"
         TOKEN=$(sign | encrypt | tr -d "\n\r" | jq -Rr @uri)
         echo -n '{"token": "'${TOKEN}'", "url": "http://localhost:8080/guacamole"}'
         finish 0

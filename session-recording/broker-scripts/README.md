@@ -1,220 +1,220 @@
-# Britive Broker Scripts — Session Recording
+# Britive Broker Scripts - Session Recording (legacy)
 
-Checkout and checkin scripts for the Britive Access Broker. Each script grants or revokes JIT access to a target host and returns a signed Guacamole token so the session is proxied and recorded through the Guacamole stack.
+> Legacy. New deployments use [Britive Bridge](../../Britive%20Bridge/v2/README.md).
+> See [../README.md](../README.md).
 
-## Architecture Overview
+Checkout and check-in scripts for the Britive Access Broker. A checkout grants
+JIT access on the target host and returns a signed Guacamole token; the session
+is proxied and recorded by the Guacamole stack in [../docker/](../docker/README.md).
+A check-in revokes that access.
+
+## Architecture
 
 ```text
 Britive Platform
-      │
-      │  triggers checkout/checkin script
-      ▼
+      |
+      |  runs checkout / check-in script
+      v
 Britive Broker (Linux container)
-      │
-      ├─── SSH (port 22) ──────────► Remote Linux host
-      │                               creates/removes user + authorized_keys
-      │
-      └─── WinRM (port 5985) ──────► Remote Windows EC2
-                                      creates/removes local admin user
+      |
+      +--- SSH (key, pinned host key) ----> Remote Linux host
+      |                                      creates/removes user + authorized_keys entry
+      |
+      +--- WinRM (http or https) ---------> Remote Windows host
+                                             creates/removes local admin user
 
-Broker also generates a signed Guacamole token
-      │
-      ▼
-Guacamole (:8080) ──► guacd (:4822) ──► Target host (SSH/RDP)
-                                               │
-                                         recordings volume
+Broker also returns a signed Guacamole token
+      |
+      v
+Guacamole (:8080) -> guacd (:4822) -> Target host (SSH/RDP)
+                                            |
+                                      recordings volume
 ```
+
+## Naming
+
+- `remote-*` runs on the broker and reaches the target over SSH or WinRM. Each checkout has a matching check-in.
+- `checkout-rdp.ps1` / `checkin-rdp.ps1` run on the Windows target itself (for example through SSM Run Command).
+- `*-ec2-*` reads the Guacamole secret from AWS Secrets Manager with the EC2 instance role; for brokers running on EC2, not in the container.
+- `checkout-rdp.sh` is token only: an existing domain or local account, nothing created, no check-in.
 
 ## Prerequisites
 
-### Broker Container
+### Broker container
 
-The broker runs inside a Docker container based on Ubuntu 24.04. The following must be present:
+The broker image (`../docker/broker/Dockerfile`, Ubuntu 24.04) provides:
 
-| Dependency | Purpose | Installed by |
-|---|---|---|
-| `python3` | Password generation, WinRM client | Dockerfile apt |
-| `pywinrm` | WinRM connection to Windows hosts | `pip3 install pywinrm` |
-| `openssl` | HMAC-SHA256 signing + AES-128-CBC encryption for Guacamole tokens | Dockerfile apt |
-| `jq` | JSON construction and URI encoding | Dockerfile apt |
-| `ssh` / `scp` | Remote Linux host access | Dockerfile apt (openssh-client) |
-| `/root/.ssh/id_rsa` | Broker RSA private key for SSH to remote Linux hosts | Bind-mounted via docker-compose |
+| Dependency           | Purpose                                                            |
+|----------------------|--------------------------------------------------------------------|
+| `python3`, `pywinrm` | Password generation, WinRM client for the Windows scripts          |
+| `openssl`            | HMAC-SHA256 signing and AES-128-CBC encryption of the token        |
+| `jq`                 | Builds the connection JSON and URL-encodes the token               |
+| `ssh`, `scp`         | Remote Linux host access                                           |
+| `/root/.ssh/id_rsa`  | Broker key for SSH to Linux targets, bind-mounted from `docker/broker-ssh/` |
 
-Verify all dependencies are available:
 ```sh
 docker exec britive-broker python3 -c "import winrm; print(winrm.__version__)"
-docker exec britive-broker openssl version
 docker exec britive-broker jq --version
 docker exec britive-broker ssh -V
 ```
 
-### Remote Linux Hosts
+### Remote Linux hosts
 
-- A service account (`britivebroker` by default) must exist and have sudo privileges
-- The broker's public key (`/root/.ssh/id_rsa.pub`) must be in that account's `authorized_keys`
-- `sudo` must be available for user management commands
+- A service account, `britivebroker`, with sudo.
+- The broker's public key (`docker/broker-ssh/id_rsa.pub`) in that account's `authorized_keys`:
 
-Add the broker's public key to the target host once:
+  ```sh
+  ssh-copy-id -i /path/to/broker-ssh/id_rsa.pub britivebroker@<target-host>
+  ```
+
+- Host keys: the scripts use `StrictHostKeyChecking=accept-new`. The first
+  connection to a host pins its key in `/root/.ssh/known_hosts` (persisted in
+  `docker/broker-ssh/known_hosts` through the bind mount, which must be
+  writable). A later key change makes checkout and check-in fail until the
+  stale line is removed. To avoid trusting the first connection, pre-populate
+  the file: `ssh-keyscan <target-host> >> docker/broker-ssh/known_hosts`.
+
+### Remote Windows hosts
+
+WinRM must be enabled. Two modes are supported, chosen with `WINRM_SCHEME` and
+`WINRM_TRANSPORT`:
+
+- **https + ntlm** (recommended). Needs a WinRM HTTPS listener with a
+  certificate. If the certificate is self-signed, set
+  `WINRM_CERT_VALIDATION=ignore`.
+
+  ```powershell
+  winrm quickconfig -transport:https -quiet
+  ```
+
+- **http + basic** (default, lab use only; the admin password crosses the
+  network base64-encoded):
+
+  ```powershell
+  winrm quickconfig -quiet
+  winrm set winrm/config/service/Auth '@{Basic="true"}'
+  winrm set winrm/config/service '@{AllowUnencrypted="true"}'
+  ```
+
+Check reachability from the broker (5986 for https):
+
 ```sh
-ssh-copy-id -i /path/to/broker-ssh/id_rsa.pub \
-  -o "IdentityFile=/path/to/existing-key" \
-  britivebroker@<target-host>
+docker exec britive-broker python3 -c "import socket; socket.create_connection(('<windows-host>', 5985), timeout=5); print('OK')"
 ```
 
-### Remote Windows Hosts
+## Token generation
 
-WinRM must be enabled with Basic auth over HTTP. Run once on each target Windows EC2 as Administrator:
+Every checkout builds the Guacamole JSON auth object with `jq` and then:
 
-```powershell
-winrm quickconfig -quiet
-winrm set winrm/config/service/Auth '@{Basic="true"}'
-winrm set winrm/config/service '@{AllowUnencrypted="true"}'
-```
+1. signs it: `HMAC-SHA256(JSON, key)` prepended to the JSON bytes
+2. encrypts it: `AES-128-CBC(signed, key, IV = 16 zero bytes)`
+3. base64- and URL-encodes the result
 
-> For production, use HTTPS (port 5986) with a certificate instead of unencrypted HTTP.
+The key (`SECRET`, `SECRET_KEY` or `json_secret_key`) is 32 hex characters,
+generated with `openssl rand -hex 16`, and must equal `JSON_SECRET_KEY` in
+`docker/.env`. Scripts refuse to run with anything else.
 
-Verify WinRM is reachable from the broker:
-```sh
-python3 -c "import socket; s=socket.create_connection(('<windows-host>', 5985), timeout=5); print('OK'); s.close()"
-```
+The `${GUAC_DATE}`, `${GUAC_TIME}` and `${HISTORY_UUID}` placeholders in the
+recording paths are Guacamole tokens, substituted by Guacamole, not by the
+shell.
 
-## Token Generation
+## Scripts
 
-All checkout scripts generate a Guacamole JSON auth token. The process:
-
-1. Build a JSON object containing `username`, `expires`, and a `connections` map
-2. Sign it: `HMAC-SHA256(JSON, secret_key)` prepended to the raw JSON bytes
-3. Encrypt it: `AES-128-CBC(signed_data, secret_key[0:16], IV=0x00*16)`
-4. Base64-encode + URL-encode the result
-
-The `SECRET` / `json_secret_key` variable must be a **32 hex character string** (16 bytes) and must match `JSON_SECRET_KEY` in `docker-compose.yaml`.
-
-## Scripts Reference
-
-### Generic
-
-#### `checkout-generic.sh`
-Lowest-level token generator. Takes a pre-built `connection` JSON object and wraps it in a signed Guacamole token. Used when the connection object is constructed externally.
-
-**Required variables:** `username`, `connection_name`, `connection` (JSON), `expiration`, `json_secret_key`
-
----
-
-### SSH — Linux Targets
-
-#### `ssh/checkout-ssh.sh`
-Runs **directly on the broker or target host** (broker IS the SSH endpoint). Creates a local OS user, generates a temporary RSA keypair, appends the public key to `authorized_keys`, and returns a Guacamole SSH token. The private key is embedded in the token — guacd uses it to connect back to the broker's SSH server.
-
-**Required variables:** `BRITIVE_USER_EMAIL`, `hostname`, `port`, `connection_name`, `expiration`, `SECRET_KEY`, `url`
-
-**Optional variables:** `BRITIVE_SUDO` (default `0`), `BRITIVE_HOME_ROOT` (default `home`)
-
----
-
-#### `ssh/checkout-ec2-ssh.sh`
-Same as `checkout-ssh.sh` but retrieves `SECRET_KEY` from **AWS Secrets Manager** using the instance's IAM role. Intended for EC2-hosted brokers.
-
-**Additional requirement:** EC2 instance role must have `secretsmanager:GetSecretValue` on the target secret.
-
-**Required variables:** same as `checkout-ssh.sh`, plus `json_secret_key` (Secrets Manager secret name/ARN)
-
----
+### SSH, Linux targets
 
 #### `ssh/remote-checkout-ssh.sh`
-Runs on the broker and **SSHes to a separate remote Linux host** to create the user there. The broker uses its own key (`/root/.ssh/id_rsa`) to authenticate to the remote host as `britivebroker`, then performs user setup with sudo. Returns a Guacamole SSH token pointing at the remote host.
 
-**Key behaviour:**
-- Generates a fresh RSA keypair on the broker per checkout
-- Appends the public key to the remote user's `authorized_keys` with a `# britive-<TRX>` marker for precise removal at checkin
-- Optionally grants passwordless sudo via `/etc/sudoers.d/`
+SSHes to the target as `britivebroker`, creates the user if missing, generates
+a fresh RSA key pair on the broker and appends the public key to the user's
+`authorized_keys` tagged `# britive-<TRX>`. The private key is embedded in the
+token so guacd can log in. Optionally grants passwordless sudo.
 
-**Required variables:** `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `SECRET`, `connection_name`, `expiration`, `url`, `recording_path`
-
-**Optional variables:** `BRITIVE_USER_GROUP`, `BRITIVE_SUDO` (default `0`), `BRITIVE_HOME_ROOT` (default `home`), `TRX` (auto-set by Britive), `port` (default `22`)
-
----
+Required: `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `SECRET`, `connection_name`, `url`
+Optional: `port` (22), `expiration` (3600), `recording_path`, `BRITIVE_USER_GROUP`, `BRITIVE_SUDO` (0), `BRITIVE_HOME_ROOT` (home), `TRX` (set by Britive)
 
 #### `ssh/remote-checkin-ssh.sh`
-Runs on the broker and **SSHes to the remote Linux host** to revoke access. Removes the specific `authorized_keys` entry tagged with `# britive-<TRX>`. By default the user account is left in place.
 
-**Key behaviour:**
-- Only removes the key matching the TRX marker — safe for shared accounts or concurrent sessions
-- `BRITIVE_CLEANUP_USER=1` enables full user removal (home dir + sudoers) when no keys remain
+Removes only the `authorized_keys` line tagged with this transaction's
+`# britive-<TRX>` marker, so concurrent sessions and shared accounts are safe.
+With `BRITIVE_CLEANUP_USER=1` the account, its home directory and its sudoers
+entry are removed once no Britive keys remain.
 
-**Required variables:** `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `TRX`
+Required: `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `TRX`
+Optional: `port`, `BRITIVE_CLEANUP_USER` (0), `BRITIVE_USER_GROUP`, `BRITIVE_SUDO`, `BRITIVE_HOME_ROOT`
 
-**Optional variables:** `BRITIVE_CLEANUP_USER` (default `0`), `BRITIVE_USER_GROUP`, `BRITIVE_SUDO`, `BRITIVE_HOME_ROOT`
-
----
-
-### RDP — Windows Targets
-
-#### `rdp/checkout-rdp.sh`
-Generates a Guacamole RDP token for an **existing domain or local user** — no user creation. Use when the user authenticates with their own AD credentials or a pre-existing account.
-
-**Required variables:** `BRITIVE_USER_EMAIL`, `hostname`, `port`, `connection_name`, `expiration`, `SECRET_KEY`, `url`
-
-**Optional variables:** `DOMAIN`, `security` (default `nla`), `ignore_cert` (default `true`), `recording_path`
-
----
-
-#### `rdp/checkout-ec2-rdp.sh`
-Same as `checkout-rdp.sh` but retrieves `SECRET_KEY` from **AWS Secrets Manager**.
-
----
-
-#### `rdp/checkout-rdp.ps1`
-PowerShell script that runs **directly on the Windows target**. Creates a temporary local admin user, generates a password, and returns a Guacamole RDP token. Use when Britive can execute scripts on the Windows host directly (e.g. via SSM Run Command).
-
-**Required variables (env):** `user_email`, `ResourceName`, `hostname`, `port`, `json_secret_key`, `expiration`, `url`
-
----
-
-#### `rdp/checkin-rdp.ps1`
-PowerShell script that runs **directly on the Windows target**. Kills active RDP sessions for the user and removes the local account.
-
-**Required variables (env):** `user_email`
-
----
+### RDP, Windows targets
 
 #### `rdp/remote-checkout-rdp.sh`
-Runs on the broker and connects to a **remote Windows host via WinRM** to create a temporary local admin user. Returns a Guacamole RDP token with the generated credentials embedded. Session is recorded via guacd.
 
-**Key behaviour:**
-- Creates user if not present, or resets the password if already exists (idempotent)
-- Password satisfies Windows complexity requirements (upper, lower, digit, special)
-- Username derived from email prefix, truncated to 16 chars + `-rec` suffix (max 20 chars)
+Connects over WinRM, creates a local administrator named
+`<email-prefix, 16 chars max>-rec` (or resets its password if it exists) with a
+random 16-character password that meets Windows complexity rules, and returns
+a token with those credentials embedded. Secrets are handed to the embedded
+Python through its environment, never written into the script text.
 
-**Required variables:** `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `WINRM_PASSWORD`, `SECRET`, `connection_name`, `expiration`, `url`, `recording_path`
-
-**Optional variables:** `WINRM_USER` (default `Administrator`), `WINRM_PORT` (default `5985`), `port` (default `3389`)
-
----
+Required: `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `WINRM_PASSWORD`, `SECRET`, `connection_name`, `url`
+Optional: `WINRM_USER` (Administrator), `WINRM_SCHEME` (http), `WINRM_PORT` (5985 / 5986), `WINRM_TRANSPORT` (basic), `WINRM_CERT_VALIDATION` (validate), `port` (3389), `expiration` (3600), `recording_path`
 
 #### `rdp/remote-checkin-rdp.sh`
-Runs on the broker and connects to the **remote Windows host via WinRM** to revoke access. Kills active RDP sessions for the user then removes the local account.
 
-**Required variables:** `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `WINRM_PASSWORD`
+Connects over WinRM, logs off every session of the temporary user
+(`Invoke-RDUserLogoff` where the RemoteDesktop module exists, `logoff.exe`
+otherwise) and removes the account.
 
-**Optional variables:** `WINRM_USER` (default `Administrator`), `WINRM_PORT` (default `5985`)
+Required: `BRITIVE_USER_EMAIL`, `BRITIVE_REMOTE_HOST`, `WINRM_PASSWORD`
+Optional: the same `WINRM_*` variables as the checkout
 
----
+#### `rdp/checkout-rdp.ps1`
 
-## Variable Reference
+Runs on the Windows target. Same account scheme as the remote variant, with a
+CSPRNG password. Logs to `%ProgramData%\Britive\logs\<ResourceName>.log` and
+exits 1 on failure.
 
-| Variable | Used by | Description |
-|---|---|---|
-| `BRITIVE_USER_EMAIL` | all | User's email address — username is derived from the prefix |
-| `BRITIVE_REMOTE_HOST` | remote scripts | Hostname or IP of the target server |
-| `SECRET` | remote-checkout scripts | 32 hex char Guacamole secret key |
-| `json_secret_key` | local/ec2 scripts | Secret key value or Secrets Manager ARN |
-| `TRX` | ssh remote scripts | Britive transaction ID — auto-injected by the platform |
-| `connection_name` | all checkout | Connection label shown in Guacamole UI |
-| `expiration` | all checkout | Session duration in seconds |
-| `url` | all checkout | Guacamole base URL (e.g. `http://host:8080/guacamole`) |
-| `recording_path` | all checkout | Path inside guacd container (default `/home/guacd/recordings`) |
-| `BRITIVE_SUDO` | ssh scripts | `1` to grant passwordless sudo to the created user |
-| `BRITIVE_CLEANUP_USER` | remote-checkin-ssh | `1` to remove user account on checkin (default `0`) |
-| `WINRM_USER` | rdp remote scripts | Windows admin account for WinRM auth (default `Administrator`) |
-| `WINRM_PASSWORD` | rdp remote scripts | Password for the WinRM admin account (mark as secret in Britive) |
-| `WINRM_PORT` | rdp remote scripts | WinRM port (default `5985`) |
+Environment: `user_email`, `ResourceName`, `hostname`, `port`, `json_secret_key`, `url`, `expiration` (3600)
+
+#### `rdp/checkin-rdp.ps1`
+
+Runs on the Windows target. Logs off the user's sessions (with the same
+`logoff.exe` fallback) and removes the account.
+
+Environment: `user_email`
+
+#### `rdp/checkout-rdp.sh`
+
+Token only, for a user who signs in to the Windows host with their own domain
+or local password. Nothing is created and there is no check-in.
+
+Required: `BRITIVE_USER_EMAIL`, `hostname`, `connection_name`, `url`, `SECRET_KEY`
+Optional: `port` (3389), `domain`, `security` (nla), `ignore_cert` (true), `expiration` (3600), `recording_path`
+
+#### `rdp/checkout-ec2-rdp.sh`
+
+As `checkout-rdp.sh`, but for a broker on EC2: the key is read from Secrets
+Manager (`json_secret_key` is the secret name or ARN; the secret value is
+`{"key": "<32 hex chars>"}`) using the instance role, which needs
+`secretsmanager:GetSecretValue`. Requires the `aws` CLI and `ec2metadata` on
+the instance.
+
+## Variable reference
+
+| Variable                | Used by                       | Description                                                                  |
+|-------------------------|-------------------------------|------------------------------------------------------------------------------|
+| `BRITIVE_USER_EMAIL`    | all                           | User's email. The Guacamole username; the OS username is derived from the prefix |
+| `BRITIVE_REMOTE_HOST`   | `remote-*`                    | Hostname or IP of the target                                                 |
+| `SECRET`                | `remote-*` checkouts          | 32 hex char Guacamole key                                                    |
+| `SECRET_KEY`            | `checkout-rdp.sh`             | 32 hex char Guacamole key                                                    |
+| `json_secret_key`       | `checkout-ec2-rdp.sh`, `.ps1` | Secrets Manager secret id (ec2) or the key itself (PowerShell)              |
+| `TRX`                   | `remote-*-ssh.sh`             | Britive transaction id, injected by the platform                            |
+| `connection_name`       | all checkouts                 | Connection label shown in Guacamole                                          |
+| `expiration`            | all checkouts                 | Token lifetime in seconds (default 3600)                                     |
+| `url`                   | all checkouts                 | Guacamole base URL, e.g. `http://host:8080/guacamole`                        |
+| `recording_path`        | all checkouts                 | Path inside guacd (default `/home/guacd/recordings`)                         |
+| `port`                  | all                           | Target SSH (22) or RDP (3389) port                                           |
+| `BRITIVE_SUDO`          | `remote-*-ssh.sh`             | `1` grants passwordless sudo                                                 |
+| `BRITIVE_CLEANUP_USER`  | `remote-checkin-ssh.sh`       | `1` removes the account when no Britive keys remain                          |
+| `WINRM_USER`            | `remote-*-rdp.sh`             | Windows admin account for WinRM (default `Administrator`)                    |
+| `WINRM_PASSWORD`        | `remote-*-rdp.sh`             | Its password; mark as secret in Britive                                      |
+| `WINRM_SCHEME`          | `remote-*-rdp.sh`             | `http` (default) or `https`                                                  |
+| `WINRM_PORT`            | `remote-*-rdp.sh`             | Default 5985 for http, 5986 for https                                        |
+| `WINRM_TRANSPORT`       | `remote-*-rdp.sh`             | `basic` (default) or `ntlm`                                                  |
+| `WINRM_CERT_VALIDATION` | `remote-*-rdp.sh`             | `validate` (default) or `ignore`, https only                                 |

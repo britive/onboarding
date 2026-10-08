@@ -1,4 +1,10 @@
 #!/bin/bash
+# Check-in: runs on the broker, SSHes to the remote Linux host and removes the
+# authorized_keys entry tagged with this checkout's Britive transaction ID.
+# Optionally removes the user when no Britive keys remain.
+#
+# Pair with remote-checkout-ssh.sh. Same host-key policy: accept-new, pinned in
+# /root/.ssh/known_hosts (bind-mounted from docker/broker-ssh/).
 
 set -u
 set -o errexit
@@ -17,25 +23,34 @@ SUDO_FLAG=${BRITIVE_SUDO:-"0"}
 HOME_ROOT=${BRITIVE_HOME_ROOT:-"home"}
 
 REMOTE_USER="britivebroker"
-REMOTE_HOST="$BRITIVE_REMOTE_HOST"
+REMOTE_HOST="${BRITIVE_REMOTE_HOST:-}"
+REMOTE_PORT="${port:-22}"
 REMOTE_KEY="/root/.ssh/id_rsa"
+KNOWN_HOSTS="/root/.ssh/known_hosts"
 
 TRX=${TRX:-"britive-trx-id"}
 
 # Set to "1" to remove the user and home dir when no Britive keys remain
 CLEANUP_USER=${BRITIVE_CLEANUP_USER:-"0"}
 
+SSH_OPTS=(
+  -i "$REMOTE_KEY"
+  -o IdentitiesOnly=yes
+  -o StrictHostKeyChecking=accept-new
+  -o "UserKnownHostsFile=$KNOWN_HOSTS"
+  -p "$REMOTE_PORT"
+)
+
 # ==============================
 # Fail-fast checks
 # ==============================
-[[ -z "$REMOTE_HOST" ]] && { echo "ERROR: BRITIVE_REMOTE_HOST is not set"; exit 1; }
-[[ ! -f "$REMOTE_KEY" ]] && { echo "ERROR: SSH key not found at $REMOTE_KEY"; exit 1; }
+[[ -z "$REMOTE_HOST" ]] && { echo "ERROR: BRITIVE_REMOTE_HOST is not set" >&2; exit 1; }
+[[ ! -f "$REMOTE_KEY" ]] && { echo "ERROR: SSH key not found at $REMOTE_KEY" >&2; exit 1; }
 
 # ==============================
 # Remove key by TRX marker and clean up user if no keys remain
 # ==============================
-if ! ssh -i "$REMOTE_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
-  "$REMOTE_USER@$REMOTE_HOST" \
+if ! ssh "${SSH_OPTS[@]}" "$REMOTE_USER@$REMOTE_HOST" \
   TARGET_USER="$TARGET_USER" TARGET_GROUP="$TARGET_GROUP" \
   SUDO_FLAG="$SUDO_FLAG" HOME_ROOT="$HOME_ROOT" TRX="$TRX" CLEANUP_USER="$CLEANUP_USER" bash -s <<'EOF'
 set -e
@@ -44,8 +59,8 @@ SSH_PATH="/${HOME_ROOT}/${TARGET_USER}/.ssh"
 AUTH_KEYS="${SSH_PATH}/authorized_keys"
 MARKER="britive-${TRX}"
 
-if [[ ! -f "$AUTH_KEYS" ]]; then
-  echo "INFO: authorized_keys not found for ${TARGET_USER} — already cleaned up"
+if ! sudo test -f "$AUTH_KEYS"; then
+  echo "INFO: authorized_keys not found for ${TARGET_USER} - already cleaned up"
   exit 0
 fi
 
@@ -58,7 +73,7 @@ REMAINING=$(sudo grep -c . "$AUTH_KEYS" 2>/dev/null || true)
 
 if [[ "$CLEANUP_USER" == "1" ]]; then
   if [[ "$REMAINING" -eq 0 ]]; then
-    echo "INFO: No keys remaining and CLEANUP_USER=1 — removing user ${TARGET_USER}"
+    echo "INFO: No keys remaining and CLEANUP_USER=1 - removing user ${TARGET_USER}"
 
     if [[ "$SUDO_FLAG" != "0" ]]; then
       sudo rm -f "/etc/sudoers.d/${TARGET_USER}"
@@ -67,10 +82,10 @@ if [[ "$CLEANUP_USER" == "1" ]]; then
     sudo pkill -u "${TARGET_USER}" 2>/dev/null || true
     sudo /usr/sbin/userdel -r "${TARGET_USER}" 2>/dev/null || true
   else
-    echo "INFO: ${REMAINING} key(s) still present — user ${TARGET_USER} retained"
+    echo "INFO: ${REMAINING} key(s) still present - user ${TARGET_USER} retained"
   fi
 else
-  echo "INFO: CLEANUP_USER=0 — user ${TARGET_USER} retained (${REMAINING} key(s) remaining)"
+  echo "INFO: CLEANUP_USER=0 - user ${TARGET_USER} retained (${REMAINING} key(s) remaining)"
 fi
 EOF
 then

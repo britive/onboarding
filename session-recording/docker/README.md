@@ -1,207 +1,192 @@
-# Session Recording — Docker Compose
+# Session Recording (legacy) - Docker Compose
 
-Deploys Britive Access Broker alongside Apache Guacamole for browser-based SSH/RDP session recording. Suitable for local development and single-server deployments.
+> Legacy. New deployments use [Britive Bridge](../../Britive%20Bridge/v2/README.md).
+> See [../README.md](../README.md).
+
+Runs Britive Access Broker next to Apache Guacamole so that SSH and RDP sessions
+brokered by Britive are proxied through a browser and recorded.
 
 ## Architecture
 
 ```text
-Browser → Guacamole (:8080) → guacd (:4822) → Target host (SSH/RDP)
-                                    ↓
-                              recordings volume
-                                    ↓
-                            guacenc (auto-converts .guac → .m4v)
+Browser -> Guacamole (:8080) -> guacd (:4822) -> Target host (SSH/RDP)
+                |                   |
+            PostgreSQL          ./recordings  (.guac files)
+     (connection history,
+      in-browser playback)
 ```
 
-| Service     | Image                 | Purpose                                                  |
-|-------------|-----------------------|----------------------------------------------------------|
-| `broker`    | Custom (Dockerfile)   | Britive Access Broker + SSH server for session brokering |
-| `guacd`     | `guacamole/guacd`     | Native protocol daemon — proxies RDP/SSH to target hosts |
-| `guacamole` | `guacamole/guacamole` | Browser-based web UI, exposed on port 8080               |
-| `guacenc`   | `tancou/guacenc`      | Watches recordings volume, converts `.guac` to `.m4v`    |
+| Service     | Image                       | Purpose                                                                 |
+|-------------|-----------------------------|-------------------------------------------------------------------------|
+| `broker`    | Custom (`broker/Dockerfile`) | Britive Access Broker; runs the checkout scripts and a key-only sshd    |
+| `guacd`     | `guacamole/guacd:1.5.5`     | Protocol daemon; opens the RDP/SSH connection and writes the recording  |
+| `guacamole` | `guacamole/guacamole:1.5.5` | Web UI on port 8080; validates the signed token from the broker         |
+| `postgres`  | `postgres:16`               | Connection history, which is what in-browser playback is attached to    |
+
+Only Guacamole (8080) is published on the host. guacd, PostgreSQL and the
+broker's sshd are reachable from the compose network only.
 
 ## Prerequisites
 
-- Docker Engine installed and running
-- Docker Compose v2 (`docker compose`) or v1 (`docker-compose`)
-- A Britive broker token (from Britive Console → System Administration → Broker Pools)
-- The broker JAR file placed in `broker/` — filename must match the `COPY` line in `broker/Dockerfile` (currently `britive-broker-1.0.0.jar`)
+- Docker Engine and Docker Compose v2 (`docker compose`)
+- A Britive broker token (Britive console: System Administration, Broker Pools)
+- The broker JAR, `britive-broker-<version>.jar`, placed in `broker/`
+  (JARs are gitignored)
 
 ## Setup
 
+All commands run from this `docker/` directory.
+
 ### 1. Configure the broker
 
-Edit `broker/broker-config.yml` with your Britive tenant subdomain and broker pool token:
+Edit `broker/broker-config.yml` with your tenant subdomain and broker token:
 
 ```yaml
 config:
   version: 2
   bootstrap:
-    tenant_subdomain: mycompany   # e.g. "mycompany" for mycompany.britive-app.com
+    tenant_subdomain: your-tenant   # for your-tenant.britive-app.com
     authentication_token: TOKEN HERE!
 ```
 
-### 2. Generate a JSON secret key
-
-Guacamole uses this key to verify signed session tokens from the broker:
+### 2. Create `.env`
 
 ```sh
-echo -n "your-passphrase" | md5     # macOS
-echo -n "your-passphrase" | md5sum  # Linux
+cp .env.example .env
 ```
 
-Copy the output (a 32-character hex string).
+Fill in:
 
-### 3. Set the secret key
+- `JSON_SECRET_KEY`: the Guacamole JSON auth key, a 128-bit AES key as 32 hex
+  characters. Generate it with `openssl rand -hex 16`.
+- `POSTGRES_PASSWORD`: any strong password for the `guacamole` database user.
 
-Set the key in **two places** — they must match exactly:
+`.env` is gitignored and `docker-compose.yaml` refuses to start without both.
+The same `JSON_SECRET_KEY` value must be given to every checkout script
+(`SECRET`, `SECRET_KEY` or `json_secret_key` variable in the Britive
+permission, and `SECRET_KEY` in the Guac example in `broker/setup.yml.example`).
+If the values differ, Guacamole rejects every token and users see an auth
+error or a blank page.
 
-**`docker-compose.yaml`:**
+### 3. Generate the database schema
 
-```yaml
-guacamole:
-  environment:
-    JSON_SECRET_KEY: "<your-32-char-hex-key>"
+PostgreSQL loads this file once, when its data volume is first created:
+
+```sh
+docker run --rm guacamole/guacamole:1.5.5 /opt/guacamole/bin/initdb.sh --postgresql > initdb.sql
 ```
 
-**`broker/setup.yml.example`** (Guac permission script, line with `SECRET_KEY=`):
-
-```bash
-SECRET_KEY="<your-32-char-hex-key>"
-```
-
-> If these two values don't match, Guacamole will reject all session tokens generated by the broker and users will see a blank screen or auth error.
+`initdb.sql` is gitignored. If you change `POSTGRES_PASSWORD` or the schema
+later, remove the volume (`docker compose down -v`) so it initializes again.
 
 ### 4. Build the broker image
 
-From the `docker/` directory:
-
 ```sh
-docker build -t broker-docker broker/
+docker build --build-arg BROKER_VERSION=2.0.1 -t broker-docker broker/
 ```
 
-> If you update the broker JAR, update the filename in `broker/Dockerfile` (`COPY ./britive-broker-X.X.X.jar`) and rebuild.
+`BROKER_VERSION` must match the JAR filename in `broker/`. The start script
+runs whatever `britive-broker-*.jar` is in the image, so nothing else refers
+to the version.
 
 ### 5. Generate the broker SSH key pair
 
-The broker container needs an RSA key pair at `/root/.ssh` so checkout scripts can authenticate with target hosts. Generate it once and it persists across container restarts via bind mount:
+The `remote-*-ssh.sh` checkout scripts authenticate to target Linux hosts with
+a key at `/root/.ssh/id_rsa` inside the broker container. Generate your own
+pair; no key is shipped in this repository:
 
 ```sh
 mkdir -p broker-ssh
-ssh-keygen -t rsa -b 4096 -f broker-ssh/id_rsa -N "" -C "broker-root"
+ssh-keygen -t rsa -b 4096 -f broker-ssh/id_rsa -N "" -C "britive-broker"
 chmod 700 broker-ssh
 chmod 600 broker-ssh/id_rsa
 chmod 644 broker-ssh/id_rsa.pub
 ```
 
-The `broker-ssh/` directory is already bind-mounted in `docker-compose.yaml`:
+`broker-ssh/` is bind-mounted to `/root/.ssh` and gitignored. Keep it
+writable: on first contact with a target the scripts accept its host key and
+pin it in `broker-ssh/known_hosts`; later connections fail if that key
+changes. Add `broker-ssh/id_rsa.pub` to the `britivebroker` account's
+`authorized_keys` on each target host (see
+[../broker-scripts/README.md](../broker-scripts/README.md)).
 
-```yaml
-broker:
-  volumes:
-    - ./broker-ssh:/root/.ssh:ro
-```
-
-> The whole `broker-ssh/` directory is in `.gitignore`. Generate your own key pair; never commit
-> either half of it. The public key is what you add to `authorized_keys` on each target host.
-
-### 6. Start all services
+### 6. Start
 
 ```sh
+mkdir -m a+rw recordings
 docker compose up -d
-```
-
-To follow logs:
-
-```sh
 docker compose logs -f
 ```
 
-## Accessing Guacamole
+### 7. Change the Guacamole admin password
 
-Once running, the Guacamole web UI is available at:
+The schema creates a database user `guacadmin` with password `guacadmin`.
+Sign in at `http://<host>:8080/guacamole`, open Settings, Preferences, and
+change it before exposing the port anywhere. This account is what you use to
+review connection history and play recordings; end users never sign in, they
+arrive with a token.
 
-```text
-http://<host-ip>:8080/guacamole
-```
+## Using it
 
-Sessions are launched via signed tokens generated by the broker checkout scripts — users do not log in with a username/password directly.
+A checkout returns `{"token": "...", "url": "..."}`; the Britive response
+template turns that into `<url>?data=<token>`, which opens the recorded
+session in the browser.
 
-> **Note:** The Guac checkout script in `broker/setup.yml.example` has the Guacamole URL hardcoded as `http://localhost:8080/guacamole`. Update this to the actual host IP or hostname if users are accessing from a different machine.
+The Guac example in `broker/setup.yml.example` has the Guacamole URL hardcoded
+as `http://localhost:8080/guacamole`. Set it to the address users reach
+Guacamole on.
 
-## Session Recordings
+## Recordings
 
-Recordings are stored in a Docker named volume (`recordings`) shared between `guacd` and `guacenc`.
+`guacd` writes one `.guac` file per session under `./recordings`
+(`/home/guacd/recordings` in the container, `/home/guacamole/recordings` in
+Guacamole). The `remote-*` scripts set `recording-path` to
+`<recording_path>/${HISTORY_UUID}`, the layout the Guacamole history
+recording storage uses, so a recording can be played from the connection's
+history in the web UI (sign in as the admin user, Settings, History). The
+`${HISTORY_UUID}` token is supplied by the database backend, which is why
+PostgreSQL is part of this stack.
 
-- `guacd` writes raw `.guac` session files to `/home/guacd/recordings` inside the volume
-- `guacenc` watches the volume at `/record` and converts completed sessions to `.m4v`
-- `guacamole` serves recordings from `/recordings` (same volume, different mount path)
+### Converting a recording to video
 
-To access recordings from the host:
-
-```sh
-# Find where Docker stores the named volume
-docker volume inspect docker_recordings
-
-# Or copy recordings out of guacd container
-docker cp guacd:/home/guacd/recordings ./recordings-export/
-```
-
-## Broker Scripts
-
-See `broker/setup.yml.example` for example checkout/checkin scripts covering:
-
-- **MySQL** — creates a temporary database user on checkout, drops it on checkin
-- **Linux SSH** — creates a user + RSA key pair on checkout, removes on checkin
-- **Guac (SSH via Guacamole)** — creates an SSH user, generates a signed Guacamole token, and returns a browser URL that opens a recorded session
-
-The Guac script uses AES-128-CBC encryption (requires the `openssl` CLI) and HMAC-SHA256 signing. Both use the `SECRET_KEY` value — see step 3 above.
-
-## Stopping and Cleanup
+There is no converter in the stack. `guacenc`, which turns a `.guac` file into
+`.m4v`, is part of guacamole-server but is not in the `guacamole/guacd` image.
+To convert on a workstation, build it from the
+[guacamole-server 1.5.5 source](https://guacamole.apache.org/releases/1.5.5/)
+with the ffmpeg development libraries installed (`./configure --disable-guacd`,
+`make`, `make install`), then:
 
 ```sh
-# Stop services (preserve volumes and recordings)
-docker compose down
+guacenc -s 1920x1080 -r 20000000 -f ./recordings/<history-uuid>/<recording-name>
+# writes <recording-name>.m4v next to the input
+```
 
-# Stop and remove all data including recordings
-docker compose down -v
+## Stopping and cleanup
+
+```sh
+docker compose down        # keeps the database volume and ./recordings
+docker compose down -v     # also drops the database (recordings stay on disk)
 ```
 
 ## Troubleshooting
 
-**Broker container exits immediately:**
+**`docker compose up` fails with "set JSON_SECRET_KEY in .env"** - step 2.
 
-```sh
-docker compose logs broker
-```
+**Broker container exits immediately** - `docker compose logs broker`. Check
+`broker/broker-config.yml`, and that exactly one `britive-broker-*.jar` was
+copied into the image (the start script refuses to guess between two).
 
-Verify `broker/broker-config.yml` has the correct tenant subdomain and token. Also confirm the JAR filename in `broker/Dockerfile` matches the actual file in `broker/`.
+**Guacamole shows a blank page or connection error** - `docker compose ps`
+and `docker compose logs guacd`. `GUACD_HOSTNAME` in `docker-compose.yaml`
+must match the `guacd` service name.
 
-**Guacamole shows a blank screen or connection error:**
+**Guacamole rejects tokens after a checkout** - `JSON_SECRET_KEY` in `.env`
+and the key the script used are not the same 32 hex characters.
 
-Confirm `guacd` is running and healthy:
+**Guacamole cannot reach the database** - the schema was not loaded (step 3
+ran after the volume already existed). `docker compose down -v`, confirm
+`initdb.sql` is non-empty, `docker compose up -d`.
 
-```sh
-docker compose ps
-docker compose logs guacd
-```
-
-If connections fail immediately, check that `GUACD_HOSTNAME` in `docker-compose.yaml` matches the `guacd` service name.
-
-**Guacamole rejects session tokens (auth error after broker checkout):**
-
-The `JSON_SECRET_KEY` in `docker-compose.yaml` and `SECRET_KEY` in the Guac checkout script must be identical 32-character hex strings. Regenerate and update both if in doubt (see step 3).
-
-**Recordings not converting:**
-
-`guacenc` only converts files after the session ends (the `.guac` file is closed by `guacd`). Check guacenc logs:
-
-```sh
-docker compose logs guacenc
-```
-
-**Permission denied on Docker socket:**
-
-```sh
-sudo usermod -aG docker $USER
-newgrp docker
-```
+**SSH checkout fails with a host key error** - the target's host key changed
+since it was pinned. Remove its line from `broker-ssh/known_hosts` once you
+have confirmed why.
