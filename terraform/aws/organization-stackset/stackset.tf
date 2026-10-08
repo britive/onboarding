@@ -4,7 +4,7 @@
 # nothing has to be uploaded to S3 first.
 
 locals {
-  member_template = "${path.module}/../../../cloudformation/aws/organization-stackset/britive_integration_resources.yaml"
+  member_template = "${path.module}/../../../cloudformation/aws/britive_integration_resources.yaml"
 }
 
 resource "aws_cloudformation_stack_set" "britive_resources" {
@@ -20,6 +20,10 @@ resource "aws_cloudformation_stack_set" "britive_resources" {
     TenantName                     = var.tenant_name
     # The template's AllowedValues are the strings "true" and "false".
     DeployAwsInvalidationFeature = var.deploy_aws_invalidation_feature ? "true" : "false"
+    DeployAccessBuilder          = var.deploy_access_builder ? "true" : "false"
+    DeployAiIdentityScanning     = var.deploy_ai_identity_scanning ? "true" : "false"
+    DeploySampleRoles            = "false"
+    MaxSessionDuration           = tostring(var.max_session_duration)
   }
 
   auto_deployment {

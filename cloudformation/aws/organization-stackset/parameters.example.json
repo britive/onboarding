@@ -1,30 +1,46 @@
 [
   {
-    "ParameterKey": "RootOuId",
-    "ParameterValue": "<root ou id>"
-  },
-  {
-    "ParameterKey": "Region",
-    "ParameterValue": "us-east-1"
-  },
-  {
-    "ParameterKey": "TenantName",
-    "ParameterValue": "<name of your britive tenant - omit '.britive-app.com'>"
-  },
-  {
-    "ParameterKey": "SamlMetadataDocumentXmlContent",
-    "ParameterValue": "<paste xml saml metadata content obtained from admin page in the britive ui>"
-  },
-  {
     "ParameterKey": "S3BucketName",
-    "ParameterValue": "<name of the bucket created earlier that holds the britive_integration_resources.yaml template>"
+    "ParameterValue": "<bucket in the management account, same region as the stack, holding britive_integration_resources.yaml>"
   },
   {
     "ParameterKey": "S3KeyForIamResourcesTemplate",
     "ParameterValue": "britive_integration_resources.yaml"
   },
   {
+    "ParameterKey": "OrganizationalUnitIds",
+    "ParameterValue": "<r-xxxx for the whole organization, or ou-xxxx-xxxxxxxx,ou-yyyy-yyyyyyyy>"
+  },
+  {
+    "ParameterKey": "Region",
+    "ParameterValue": "us-east-1"
+  },
+  {
+    "ParameterKey": "CallAs",
+    "ParameterValue": "SELF"
+  },
+  {
+    "ParameterKey": "TenantName",
+    "ParameterValue": "<your britive tenant subdomain - omit '.britive-app.com'>"
+  },
+  {
+    "ParameterKey": "SamlMetadataDocumentXmlContent",
+    "ParameterValue": "<the SAML metadata XML, JSON-escaped - take it from a file written by ../generate-parameters.sh>"
+  },
+  {
     "ParameterKey": "DeployAwsInvalidationFeature",
     "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "DeployAccessBuilder",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeployAiIdentityScanning",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeploySampleRoles",
+    "ParameterValue": "false"
   }
 ]

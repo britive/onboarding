@@ -1,0 +1,30 @@
+[
+  {
+    "ParameterKey": "TenantName",
+    "ParameterValue": "<your britive tenant subdomain - omit '.britive-app.com'>"
+  },
+  {
+    "ParameterKey": "SamlMetadataDocumentXmlContent",
+    "ParameterValue": "<the SAML metadata XML, JSON-escaped - run ./generate-parameters.sh instead of editing this by hand>"
+  },
+  {
+    "ParameterKey": "DeployAwsInvalidationFeature",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "DeployAccessBuilder",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeployAiIdentityScanning",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeploySampleRoles",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "MaxSessionDuration",
+    "ParameterValue": "3600"
+  }
+]

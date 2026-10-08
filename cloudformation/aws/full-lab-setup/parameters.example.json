@@ -1,14 +1,18 @@
 [
   {
     "ParameterKey": "TenantName",
-    "ParameterValue": "<(prefix) name of your britive tenant - Omit '.britive-app.com'>"
+    "ParameterValue": "<your britive tenant subdomain - omit '.britive-app.com'>"
+  },
+  {
+    "ParameterKey": "SamlMetadataDocumentXmlContent",
+    "ParameterValue": "<the SAML metadata XML, JSON-escaped - take it from a file written by ../generate-parameters.sh>"
   },
   {
     "ParameterKey": "DeployAwsInvalidationFeature",
     "ParameterValue": "true"
   },
   {
-    "ParameterKey": "SamlMetadataDocumentXmlContent",
-    "ParameterValue": "<paste formatted xml saml metadata content obtained after running the metadata formatter"
+    "ParameterKey": "AllowedIngressCidr",
+    "ParameterValue": "<your public IP as a /32, e.g. 203.0.113.10/32>"
   }
 ]

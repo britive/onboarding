@@ -33,7 +33,7 @@ variable "max_session_duration" {
 }
 
 variable "deploy_sample_roles" {
-  description = "Also create four sample JIT roles for a demonstration (the equivalent of the CloudFormation britive_integration_with_roles.yaml template)."
+  description = "Also create four sample JIT roles for a demonstration (the equivalent of DeploySampleRoles=true on the CloudFormation template)."
   type        = bool
   default     = false
 }
