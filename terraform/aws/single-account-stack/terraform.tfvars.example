@@ -13,3 +13,10 @@ deploy_ai_identity_scanning     = false
 deploy_sample_roles             = false
 max_session_duration            = 3600
 region                          = "us-east-1"
+
+# Management account only: the AWS Identity Center and AWS Account Access
+# application types. The ARN comes from the account access manager Settings
+# page (arn:aws:account-access:...), not from IAM Identity Center (arn:aws:sso::).
+deploy_identity_center         = false
+deploy_account_access          = false
+account_access_application_arn = ""

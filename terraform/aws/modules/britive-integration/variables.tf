@@ -47,6 +47,29 @@ variable "max_session_duration" {
   }
 }
 
+variable "deploy_identity_center" {
+  description = "Management account only. Grant the Identity Center, Organizations and IAM policy read permissions the Britive 'AWS Identity Center' application needs to scan permission sets, groups and applications and to assign them at checkout."
+  type        = bool
+  default     = false
+}
+
+variable "deploy_account_access" {
+  description = "Management account only. Grant the account access manager permissions the Britive 'AWS Account Access' application needs to create and delete entitlements. Requires account_access_application_arn; enable the account access manager in the Identity Center primary region first."
+  type        = bool
+  default     = false
+}
+
+variable "account_access_application_arn" {
+  description = "ARN of the account access manager application, from its Settings page in the management account (begins with arn:aws:account-access:). Not the 'AWS account access' application listed in IAM Identity Center (arn:aws:sso::), which fails the connection test."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.account_access_application_arn == "" || can(regex("^arn:aws[a-z-]*:account-access:[a-z0-9-]+:[0-9]{12}:application/", var.account_access_application_arn))
+    error_message = "account_access_application_arn must begin with arn:aws:account-access:<region>:<account>:application/ (the account access manager Settings page shows it), or be empty."
+  }
+}
+
 variable "deploy_sample_roles" {
   description = "Create four sample JIT roles (ReadOnly, PowerUser, EC2 full access, S3 full access) trusting the Britive SAML provider, for demonstrations."
   type        = bool

@@ -78,6 +78,7 @@ scans the organization.
 | `TenantName`, `SamlMetadataDocumentXmlContent` | — | Tenant subdomain, metadata XML |
 | `DeployAwsInvalidationFeature` | `true` | Everywhere |
 | `DeployAccessBuilder`, `DeployAiIdentityScanning`, `DeploySampleRoles` | `false` | Everywhere |
+| `DeployIdentityCenter`, `DeployAccountAccess`, `AccountAccessApplicationArn` | `false`, `false`, `""` | Management account only: the AWS Identity Center and AWS Account Access application types ([details](../README.md#aws-identity-center-and-aws-account-access)) |
 
 ## Update and delete
 

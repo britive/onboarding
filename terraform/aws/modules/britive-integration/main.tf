@@ -2,8 +2,12 @@
 # Britive assumes to scan the account, plus the optional permissions for the
 # session-invalidation feature, Access Builder and AI identity scanning.
 #
+# In the management account the same role can also serve the "AWS Identity
+# Center" and "AWS Account Access" application types.
+#
 # Matches https://docs.britive.com/docs/configuring-identity-provider,
-# configuring-iam-roles and configuring-for-session-invalidation.
+# configuring-iam-roles, configuring-for-session-invalidation,
+# configuring-iam-roles-in-awsidentitycenter and enable-account-access-manager.
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
@@ -132,6 +136,123 @@ resource "aws_iam_role_policy" "access_builder" {
       }
     ]
   })
+}
+
+# AWS Identity Center application: scan permission sets, groups, applications
+# and accounts, and assign/unassign them at checkout and checkin. The action
+# list is the one Britive documents; most Identity Center APIs offer no
+# resource-level scoping.
+resource "aws_iam_role_policy" "identity_center" {
+  count = var.deploy_identity_center ? 1 : 0
+
+  name = "britive-identity-center"
+  role = aws_iam_role.britive_integration.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion",
+          "iam:ListPolicies",
+          "iam:ListPolicyVersions",
+          "identitystore:CreateGroupMembership",
+          "identitystore:DeleteGroupMembership",
+          "identitystore:DescribeGroup",
+          "identitystore:DescribeGroupMembership",
+          "identitystore:DescribeUser",
+          "identitystore:GetGroupId",
+          "identitystore:GetGroupMembershipId",
+          "identitystore:GetUserId",
+          "identitystore:IsMemberInGroups",
+          "identitystore:ListGroupMemberships",
+          "identitystore:ListGroupMembershipsForMember",
+          "identitystore:ListGroups",
+          "identitystore:ListUsers",
+          "organizations:DescribeAccount",
+          "organizations:DescribeOrganization",
+          "organizations:DescribeOrganizationalUnit",
+          "organizations:ListAccounts",
+          "organizations:ListAccountsForParent",
+          "organizations:ListChildren",
+          "organizations:ListOrganizationalUnitsForParent",
+          "organizations:ListParents",
+          "organizations:ListRoots",
+          "organizations:ListTagsForResource",
+          "sso:CreateAccountAssignment",
+          "sso:CreateApplicationAssignment",
+          "sso:DeleteAccountAssignment",
+          "sso:DeleteApplicationAssignment",
+          "sso:DescribeAccountAssignmentCreationStatus",
+          "sso:DescribeAccountAssignmentDeletionStatus",
+          "sso:DescribeApplication",
+          "sso:DescribeApplicationAssignment",
+          "sso:DescribeInstance",
+          "sso:DescribePermissionSet",
+          "sso:DescribePermissionSetProvisioningStatus",
+          "sso:GetInlinePolicyForPermissionSet",
+          "sso:GetPermissionSet",
+          "sso:ListAccountAssignmentCreationStatus",
+          "sso:ListAccountAssignmentDeletionStatus",
+          "sso:ListAccountAssignments",
+          "sso:ListAccountAssignmentsForPrincipal",
+          "sso:ListAccountsForProvisionedPermissionSet",
+          "sso:ListApplicationAssignments",
+          "sso:ListApplicationAssignmentsForPrincipal",
+          "sso:ListApplications",
+          "sso:ListCustomerManagedPolicyReferencesInPermissionSet",
+          "sso:ListInstances",
+          "sso:ListManagedPoliciesInPermissionSet",
+          "sso:ListPermissionSets",
+          "sso:ListPermissionSetsProvisionedToAccount",
+          "sso:ListTagsForResource",
+          "sso:ProvisionPermissionSet",
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# AWS Account Access application: Britive creates an entitlement at checkout
+# and deletes it at checkin. ListApplications is what "Save and Test" uses to
+# confirm the ARN exists; AWS offers no resource-level scoping for it.
+resource "aws_iam_role_policy" "account_access" {
+  count = var.deploy_account_access ? 1 : 0
+
+  name = "britive-account-access"
+  role = aws_iam_role.britive_integration.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "DiscoverApplications"
+        Effect   = "Allow"
+        Action   = "account-access:ListApplications"
+        Resource = "*"
+      },
+      {
+        Sid    = "ManageEntitlements"
+        Effect = "Allow"
+        Action = [
+          "account-access:ListEntitlements",
+          "account-access:CreateEntitlement",
+          "account-access:DeleteEntitlement",
+        ]
+        Resource = var.account_access_application_arn
+      }
+    ]
+  })
+
+  lifecycle {
+    precondition {
+      condition     = var.account_access_application_arn != ""
+      error_message = "deploy_account_access = true requires account_access_application_arn (the account access manager Settings page in the management account shows it)."
+    }
+  }
 }
 
 # Sample JIT roles for demonstrations. Each trusts the Britive SAML provider
