@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars (gitignored). Credentials go in the environment:
+#   export BRITIVE_TENANT=https://your-tenant.britive-app.com
+#   export BRITIVE_TOKEN=<API token with rights over applications>
+
+application_name = "AWS"
+description      = "AWS organization, integration managed with Terraform"
+
+# From the AWS stack's outputs:
+#   terraform -chdir=../../../aws/organization-stackset output
+management_account_id             = "<management account id>"
+identity_provider_name            = "britive-your-tenant"
+integration_role_name             = "britive-your-tenant-integration-role"
+backend_connection_duration_hours = 1
+region                            = "us-east-1"
+
+show_aws_account_numbers          = true
+max_session_duration_for_profiles = 43200 # 12 hours
+account_mapping_attribute         = "Email"

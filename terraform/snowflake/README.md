@@ -51,7 +51,8 @@ terraform apply
 ## Configure the application in Britive
 
 **System Administration → Tenant Applications → Create Application →
-Snowflake** (or **Snowflake Standalone**), then:
+Snowflake** (or **Snowflake Standalone**) — or create it with the provider
+from [`../britive/applications/snowflake/`](../britive/applications/snowflake/) — then:
 
 | Britive field | From |
 | ------------- | ---- |

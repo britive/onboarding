@@ -56,7 +56,9 @@ then map the outputs:
 | Region | the region you deploy workloads in |
 
 **Save and Test** scans the organization and lists every member account the
-StackSet reached.
+StackSet reached. To create the application with the Britive provider
+instead, feed these outputs to
+[`../../britive/applications/aws/`](../../britive/applications/aws/).
 
 ## Variables
 

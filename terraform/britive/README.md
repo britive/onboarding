@@ -16,6 +16,19 @@ repository create ([CloudFormation](../../cloudformation/aws/) with
 `DeploySampleRoles=true`, [Terraform](../aws/) with
 `deploy_sample_roles = true`).
 
+## Applications
+
+The application itself can be created with the provider too, from the
+outputs of the cloud-side stack, instead of in the console:
+
+| Directory | Application type | Fed by |
+| --------- | ---------------- | ------ |
+| [`applications/aws/`](applications/aws/) | **AWS** (organization) | [`../aws/organization-stackset/`](../aws/organization-stackset/) or [`single-account-stack/`](../aws/single-account-stack/) outputs |
+| [`applications/snowflake/`](applications/snowflake/) | **Snowflake** or **Snowflake Standalone** (`standalone = true`, one `britive_entity_environment` per account) | [`../snowflake/`](../snowflake/) outputs and key pair |
+
+Scans are still started in the console. [`../google-cloud/britive-app/`](../google-cloud/britive-app/)
+does the same for the GCP application types.
+
 ## Prerequisites
 
 - Terraform >= 1.5; the provider (`~> 3.0`) is fetched by `terraform init`
