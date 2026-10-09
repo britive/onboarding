@@ -14,3 +14,10 @@ deploy_access_builder           = false
 deploy_ai_identity_scanning     = false
 region                          = "us-east-1"
 call_as                         = "SELF" # DELEGATED_ADMIN from a StackSets delegated administrator
+
+# Management account only: the AWS Identity Center and AWS Account Access
+# application types. The ARN comes from the account access manager Settings
+# page (arn:aws:account-access:...), not from IAM Identity Center (arn:aws:sso::).
+deploy_identity_center         = false
+deploy_account_access          = false
+account_access_application_arn = ""

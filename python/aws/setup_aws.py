@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Create the AWS side of a Britive integration: the SAML identity provider
 and the integration role, with the optional session-invalidation and Access
-Builder permissions.
+Builder permissions. In the management account the same role can also be
+given the permissions the "AWS Identity Center" and "AWS Account Access"
+application types need.
 
 The same resources the CloudFormation and Terraform templates in this
 repository create; use this when you want them from a script.
@@ -12,12 +14,14 @@ Environment (or .env next to this file):
 AWS credentials come from the usual boto3 sources (AWS_PROFILE, env, SSO).
 
 Matches docs.britive.com/docs/configuring-identity-provider,
-configuring-iam-roles and configuring-for-session-invalidation.
+configuring-iam-roles, configuring-for-session-invalidation,
+configuring-iam-roles-in-awsidentitycenter and enable-account-access-manager.
 """
 
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -28,12 +32,47 @@ from dotenv import load_dotenv
 from britive.britive import Britive
 
 SAML_AUDIENCE = "https://signin.aws.amazon.com/saml"
+ACCOUNT_ACCESS_ARN = re.compile(r"^arn:aws[a-z-]*:account-access:[a-z0-9-]+:[0-9]{12}:application/")
+
+# The permissions Britive documents for the AWS Identity Center application:
+# scan permission sets, groups, applications and accounts, and assign or
+# unassign them at checkout and checkin.
+IDENTITY_CENTER_ACTIONS = [
+    "iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicies", "iam:ListPolicyVersions",
+    "identitystore:CreateGroupMembership", "identitystore:DeleteGroupMembership",
+    "identitystore:DescribeGroup", "identitystore:DescribeGroupMembership",
+    "identitystore:DescribeUser", "identitystore:GetGroupId",
+    "identitystore:GetGroupMembershipId", "identitystore:GetUserId",
+    "identitystore:IsMemberInGroups", "identitystore:ListGroupMemberships",
+    "identitystore:ListGroupMembershipsForMember", "identitystore:ListGroups",
+    "identitystore:ListUsers",
+    "organizations:DescribeAccount", "organizations:DescribeOrganization",
+    "organizations:DescribeOrganizationalUnit", "organizations:ListAccounts",
+    "organizations:ListAccountsForParent", "organizations:ListChildren",
+    "organizations:ListOrganizationalUnitsForParent", "organizations:ListParents",
+    "organizations:ListRoots", "organizations:ListTagsForResource",
+    "sso:CreateAccountAssignment", "sso:CreateApplicationAssignment",
+    "sso:DeleteAccountAssignment", "sso:DeleteApplicationAssignment",
+    "sso:DescribeAccountAssignmentCreationStatus", "sso:DescribeAccountAssignmentDeletionStatus",
+    "sso:DescribeApplication", "sso:DescribeApplicationAssignment", "sso:DescribeInstance",
+    "sso:DescribePermissionSet", "sso:DescribePermissionSetProvisioningStatus",
+    "sso:GetInlinePolicyForPermissionSet", "sso:GetPermissionSet",
+    "sso:ListAccountAssignmentCreationStatus", "sso:ListAccountAssignmentDeletionStatus",
+    "sso:ListAccountAssignments", "sso:ListAccountAssignmentsForPrincipal",
+    "sso:ListAccountsForProvisionedPermissionSet", "sso:ListApplicationAssignments",
+    "sso:ListApplicationAssignmentsForPrincipal", "sso:ListApplications",
+    "sso:ListCustomerManagedPolicyReferencesInPermissionSet", "sso:ListInstances",
+    "sso:ListManagedPoliciesInPermissionSet", "sso:ListPermissionSets",
+    "sso:ListPermissionSetsProvisionedToAccount", "sso:ListTagsForResource",
+    "sso:ProvisionPermissionSet",
+]
 
 
 class BritiveAwsIntegration:
     def __init__(self, tenant: str, token: str, idp_name: str, role_name: str,
                  max_session_duration: int, invalidation: bool, access_builder: bool,
-                 ai_scanning: bool):
+                 ai_scanning: bool, identity_center: bool = False,
+                 account_access_application_arn: str | None = None):
         self.tenant = tenant
         self.idp_name = idp_name
         self.role_name = role_name
@@ -41,6 +80,8 @@ class BritiveAwsIntegration:
         self.invalidation = invalidation
         self.access_builder = access_builder
         self.ai_scanning = ai_scanning
+        self.identity_center = identity_center
+        self.account_access_application_arn = account_access_application_arn
 
         self.iam = boto3.client("iam")
         sts = boto3.client("sts")
@@ -113,6 +154,38 @@ class BritiveAwsIntegration:
             }],
         })
 
+    def identity_center_policy(self) -> str:
+        # Most Identity Center APIs offer no resource-level scoping.
+        return json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{"Effect": "Allow", "Action": IDENTITY_CENTER_ACTIONS, "Resource": "*"}],
+        })
+
+    def account_access_policy(self) -> str:
+        # ListApplications is what "Save and Test" uses to confirm the ARN
+        # exists; AWS offers no resource-level scoping for it. Entitlements are
+        # scoped to the one application.
+        return json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "DiscoverApplications",
+                    "Effect": "Allow",
+                    "Action": "account-access:ListApplications",
+                    "Resource": "*",
+                },
+                {
+                    "Sid": "ManageEntitlements",
+                    "Effect": "Allow",
+                    "Action": [
+                        "account-access:ListEntitlements", "account-access:CreateEntitlement",
+                        "account-access:DeleteEntitlement",
+                    ],
+                    "Resource": self.account_access_application_arn,
+                },
+            ],
+        })
+
     def create_role(self) -> str:
         provider_arn = self.saml_provider_arn()
         if not provider_arn:
@@ -149,12 +222,25 @@ class BritiveAwsIntegration:
             self.iam.put_role_policy(RoleName=self.role_name, PolicyName="britive-access-builder",
                                      PolicyDocument=self.access_builder_policy())
             print("Added Access Builder policy (role/britive/managed/*)")
+        if self.identity_center:
+            self.iam.put_role_policy(RoleName=self.role_name, PolicyName="britive-identity-center",
+                                     PolicyDocument=self.identity_center_policy())
+            print("Added AWS Identity Center policy (identitystore, sso, organizations)")
+        if self.account_access_application_arn:
+            self.iam.put_role_policy(RoleName=self.role_name, PolicyName="britive-account-access",
+                                     PolicyDocument=self.account_access_policy())
+            print(f"Added AWS Account Access policy for {self.account_access_application_arn}")
 
         print("\nBritive application fields:")
         print(f"  Account ID:                      {self.account_id}")
         print(f"  Identity Provider Name:          {self.idp_name}")
         print(f"  Integration Role Name:           {self.role_name}")
         print(f"  Duration of backend connection:  {self.max_session_duration // 3600} hour(s)")
+        if self.identity_center or self.account_access_application_arn:
+            print("  Region:                          the Identity Center primary region")
+            print("  Login URL:                       the AWS access portal URL (Identity Center > Settings)")
+        if self.account_access_application_arn:
+            print(f"  AWS Account Access Application ARN: {self.account_access_application_arn}")
         return role_arn
 
 
@@ -174,6 +260,11 @@ def main() -> None:
     parser.add_argument("-m", "--access-builder", action="store_true",
                         help="add the Access Builder permissions on role/britive/managed/*")
     parser.add_argument("--ai-scanning", action="store_true", help="attach AmazonBedrockReadOnly for AI identity scanning")
+    parser.add_argument("--identity-center", action="store_true",
+                        help="management account only: add the AWS Identity Center application permissions")
+    parser.add_argument("--account-access", metavar="ARN",
+                        help="management account only: add the AWS Account Access application permissions for this "
+                             "account access manager application ARN (arn:aws:account-access:...)")
     args = parser.parse_args()
 
     if not args.idp and not args.role:
@@ -185,6 +276,9 @@ def main() -> None:
         parser.error("BRITIVE_API_TOKEN is required (environment or .env)")
     if not 3600 <= args.max_session_duration <= 43200:
         parser.error("--max-session-duration must be between 3600 and 43200")
+    if args.account_access and not ACCOUNT_ACCESS_ARN.match(args.account_access):
+        parser.error("--account-access needs the ARN from the account access manager Settings page "
+                     "(arn:aws:account-access:<region>:<account>:application/...), not the arn:aws:sso:: one")
 
     integration = BritiveAwsIntegration(
         tenant=args.tenant,
@@ -195,6 +289,8 @@ def main() -> None:
         invalidation=not args.no_invalidation,
         access_builder=args.access_builder,
         ai_scanning=args.ai_scanning,
+        identity_center=args.identity_center,
+        account_access_application_arn=args.account_access,
     )
     try:
         if args.idp:
