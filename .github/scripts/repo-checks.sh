@@ -41,7 +41,9 @@ echo "== identifiers that must not be published"
 # Real tenant subdomains, account IDs, keys, internal addresses. Placeholders
 # are allowed; anything else is a leak until proven otherwise.
 pattern='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[0-9]{12}\.dkr\.ecr|arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:|[a-z0-9.-]+\.britive-app\.com|[A-Za-z0-9._%+-]+@britive\.com|hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|xox[baprs]-[0-9A-Za-z-]+)'
-allow='(123456789012|111111111111|000000000000|<[^>]*>\.britive-app\.com|(your-tenant|acme|acme\.us-east|mycompany|example|tenant|subdomain|demo)\.britive-app\.com|<[^>]*>\.dkr\.ecr|arn:aws:[a-z0-9-]+:[a-z0-9-]*:(123456789012|111111111111|000000000000):)'
+# sys@britive.com is the fixed subject claim Britive's Azure WIF guide prescribes
+# for the federated credential, not a person's address.
+allow='(123456789012|111111111111|000000000000|<[^>]*>\.britive-app\.com|(your-tenant|acme|acme\.us-east|mycompany|example|tenant|subdomain|demo)\.britive-app\.com|<[^>]*>\.dkr\.ecr|arn:aws:[a-z0-9-]+:[a-z0-9-]*:(123456789012|111111111111|000000000000):|sys@britive\.com)'
 hits=$(git grep -nIE "$pattern" -- . ':!AUDIT.md' | grep -vE "$allow" || true)
 [ -z "$hits" ] || err "possible published identifiers (add a placeholder or extend the allow list in this script):"$'\n'"$hits"
 
