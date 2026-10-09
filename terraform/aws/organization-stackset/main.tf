@@ -27,4 +27,10 @@ module "britive_management_account" {
   deploy_access_builder              = var.deploy_access_builder
   deploy_ai_identity_scanning        = var.deploy_ai_identity_scanning
   max_session_duration               = var.max_session_duration
+
+  # Identity Center and the account access manager live in the management
+  # account only; stackset.tf never passes these to member accounts.
+  deploy_identity_center         = var.deploy_identity_center
+  deploy_account_access          = var.deploy_account_access
+  account_access_application_arn = var.account_access_application_arn
 }

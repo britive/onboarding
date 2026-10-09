@@ -151,12 +151,14 @@ directly, so a custom image is only needed for the extra utilities: set
 
 ### Kubernetes
 
-Use Britive's official Helm chart —
-[learn.britive.com/bridge/deploy/kubernetes/](https://learn.britive.com/bridge/deploy/kubernetes/) —
-and point `image.repository` / `image.tag` at your build. Provide the SSH key
-and cloud credentials the examples need as a Secret and a workload identity
-(IRSA / GKE Workload Identity / AKS workload identity) through the chart's
-values.
+Use Britive's official Helm chart with the values file in
+[`../v2/kubernetes/`](../v2/kubernetes/): set `image.repository` /
+`image.tag` to your build and leave `BAKE_CONFIG=false` (the chart renders
+the configuration). Provide the SSH key the Linux example needs as a Secret
+mounted through `worker.customization.session.volumes`, and the cloud
+identity the MySQL example needs through `worker.serviceAccount.annotations`
+(IRSA / GKE Workload Identity / AKS workload identity) — both shown in that
+values file.
 
 ---
 

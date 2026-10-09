@@ -10,6 +10,7 @@ Each directory is one deployment option with its own `README.md` and an example 
 | --------- | ----- |
 | Connect one AWS account (POC, standalone, or a management account) | [`cloudformation/aws/single-account-stack/`](cloudformation/aws/single-account-stack/) or [`terraform/aws/single-account-stack/`](terraform/aws/single-account-stack/) |
 | Connect every account in an AWS Organization | [`cloudformation/aws/organization-stackset/`](cloudformation/aws/organization-stackset/) or [`terraform/aws/organization-stackset/`](terraform/aws/organization-stackset/) |
+| Broker IAM Identity Center permission sets, or account access manager entitlements | The same AWS stacks in the management account with the Identity Center / Account Access flags — see [`cloudformation/aws/`](cloudformation/aws/#aws-identity-center-and-aws-account-access) |
 | Try Britive on AWS with disposable Linux, Windows and MySQL targets | [`cloudformation/aws/full-lab-setup/`](cloudformation/aws/full-lab-setup/) or [`terraform/aws/full-lab-setup/`](terraform/aws/full-lab-setup/) |
 | Connect Google Cloud, keyless (workload identity federation) or with a key | [`terraform/google-cloud/`](terraform/google-cloud/) |
 | Connect Azure, keyless (workload identity federation) | [`terraform/azure/`](terraform/azure/) |
@@ -28,7 +29,7 @@ Each directory is one deployment option with its own `README.md` and an example 
 | [`terraform/`](terraform/) | The same AWS integration as a module; Azure (WIF); Google Cloud (WIF or key) with the optional Britive application; Google Workspace admin user; Snowflake role and user; Britive provider examples |
 | [`python/`](python/) | Britive SDK scripts: AWS, Google Cloud, OCI, Google Workspace SCIM, tenant bootstrap |
 | [`access-broker/`](access-broker/) | Access Broker 3.x: container image, Docker Compose, Linux VM, ECS Fargate, Kubernetes Helm chart |
-| [`bridge/`](bridge/) | Britive Bridge v2: platform setup, custom image, ECS Fargate with NLB, Docker Compose |
+| [`bridge/`](bridge/) | Britive Bridge v2: platform setup, custom image, ECS Fargate with NLB, Kubernetes (official Helm chart), Docker Compose |
 | [`kubernetes/`](kubernetes/) | Kubernetes just-in-time access: quick-start cluster and RBAC |
 | [`third-party-tool-integrations/`](third-party-tool-integrations/) | Checked-out credentials in DBeaver and MobaXterm with `pybritive` |
 | [`session-recording/`](session-recording/) | Legacy session-recording proxy, kept for existing deployments; new deployments use Bridge |

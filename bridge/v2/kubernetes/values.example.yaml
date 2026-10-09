@@ -1,0 +1,171 @@
+# Britive Bridge v2 on Kubernetes - production-shaped values for Britive's
+# official chart (oci://registry-1.docker.io/britive/bridge-chart).
+#
+#   cp values.example.yaml values.yaml      # edit; values.yaml is gitignored
+#   helm upgrade --install bridge oci://registry-1.docker.io/britive/bridge-chart \
+#     --version 2.1.1 -n bridge --create-namespace -f values.yaml
+#
+# The chart runs Bridge in clustered mode: an orchestrator Deployment spawns
+# session and proxy pods at runtime; a Service fronts the proxies. The
+# comments assume EKS (RDS, EFS, NLB, IRSA); the equivalents for other clouds
+# are in README.md. Every secret comes from a Secret you manage
+# (secrets.existingSecret, see external-secret.example.yaml); nothing
+# sensitive belongs in this file.
+
+image:
+  # Pin a release. The chart's default is "latest", which moves without
+  # notice. Use your registry's copy from ../../custom-image/ when checkout
+  # scripts need extra tools (aws, mysql, ssh): the same image is used for
+  # the orchestrator and every spawned worker.
+  repository: britive/bridge
+  tag: "v2.3.1"
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+orchestrator:
+  # 2 = HA (leader election). Needs the recordings claim to be ReadWriteMany;
+  # set 1 on a ReadWriteOnce class.
+  replicas: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1Gi }
+
+worker:
+  # Session and proxy pods are created by the orchestrator, not by Helm.
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  serviceAccount:
+    create: true
+    # Cloud identity for checkout scripts that call cloud APIs (Secrets
+    # Manager for database master credentials, EC2/RDS discovery). Bound to
+    # the worker pods only, never to the orchestrator.
+    annotations: {}
+      # eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/bridge-workers
+      # iam.gke.io/gcp-service-account: bridge-workers@<project>.iam.gserviceaccount.com
+      # azure.workload.identity/client-id: <client-id>
+  customization:
+    defaults: {}
+    # Example: mount the broker's SSH provisioning key for the Linux SSH
+    # checkout scripts in ../../custom-image/scripts/linux-ssh (the Secret
+    # holds the private key under the key "id_ed25519").
+    # session:
+    #   volumes:
+    #     - name: broker-ssh
+    #       secret: { secretName: bridge-broker-ssh, defaultMode: 0400 }
+    #   volumeMounts:
+    #     - { name: broker-ssh, mountPath: /home/bridge/.ssh, readOnly: true }
+    session: {}
+    proxy: {}
+
+config:
+  listen: ":8080"
+  tls:
+    # TLS terminates at the load balancer; the pods serve plain HTTP.
+    enabled: false
+  auth:
+    types: [britive]
+    britive:
+      tenant: "https://your-tenant.britive-app.com" # REQUIRED
+      scopes: [openid]
+      # Set when the load balancer does not pass X-Forwarded-Proto (an L4
+      # NLB does not): the public URL users reach Bridge at, plus the
+      # callback path. Otherwise the OAuth redirect is derived as http://.
+      redirectUrl: "https://bridge.example.com/api/auth/britive/callback"
+    ldap: {}
+  recording:
+    outputDir: /data/recordings
+  cluster:
+    session:
+      maxConcurrentSessions: 10
+      lifespan: "48h"
+    proxy:
+      lifespan: "48h"
+    orchestrator:
+      warmSessionWorkers: 2
+      proxyWorkers: 2
+  # Native = a port on the proxy Service for the user's own client; browser =
+  # in the web UI. Every native protocol enabled here needs a matching port
+  # under proxyService below.
+  protocols:
+    ssh: { native: true, browser: true }
+    rdp: { native: true, browser: true }
+    telnet: { native: false, browser: true }
+    vnc: { browser: true }
+    k8sExec: { browser: true }
+  # Settings the chart does not expose, merged verbatim into
+  # /etc/britive-bridge/config.yaml. Top-level keys only. The protocol keys
+  # match ../../custom-image/bridge.yaml; the full reference is
+  # https://learn.britive.com/bridge-files/bridge.reference.yaml
+  extraConfig:
+    mysql:
+      native: { enabled: true, listen: 3306 }
+      browser: { enabled: true }
+    postgres:
+      native: { enabled: true, listen: 5432 }
+      browser: { enabled: true }
+    mssql:
+      browser: { enabled: true }
+    server:
+      # The load balancer's source ranges, so session recordings capture
+      # real client IPs rather than the LB's.
+      trusted_proxies: ["10.0.0.0/8"]
+
+secrets:
+  # A Secret you manage, carrying BRIDGE_CLUSTER_TOKEN, BRIDGE_ENCRYPTION_KEY_B64,
+  # BRIDGE_HOST_KEY_SEED, every BRIDGE_DATASTORE_* key and
+  # BRITIVE_BROKER_AUTH_TOKEN. See external-secret.example.yaml. The chart
+  # renders no Secret of its own when this is set.
+  existingSecret: bridge-secrets
+
+datastore:
+  # Ignored when secrets.existingSecret is set (the Secret carries the
+  # connection); kept here so a reader sees what the Secret must contain.
+  host: ""
+  port: "5432"
+  user: bridge
+  name: bridge
+  sslmode: require
+
+postgres:
+  # The bundled PostgreSQL is for evaluation only. Production: a managed
+  # database (RDS PostgreSQL, Cloud SQL, Azure Database) reachable from the
+  # cluster, referenced by the Secret above.
+  enabled: false
+
+recordings:
+  mode: pvc
+  pvc:
+    # Must be ReadWriteMany on a multi-node cluster: session workers write,
+    # proxies read for playback. EFS on EKS (README: the StorageClass must use
+    # an access point owning the volume as uid 102 / gid 103), Azure Files on
+    # AKS, Filestore on GKE, NFS on-prem.
+    storageClassName: efs-sc
+    accessMode: ReadWriteMany
+    size: 50Gi
+
+proxyService:
+  # An L4 load balancer: SSH, RDP and database clients speak raw TCP.
+  type: LoadBalancer
+  annotations:
+    # AWS Load Balancer Controller: internet-facing NLB with TLS on 443 from
+    # an ACM certificate; the other ports pass TCP through.
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:<region>:<account>:certificate/<id>
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+    # Restrict native-client reachability to your networks.
+    service.beta.kubernetes.io/load-balancer-source-ranges: "10.0.0.0/8"
+  ports:
+    web: 443
+    ssh: 2222
+  extraPorts:
+    - { name: rdp, port: 3389, targetPort: 3389, protocol: TCP }
+    - { name: mysql, port: 3306, targetPort: 3306, protocol: TCP }
+    - { name: postgres, port: 5432, targetPort: 5432, protocol: TCP }
+
+rbac:
+  create: true
+serviceAccount:
+  create: true

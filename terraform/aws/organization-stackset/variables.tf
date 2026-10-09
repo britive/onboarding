@@ -42,6 +42,24 @@ variable "max_session_duration" {
   default     = 3600
 }
 
+variable "deploy_identity_center" {
+  description = "Add the permissions the Britive 'AWS Identity Center' application needs to the management-account role. Member accounts are not affected."
+  type        = bool
+  default     = false
+}
+
+variable "deploy_account_access" {
+  description = "Add the permissions the Britive 'AWS Account Access' application needs to the management-account role. Requires account_access_application_arn. Member accounts are not affected."
+  type        = bool
+  default     = false
+}
+
+variable "account_access_application_arn" {
+  description = "ARN of the account access manager application from its Settings page (arn:aws:account-access:<region>:<account>:application/...). Required when deploy_account_access is true."
+  type        = string
+  default     = ""
+}
+
 variable "region" {
   description = "Region for the provider and for the StackSet instance. IAM is global, so one region is enough."
   type        = string
