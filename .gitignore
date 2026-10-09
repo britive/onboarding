@@ -23,6 +23,8 @@ venv/
 
 # Terraform
 **/.terraform/
+# Provider lock files: these are examples, each user pins providers in their own copy.
+**/.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfplan

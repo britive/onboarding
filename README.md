@@ -13,8 +13,9 @@ Each directory is one deployment option with its own `README.md` and an example 
 | Broker IAM Identity Center permission sets, or account access manager entitlements | The same AWS stacks in the management account with the Identity Center / Account Access flags — see [`cloudformation/aws/`](cloudformation/aws/#aws-identity-center-and-aws-account-access) |
 | Try Britive on AWS with disposable Linux, Windows and MySQL targets | [`cloudformation/aws/full-lab-setup/`](cloudformation/aws/full-lab-setup/) or [`terraform/aws/full-lab-setup/`](terraform/aws/full-lab-setup/) |
 | Connect Google Cloud, keyless (workload identity federation) or with a key | [`terraform/google-cloud/`](terraform/google-cloud/) |
+| Connect Azure, keyless (workload identity federation) | [`terraform/azure/`](terraform/azure/) |
 | Connect Snowflake | [`terraform/snowflake/`](terraform/snowflake/) |
-| Connect OCI, Azure, or Google Cloud projects with a script | [`python/`](python/) |
+| Connect OCI or Google Cloud projects with a script | [`python/`](python/) |
 | Give users just-in-time access to servers, databases and Kubernetes clusters | [`access-broker/`](access-broker/) |
 | Let users reach brokered resources through a browser or native client without seeing credentials | [`bridge/`](bridge/) |
 | Manage Britive itself as code: tags, profiles, policies | [`terraform/britive/`](terraform/britive/) |
@@ -25,7 +26,7 @@ Each directory is one deployment option with its own `README.md` and an example 
 | Directory | Contents |
 | --------- | -------- |
 | [`cloudformation/`](cloudformation/) | AWS integration: one template for the SAML provider and integration role, deployed as a single stack, a StackSet, or organization-wide; a demo lab; a sample SCP |
-| [`terraform/`](terraform/) | The same AWS integration as a module; Google Cloud (WIF or key) with the optional Britive application; Google Workspace admin user; Snowflake role and user; Britive provider examples |
+| [`terraform/`](terraform/) | The same AWS integration as a module; Azure (WIF); Google Cloud (WIF or key) with the optional Britive application; Google Workspace admin user; Snowflake role and user; Britive provider examples |
 | [`python/`](python/) | Britive SDK scripts: AWS, Google Cloud, OCI, Google Workspace SCIM, tenant bootstrap |
 | [`access-broker/`](access-broker/) | Access Broker 3.x: container image, Docker Compose, Linux VM, ECS Fargate, Kubernetes Helm chart |
 | [`bridge/`](bridge/) | Britive Bridge v2: platform setup, custom image, ECS Fargate with NLB, Kubernetes (official Helm chart), Docker Compose |

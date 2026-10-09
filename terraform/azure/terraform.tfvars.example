@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+britive_tenant_url = "https://your-tenant.britive-app.com"
+
+# "discovery": scan only (Reader). "dynamic": Britive also grants Azure roles
+# and group memberships at checkout (custom role + Graph write permissions).
+integration_mode = "dynamic"
+
+scan_ai_identities  = false # Azure AI Foundry agents as AI identities
+enable_last_sign_in = true  # AuditLog.Read.All; needs Entra ID P1/P2 to return data
+
+# Any subscription in the tenant; the azurerm provider needs one to start.
+# Leave null to use ARM_SUBSCRIPTION_ID.
+subscription_id = null
+
+# Only if the Britive application's Settings show a different issuer URL:
+# britive_issuer_url = "https://your-tenant.britive-app.com/api/auth/sso/oauth2"
