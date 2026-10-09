@@ -75,16 +75,17 @@ existing resource in place.
 | ------ | ------------- | --------------------- | ----------- | -------- |
 | [**AWS ECS Fargate + NLB**](v2/aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an **ACM cert**; TCP listeners for native SSH/RDP/MySQL/PostgreSQL | EFS + RDS PostgreSQL (companion stack included) | Production on AWS, no hosts to patch |
 | [**Docker Compose**](v2/docker-compose/) | Any Docker host / VM | Container's own TLS (self-signed by default) | Docker volumes (bridge data + PostgreSQL) | Evaluation, POCs, single-server deployments |
-| **Kubernetes (Helm)** | Any cluster | Ingress of your choice | PVC + your PostgreSQL | Britive publishes an official chart: `helm install bridge oci://registry-1.docker.io/britive/bridge-chart` — see [learn.britive.com/bridge/deploy/kubernetes/](https://learn.britive.com/bridge/deploy/kubernetes/). No manifests are duplicated here. |
+| [**Kubernetes (Helm)**](v2/kubernetes/) | Any cluster (EKS, AKS, GKE, on-prem) | L4 load balancer from the chart's Service, TLS at the LB (ACM on an NLB) | ReadWriteMany PVC for recordings + your managed PostgreSQL | Britive's official chart `oci://registry-1.docker.io/britive/bridge-chart` in clustered mode; this repo adds a production values file and the External Secrets manifest |
 
 ### Quick guidance
 
 - **Just trying it out, or one server is enough?** → [Docker Compose](v2/docker-compose/).
 - **Production on AWS?** → [ECS Fargate + NLB](v2/aws-ecs-fargate-nlb/), with
   the included `rds-postgres.yaml` for the datastore.
-- **Already standardized on Kubernetes?** → the official Helm chart (link
-  above). Build a [custom image](custom-image/) first if your checkout scripts
-  need extra tools.
+- **Already standardized on Kubernetes?** → [Kubernetes (Helm)](v2/kubernetes/):
+  the official chart with a values file for RDS, EFS, an NLB and External
+  Secrets. Build a [custom image](custom-image/) first if your checkout
+  scripts need extra tools.
 - **Need the broker to run scripts that use extra tools** (`ssh`, `mysql`,
   `aws`, `jq`, …) or want the configuration baked in for Fargate? → build a
   [custom image](custom-image/) and use it as the image in any option.
@@ -138,9 +139,13 @@ bridge/
     │   ├── ecs-fargate-nlb.yaml    # ECS service, NLB, EFS, IAM, secrets
     │   ├── params.example.json
     │   └── README.md
-    └── docker-compose/
-        ├── docker-compose.yaml
-        ├── .env.example
+    ├── docker-compose/
+    │   ├── docker-compose.yaml
+    │   ├── .env.example
+    │   └── README.md
+    └── kubernetes/
+        ├── values.example.yaml         # for Britive's official Helm chart
+        ├── external-secret.example.yaml
         └── README.md
 ```
 

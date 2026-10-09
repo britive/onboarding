@@ -28,7 +28,7 @@ Each directory is one deployment option with its own `README.md` and an example 
 | [`terraform/`](terraform/) | The same AWS integration as a module; Google Cloud (WIF or key) with the optional Britive application; Google Workspace admin user; Snowflake role and user; Britive provider examples |
 | [`python/`](python/) | Britive SDK scripts: AWS, Google Cloud, OCI, Google Workspace SCIM, tenant bootstrap |
 | [`access-broker/`](access-broker/) | Access Broker 3.x: container image, Docker Compose, Linux VM, ECS Fargate, Kubernetes Helm chart |
-| [`bridge/`](bridge/) | Britive Bridge v2: platform setup, custom image, ECS Fargate with NLB, Docker Compose |
+| [`bridge/`](bridge/) | Britive Bridge v2: platform setup, custom image, ECS Fargate with NLB, Kubernetes (official Helm chart), Docker Compose |
 | [`kubernetes/`](kubernetes/) | Kubernetes just-in-time access: quick-start cluster and RBAC |
 | [`third-party-tool-integrations/`](third-party-tool-integrations/) | Checked-out credentials in DBeaver and MobaXterm with `pybritive` |
 | [`session-recording/`](session-recording/) | Legacy session-recording proxy, kept for existing deployments; new deployments use Bridge |

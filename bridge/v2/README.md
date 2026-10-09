@@ -19,7 +19,8 @@ Where the configuration file comes from differs per option: Docker Compose
 bind-mounts [`../custom-image/bridge.yaml`](../custom-image/bridge.yaml);
 ECS Fargate has no volume to mount it from, so the
 [custom image builder](../custom-image/) bakes it into the image
-(`--build-arg BAKE_CONFIG=true`), and a config change becomes an image change.
+(`--build-arg BAKE_CONFIG=true`), and a config change becomes an image change;
+the Helm chart renders it from values into a ConfigMap.
 
 ## Options
 
@@ -27,7 +28,7 @@ ECS Fargate has no volume to mount it from, so the
 | ------ | ------------- | --------------------- | ----------- |
 | [**AWS ECS Fargate + NLB**](aws-ecs-fargate-nlb/) | AWS ECS Fargate | NLB:443 terminates TLS with an ACM certificate; TCP listeners for native SSH, RDP, MySQL and PostgreSQL | EFS for recordings; RDS PostgreSQL from the included `rds-postgres.yaml` |
 | [**Docker Compose**](docker-compose/) | Any Docker host / VM | The container's own TLS (self-signed by default); every native port published | Docker volumes for Bridge data and PostgreSQL |
-| **Kubernetes** | Any cluster | Your Ingress | Britive's official Helm chart — `oci://registry-1.docker.io/britive/bridge-chart` — documented at [learn.britive.com/bridge/deploy/kubernetes/](https://learn.britive.com/bridge/deploy/kubernetes/). Not duplicated here. |
+| [**Kubernetes (Helm)**](kubernetes/) | Any cluster | L4 load balancer from the chart's proxy Service; TLS at the LB (ACM on an NLB) or in the pods | ReadWriteMany PVC for recordings (EFS, Azure Files, NFS); your managed PostgreSQL. Britive's official chart `oci://registry-1.docker.io/britive/bridge-chart`, with a production values file and External Secrets manifest here |
 
 ## Before you start
 
@@ -44,6 +45,10 @@ v2/
 │   ├── ecs-fargate-nlb.yaml     # ECS service, NLB, EFS, IAM, secrets
 │   ├── params.example.json      # every ECS stack parameter
 │   └── README.md                # prerequisites through cleanup
+├── kubernetes/
+│   ├── values.example.yaml      # production values for Britive's official chart
+│   ├── external-secret.example.yaml
+│   └── README.md
 └── docker-compose/
     ├── docker-compose.yaml      # PostgreSQL + Bridge on one host
     ├── .env.example
