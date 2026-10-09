@@ -42,8 +42,9 @@ terraform.rc
 *.tfvars.json
 !*.tfvars.example
 !*.example.tfvars
-# Google Cloud key mode writes an org-wide service account key here.
+# Google Cloud key mode and the Google Workspace application write a service account key here.
 terraform/google-cloud/keys/
+terraform/google-workspace-application/keys/
 terraform/keys/
 
 # Secrets and local working copies (never commit)

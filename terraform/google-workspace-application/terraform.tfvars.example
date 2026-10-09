@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+project_id       = "britive-workspace"       # new project, or create_project = false for an existing one
+create_project   = true
+workspace_domain = "example.com"             # primary domain of the Workspace account
+
+# Where the new project lives. Leave both null only if the Google account has
+# no Cloud organisation.
+organization_id = "123456789012"
+folder_id       = null
+billing_account = null
+
+allow_project_deletion = false

@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars (gitignored). Everything is optional; the admin user
+# and the domain are read from ../ and ../../google-workspace when applied.
+
+application_name            = "Google Workspace"
+login_url                   = "https://admin.google.com"
+create_user_for_super_admin = false
+scan_roles                  = true
+scan_groups                 = true
+enable_sso                  = false
+
+# When Britive users and Workspace identities use different email domains:
+# britive_users_domain = "corp.example.com"
+# google_domain        = "example.com"
+
+max_session_duration_seconds = 43200
