@@ -1,6 +1,9 @@
-# Google Workspace for the Britive GCP application (key mode)
+# Google Workspace admin role and user for Britive
 
-Only for the legacy, key-based Britive **GCP** application (`integration_type = "key"` in [../google-cloud](../google-cloud/README.md)). The recommended **GCP WIF** application does not use it.
+Used by two application types, both of which impersonate a Workspace admin user through domain-wide delegation granted to a Britive service account:
+
+- the legacy, key-based **GCP** application (`integration_type = "key"` in [../google-cloud](../google-cloud/README.md); the recommended **GCP WIF** application does not use it), and
+- the **Google Workspace** application ([../google-workspace-application](../google-workspace-application/README.md)), whose `deploy.sh` runs this root with its own key (`service_account_key_file`).
 
 Creates a Workspace admin role limited to reading organisational units, users and groups and updating groups, and a Workspace user `britive-integration@<domain>` holding it. Britive acts as that user, the application's **G Suite admin**, through domain-wide delegation granted to the Britive service account. The user takes a Workspace licence. Its password is random and kept only in Terraform state: nobody signs in as it.
 
