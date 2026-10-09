@@ -1,0 +1,32 @@
+# Copy to terraform.tfvars (gitignored). Credentials go in the environment:
+#   export BRITIVE_TENANT=https://your-tenant.britive-app.com
+#   export BRITIVE_TOKEN=<API token with rights over applications>
+
+# false = "Snowflake" organization application; true = "Snowflake Standalone"
+standalone       = false
+application_name = "Snowflake"
+
+# Organization application: the account identifier from
+#   terraform -chdir=../../../snowflake output account_identifier
+account_identifier = "MYORG-MYACCOUNT"
+
+# Standalone application: one environment per account instead
+# accounts = {
+#   production = { account_identifier = "MYORG-PROD", description = "Production account" }
+#   analytics  = { account_identifier = "MYORG-ANALYTICS" }
+# }
+
+# Service user and role created by ../../../snowflake (uppercase)
+username = "BRITIVEUSER"
+role     = "BRITIVEROLE"
+
+# Britive's key pair from ../../../snowflake (never committed)
+private_key_file       = "~/.ssh/britive_snowflake.p8"
+public_key_file        = "~/.ssh/britive_snowflake.pub"
+private_key_passphrase = ""
+
+login_url                          = "https://{accountId}.snowflakecomputing.com"
+use_login_name_for_account_mapping = false
+skip_schema_level_privileges       = false
+copy_settings_to_all_accounts      = true
+max_session_duration_for_profiles  = 43200
