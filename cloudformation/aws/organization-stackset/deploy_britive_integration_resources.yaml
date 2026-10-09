@@ -35,6 +35,12 @@ Metadata:
           - DeployAccessBuilder
           - DeployAiIdentityScanning
           - DeploySampleRoles
+      - Label:
+          default: AWS Identity Center and AWS Account Access (management account only)
+        Parameters:
+          - DeployIdentityCenter
+          - DeployAccountAccess
+          - AccountAccessApplicationArn
     ParameterLabels:
       S3BucketName:
         default: S3 bucket (same region as this stack) holding britive_integration_resources.yaml
@@ -100,6 +106,29 @@ Parameters:
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: Create the four sample JIT roles in every account. Demonstrations only.
+  DeployIdentityCenter:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Grant the Britive "AWS Identity Center" application permissions on the management-account role. Member accounts are not affected.
+  DeployAccountAccess:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Grant the Britive "AWS Account Access" application permissions on the management-account role. Requires AccountAccessApplicationArn. Member accounts are not affected.
+  AccountAccessApplicationArn:
+    Type: String
+    Default: ""
+    AllowedPattern: "^(arn:aws[a-z-]*:account-access:[a-z0-9-]+:[0-9]{12}:application/.+)?$"
+    ConstraintDescription: the ARN from the account access manager Settings page, beginning arn:aws:account-access:, or empty
+    Description: ARN of the account access manager application (its Settings page in the management account), beginning arn:aws:account-access:.
+
+Rules:
+  AccountAccessNeedsApplicationArn:
+    RuleCondition: !Equals [!Ref DeployAccountAccess, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AccountAccessApplicationArn, ""]]
+        AssertDescription: DeployAccountAccess=true requires AccountAccessApplicationArn.
 
 Resources:
   ManagementAccountStack:
@@ -114,6 +143,11 @@ Resources:
         DeployAccessBuilder: !Ref DeployAccessBuilder
         DeployAiIdentityScanning: !Ref DeployAiIdentityScanning
         DeploySampleRoles: !Ref DeploySampleRoles
+        # Identity Center and the account access manager live in the
+        # management account only; the StackSet below never passes these.
+        DeployIdentityCenter: !Ref DeployIdentityCenter
+        DeployAccountAccess: !Ref DeployAccountAccess
+        AccountAccessApplicationArn: !Ref AccountAccessApplicationArn
 
   MemberAccountsStackSet:
     Type: AWS::CloudFormation::StackSet
@@ -167,6 +201,9 @@ Outputs:
   BackendConnectionDurationHours:
     Description: Enter as "Duration of backend connection" in the Britive application.
     Value: "1"
+  AccountAccessApplicationArn:
+    Description: Enter as "AWS Account Access Application ARN" in the Britive AWS Account Access application (empty unless DeployAccountAccess is true).
+    Value: !Ref AccountAccessApplicationArn
   StackSetName:
     Description: StackSet deploying the member-account resources; list instances with aws cloudformation list-stack-instances.
     Value: !Ref MemberAccountsStackSet

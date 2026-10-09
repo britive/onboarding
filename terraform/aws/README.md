@@ -27,7 +27,18 @@ the management account together.
 tenant_name                        = "your-tenant"               # omit .britive-app.com
 saml_metadata_document_xml_content = file("britive-saml-metadata.xml")  # or pass with -var on the command line
 deploy_aws_invalidation_feature    = true
+
+# management account only: the AWS Identity Center / AWS Account Access application types
+deploy_identity_center         = false
+deploy_account_access          = false
+account_access_application_arn = ""      # arn:aws:account-access:<region>:<account>:application/<id>
 ```
+
+The Identity Center and Account Access flags add their permissions to the
+management account's integration role, as Britive's guides prescribe; the
+prerequisites (enabling the account access manager, the trust policy Account
+Access roles need) and the application fields are in
+[`../../cloudformation/aws/README.md`](../../cloudformation/aws/README.md#aws-identity-center-and-aws-account-access).
 
 The SAML metadata comes from **System Administration → Security → SAML
 Configurations → Download SAML Metadata**. It identifies your tenant, so keep

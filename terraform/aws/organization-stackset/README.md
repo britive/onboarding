@@ -69,6 +69,7 @@ StackSet reached.
 | `deploy_access_builder` | `false` | Access Builder permissions, management account only |
 | `deploy_ai_identity_scanning` | `false` | `AmazonBedrockReadOnly`, management account only |
 | `max_session_duration` | `3600` | Management-account integration role (member accounts use the template's 3600) |
+| `deploy_identity_center`, `deploy_account_access`, `account_access_application_arn` | `false`, `false`, `""` | Management account only: the **AWS Identity Center** and **AWS Account Access** application types ([prerequisites and fields](../../../cloudformation/aws/README.md#aws-identity-center-and-aws-account-access)) |
 | `region` | `us-east-1` | Provider and StackSet instance region |
 | `call_as` | `SELF` | `DELEGATED_ADMIN` from a delegated administrator |
 | `failure_tolerance_count` / `max_concurrent_count` | `10` / `10` | StackSet operation preferences |

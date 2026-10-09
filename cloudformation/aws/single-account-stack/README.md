@@ -47,6 +47,13 @@ Standalone** (or **AWS** when this is the management account): enter
 `AccountId`, `BritiveSamlProviderName`, `BritiveIntegrationRoleName` and
 `MaxSessionDurationSeconds ÷ 3600` from the outputs, then **Save and Test**.
 
+In the management account the same stack can also serve the **AWS Identity
+Center** and **AWS Account Access** application types: add `--identity-center`
+and/or `--account-access <arn>` to `generate-parameters.sh`. See
+[`../README.md`](../README.md#aws-identity-center-and-aws-account-access) for
+the prerequisites (enabling the account access manager) and the application
+fields.
+
 ## Verify
 
 ```bash

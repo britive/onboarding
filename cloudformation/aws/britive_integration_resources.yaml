@@ -3,13 +3,22 @@ Description: >
   Britive AWS integration for one account: the SAML identity provider and the
   integration role Britive assumes to scan the account, with optional
   permissions for session invalidation, Access Builder and AI identity
-  scanning, and optional sample JIT roles for demonstrations. Deploy it as a
-  stack in a single account, as a StackSet across an organization, or as the
+  scanning, and optional sample JIT roles for demonstrations. In the
+  management account it can also grant the permissions the AWS Identity Center
+  and AWS Account Access application types need on the same role. Deploy it as
+  a stack in a single account, as a StackSet across an organization, or as the
   nested template of organization-stackset/. Matches
-  docs.britive.com/docs/configuring-identity-provider, configuring-iam-roles
-  and configuring-for-session-invalidation.
+  docs.britive.com/docs/configuring-identity-provider, configuring-iam-roles,
+  configuring-for-session-invalidation, configuring-iam-roles-in-awsidentitycenter
+  and enable-account-access-manager.
 
 Metadata:
+  cfn-lint:
+    config:
+      # W1030: AccountAccessApplicationArn is intentionally empty unless
+      # DeployAccountAccess is true; the AccountAccessNeedsApplicationArn
+      # rule below enforces a real ARN whenever the policy is deployed.
+      ignore_checks: [W1030]
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
@@ -24,6 +33,12 @@ Metadata:
           - DeployAccessBuilder
           - DeployAiIdentityScanning
           - MaxSessionDuration
+      - Label:
+          default: AWS Identity Center and AWS Account Access (management account only)
+        Parameters:
+          - DeployIdentityCenter
+          - DeployAccountAccess
+          - AccountAccessApplicationArn
       - Label:
           default: Demonstration
         Parameters:
@@ -41,6 +56,12 @@ Metadata:
         default: AI identity scanning (AmazonBedrockReadOnly)
       MaxSessionDuration:
         default: Integration role maximum session duration (seconds)
+      DeployIdentityCenter:
+        default: AWS Identity Center permissions (identitystore, sso, organizations)
+      DeployAccountAccess:
+        default: AWS Account Access permissions (account-access entitlements)
+      AccountAccessApplicationArn:
+        default: Account access manager application ARN (arn:aws:account-access:...), required with the option above
       DeploySampleRoles:
         default: Create four sample JIT roles
 
@@ -76,16 +97,44 @@ Parameters:
     MinValue: 3600
     MaxValue: 43200
     Description: Maximum session duration of the integration role in seconds. Enter the same value, in hours, as "Duration of backend connection" when creating the AWS application in Britive.
+  DeployIdentityCenter:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Management account only. Grant the Identity Center, Organizations and IAM policy read permissions the Britive "AWS Identity Center" application needs to scan permission sets, groups and applications and to assign them at checkout.
+  DeployAccountAccess:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Management account only. Grant the account access manager permissions the Britive "AWS Account Access" application needs to create and delete entitlements. Requires AccountAccessApplicationArn. Enable the account access manager in the Identity Center primary region first.
+  AccountAccessApplicationArn:
+    Type: String
+    Default: ""
+    AllowedPattern: "^(arn:aws[a-z-]*:account-access:[a-z0-9-]+:[0-9]{12}:application/.+)?$"
+    ConstraintDescription: the ARN from the account access manager Settings page, beginning arn:aws:account-access:, or empty
+    Description: >-
+      ARN of the account access manager application, from its Settings page in the management account
+      (begins with arn:aws:account-access:). Not the "AWS account access" application listed in IAM
+      Identity Center, whose ARN begins with "arn:aws:sso::" and fails the connection test.
   DeploySampleRoles:
     Type: String
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: Create Readonly-admin-role, Poweruser-role, EC2-Fullaccess-role and S3-Fullaccess-role, trusting the Britive SAML provider, for demonstrations.
 
+Rules:
+  AccountAccessNeedsApplicationArn:
+    RuleCondition: !Equals [!Ref DeployAccountAccess, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AccountAccessApplicationArn, ""]]
+        AssertDescription: DeployAccountAccess=true requires AccountAccessApplicationArn (the account access manager Settings page in the management account shows it).
+
 Conditions:
   Invalidation: !Equals [!Ref DeployAwsInvalidationFeature, "true"]
   AccessBuilder: !Equals [!Ref DeployAccessBuilder, "true"]
   AiScanning: !Equals [!Ref DeployAiIdentityScanning, "true"]
+  IdentityCenter: !Equals [!Ref DeployIdentityCenter, "true"]
+  AccountAccess: !Equals [!Ref DeployAccountAccess, "true"]
   SampleRoles: !Equals [!Ref DeploySampleRoles, "true"]
 
 Resources:
@@ -175,6 +224,110 @@ Resources:
               - iam:PutRolePolicy
               - iam:DeleteRolePolicy
             Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/britive/managed/*
+
+  # AWS Identity Center application: scan permission sets, groups, applications
+  # and accounts, and assign/unassign them at checkout and checkin. The action
+  # list is the one Britive documents; the Identity Center APIs do not support
+  # resource-level scoping for most of it.
+  BritiveIdentityCenterPolicy:
+    Type: AWS::IAM::Policy
+    Condition: IdentityCenter
+    Properties:
+      PolicyName: britive-identity-center
+      Roles:
+        - !Ref BritiveIntegrationRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicies
+              - iam:ListPolicyVersions
+              - identitystore:CreateGroupMembership
+              - identitystore:DeleteGroupMembership
+              - identitystore:DescribeGroup
+              - identitystore:DescribeGroupMembership
+              - identitystore:DescribeUser
+              - identitystore:GetGroupId
+              - identitystore:GetGroupMembershipId
+              - identitystore:GetUserId
+              - identitystore:IsMemberInGroups
+              - identitystore:ListGroupMemberships
+              - identitystore:ListGroupMembershipsForMember
+              - identitystore:ListGroups
+              - identitystore:ListUsers
+              - organizations:DescribeAccount
+              - organizations:DescribeOrganization
+              - organizations:DescribeOrganizationalUnit
+              - organizations:ListAccounts
+              - organizations:ListAccountsForParent
+              - organizations:ListChildren
+              - organizations:ListOrganizationalUnitsForParent
+              - organizations:ListParents
+              - organizations:ListRoots
+              - organizations:ListTagsForResource
+              - sso:CreateAccountAssignment
+              - sso:CreateApplicationAssignment
+              - sso:DeleteAccountAssignment
+              - sso:DeleteApplicationAssignment
+              - sso:DescribeAccountAssignmentCreationStatus
+              - sso:DescribeAccountAssignmentDeletionStatus
+              - sso:DescribeApplication
+              - sso:DescribeApplicationAssignment
+              - sso:DescribeInstance
+              - sso:DescribePermissionSet
+              - sso:DescribePermissionSetProvisioningStatus
+              - sso:GetInlinePolicyForPermissionSet
+              - sso:GetPermissionSet
+              - sso:ListAccountAssignmentCreationStatus
+              - sso:ListAccountAssignmentDeletionStatus
+              - sso:ListAccountAssignments
+              - sso:ListAccountAssignmentsForPrincipal
+              - sso:ListAccountsForProvisionedPermissionSet
+              - sso:ListApplicationAssignments
+              - sso:ListApplicationAssignmentsForPrincipal
+              - sso:ListApplications
+              - sso:ListCustomerManagedPolicyReferencesInPermissionSet
+              - sso:ListInstances
+              - sso:ListManagedPoliciesInPermissionSet
+              - sso:ListPermissionSets
+              - sso:ListPermissionSetsProvisionedToAccount
+              - sso:ListTagsForResource
+              - sso:ProvisionPermissionSet
+            Resource: "*"
+
+  # AWS Account Access application: Britive creates an entitlement at checkout
+  # and deletes it at checkin. ListApplications is what "Save and Test" uses
+  # to confirm the ARN exists; AWS offers no resource-level scoping for it.
+  BritiveAccountAccessPolicy:
+    Type: AWS::IAM::Policy
+    Condition: AccountAccess
+    Metadata:
+      cfn-lint:
+        config:
+          # W3037: cfn-lint's IAM service list predates the account-access
+          # prefix; the actions are the ones AWS and Britive document.
+          ignore_checks: [W3037]
+    Properties:
+      PolicyName: britive-account-access
+      Roles:
+        - !Ref BritiveIntegrationRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DiscoverApplications
+            Effect: Allow
+            Action: account-access:ListApplications
+            Resource: "*"
+          - Sid: ManageEntitlements
+            Effect: Allow
+            Action:
+              - account-access:ListEntitlements
+              - account-access:CreateEntitlement
+              - account-access:DeleteEntitlement
+            Resource: !Ref AccountAccessApplicationArn
 
   # Sample JIT roles for demonstrations. Each trusts the Britive SAML provider
   # exactly as a production role must.
@@ -287,6 +440,10 @@ Outputs:
   MaxSessionDurationSeconds:
     Description: Divide by 3600 and enter as "Duration of backend connection" (hours) in the Britive application.
     Value: !Ref MaxSessionDuration
+  AccountAccessApplicationArn:
+    Condition: AccountAccess
+    Description: Enter as "AWS Account Access Application ARN" in the Britive AWS Account Access application.
+    Value: !Ref AccountAccessApplicationArn
   SampleReadOnlyRoleArn:
     Condition: SampleRoles
     Value: !GetAtt SampleReadOnlyRole.Arn
