@@ -24,6 +24,8 @@ the Britive application fields.
 - The target IDs: `aws organizations list-roots` (root `r-xxxx`) or
   `aws organizations list-organizational-units-for-parent --parent-id r-xxxx`
 - A parameters file: `cd .. && ./generate-parameters.sh acme britive-saml-metadata.xml`
+  (without `--identity-center` / `--account-access`: those permissions belong
+  in the management account only)
 
 ## Deploy
 

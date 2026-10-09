@@ -42,5 +42,17 @@
   {
     "ParameterKey": "DeploySampleRoles",
     "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeployIdentityCenter",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeployAccountAccess",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "AccountAccessApplicationArn",
+    "ParameterValue": ""
   }
 ]

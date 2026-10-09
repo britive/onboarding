@@ -32,3 +32,8 @@ output "sample_role_arns" {
   description = "Sample JIT role ARNs (empty unless deploy_sample_roles = true)."
   value       = module.britive.sample_role_arns
 }
+
+output "account_access_application_arn" {
+  description = "Enter as 'AWS Account Access Application ARN' in the Britive AWS Account Access application (empty unless deploy_account_access = true)."
+  value       = var.account_access_application_arn
+}

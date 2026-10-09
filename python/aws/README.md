@@ -29,6 +29,8 @@ The API token needs permission to read the tenant's SAML metadata
 python3 setup_aws.py --idp --role                        # provider + role, invalidation on
 python3 setup_aws.py --idp --role --access-builder       # + Access Builder permissions
 python3 setup_aws.py --role --no-invalidation            # provider already exists
+python3 setup_aws.py --role --identity-center \
+  --account-access arn:aws:account-access:<region>:<account>:application/<id>   # management account
 python3 setup_aws.py --help
 ```
 
@@ -43,11 +45,18 @@ python3 setup_aws.py --help
 | `--no-invalidation` | off | Skip the `policy/britive/managed/*` permissions |
 | `-m`, `--access-builder` | off | Add `iam:*Role*` on `role/britive/managed/*` |
 | `--ai-scanning` | off | Attach `AmazonBedrockReadOnly` |
+| `--identity-center` | off | Management account only: inline policy `britive-identity-center` with the permissions the **AWS Identity Center** application needs |
+| `--account-access <arn>` | off | Management account only: inline policy `britive-account-access` for the **AWS Account Access** application; the ARN comes from the account access manager **Settings** page (`arn:aws:account-access:…`, not `arn:aws:sso::`) |
 
 The script prints the four values to enter in **System Administration →
 Tenant Applications → Create Application → AWS Standalone**: account ID,
 identity provider name, integration role name, duration of backend
-connection.
+connection. With `--identity-center` or `--account-access` it also prints the
+extra fields of those application types; the prerequisites (enabling the
+account access manager, the trust policy Account Access roles need) are in
+[`../../cloudformation/aws/README.md`](../../cloudformation/aws/README.md#aws-identity-center-and-aws-account-access).
+`--role` is idempotent, so the two flags can be added to an existing role
+later.
 
 ## Helper: `helper/aws_identityCenter_convert.py`
 
